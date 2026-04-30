@@ -16,12 +16,19 @@ type GameNight = {
   createdByUserId: number;
   topGameName: string | null;
   topGameVote: number | null;
+  attendeeCount: number;
+  currentUserAttending: boolean;
 };
 
 type GameNightVote = {
   appId: number;
   name: string;
   totalVote: number;
+};
+
+type GameNightAttendee = {
+  discordUserId: string;
+  username: string;
 };
 
 export function App() {
@@ -37,6 +44,8 @@ export function App() {
   const [voteAppId, setVoteAppId] = useState("");
   const [voteValue, setVoteValue] = useState("1");
   const [nightVotes, setNightVotes] = useState<GameNightVote[]>([]);
+  const [nightAttendees, setNightAttendees] = useState<GameNightAttendee[]>([]);
+  const [currentUserAttendingSelectedNight, setCurrentUserAttendingSelectedNight] = useState(false);
 
   const parsedMembers = useMemo(
     () => memberIds.split(",").map((id) => id.trim()).filter(Boolean),
@@ -152,6 +161,9 @@ export function App() {
         throw new Error(data?.error ?? `Create game night failed (${response.status})`);
       }
       await loadGameNights();
+      if (data?.id) {
+        await loadVotes(data.id);
+      }
       setStatus(`Created game night #${data?.id ?? "?"}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Create game night failed");
@@ -170,9 +182,70 @@ export function App() {
       }
       setSelectedNightId(gameNightId);
       setNightVotes(data?.votes ?? []);
+      await loadAttendees(gameNightId);
       setStatus(`Loaded ${data?.votes?.length ?? 0} vote row(s)`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Vote load failed");
+    }
+  }
+
+  async function loadAttendees(gameNightId: number) {
+    const response = await fetch(`http://localhost:3000/game-nights/${gameNightId}/attendees`, {
+      credentials: "include"
+    });
+    const data = (await response.json().catch(() => null)) as
+      | { attendees?: GameNightAttendee[]; currentUserIsAttending?: boolean; error?: string }
+      | null;
+    if (!response.ok) {
+      throw new Error(data?.error ?? `Attendee load failed (${response.status})`);
+    }
+    setNightAttendees(data?.attendees ?? []);
+    setCurrentUserAttendingSelectedNight(Boolean(data?.currentUserIsAttending));
+  }
+
+  async function joinSelectedNight() {
+    if (!selectedNightId) {
+      setStatus("Pick a game night first");
+      return;
+    }
+    setStatus(`Joining game night #${selectedNightId}...`);
+    try {
+      const response = await fetch(`http://localhost:3000/game-nights/${selectedNightId}/attendees/me`, {
+        method: "POST",
+        credentials: "include"
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok) {
+        throw new Error(data?.error ?? `Join failed (${response.status})`);
+      }
+      await loadGameNights();
+      await loadAttendees(selectedNightId);
+      setStatus("Joined game night");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Join failed");
+    }
+  }
+
+  async function leaveSelectedNight() {
+    if (!selectedNightId) {
+      setStatus("Pick a game night first");
+      return;
+    }
+    setStatus(`Leaving game night #${selectedNightId}...`);
+    try {
+      const response = await fetch(`http://localhost:3000/game-nights/${selectedNightId}/attendees/me`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok) {
+        throw new Error(data?.error ?? `Leave failed (${response.status})`);
+      }
+      await loadGameNights();
+      await loadAttendees(selectedNightId);
+      setStatus("Left game night");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Leave failed");
     }
   }
 
@@ -200,6 +273,37 @@ export function App() {
       setStatus("Vote saved");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Vote save failed");
+    }
+  }
+
+  async function recommendForSelectedNight() {
+    if (!selectedNightId) {
+      setStatus("Pick a game night first");
+      return;
+    }
+
+    setStatus(`Loading recommendations for game night #${selectedNightId}...`);
+    try {
+      const response = await fetch(`http://localhost:3000/game-nights/${selectedNightId}/recommendations`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          memberIds: parsedMembers.length ? parsedMembers : undefined,
+          sessionLength: "any"
+        })
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { recommendations?: Recommendation[]; memberIds?: string[]; error?: string }
+        | null;
+      if (!response.ok) {
+        throw new Error(data?.error ?? `Recommendation request failed (${response.status})`);
+      }
+      setResults(data?.recommendations ?? []);
+      const used = data?.memberIds?.length ? `for ${data.memberIds.join(", ")}` : "";
+      setStatus(`Loaded ${data?.recommendations?.length ?? 0} recommendation(s) ${used}`.trim());
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Recommendation request failed");
     }
   }
 
@@ -279,6 +383,7 @@ export function App() {
         {gameNights.map((night) => (
           <li key={night.id}>
             #{night.id} {night.title} at {new Date(night.scheduledFor).toLocaleString()}{" "}
+            [attendees: {night.attendeeCount}] {night.currentUserAttending ? "[you are in]" : ""}{" "}
             {night.topGameName ? `(top: ${night.topGameName} / ${night.topGameVote})` : "(no votes yet)"}{" "}
             <button onClick={() => loadVotes(night.id)}>View votes</button>
           </li>
@@ -300,7 +405,26 @@ export function App() {
         <button onClick={castVote} style={{ marginLeft: 8 }}>
           Cast vote
         </button>
+        <button onClick={joinSelectedNight} style={{ marginLeft: 8 }}>
+          Join night
+        </button>
+        <button onClick={leaveSelectedNight} style={{ marginLeft: 8 }}>
+          Leave night
+        </button>
+        <button onClick={recommendForSelectedNight} style={{ marginLeft: 8 }}>
+          Recommend for selected night
+        </button>
       </p>
+      <p>
+        RSVP status: {selectedNightId ? (currentUserAttendingSelectedNight ? "Attending" : "Not attending") : "n/a"}
+      </p>
+      <ul>
+        {nightAttendees.map((row) => (
+          <li key={row.discordUserId}>
+            {row.username} ({row.discordUserId})
+          </li>
+        ))}
+      </ul>
       <ul>
         {nightVotes.map((row) => (
           <li key={row.appId}>
