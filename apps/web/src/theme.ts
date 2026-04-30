@@ -34,6 +34,12 @@ export const islandTheme = {
     pagePaddingWide: "1.2rem",
     pagePaddingNarrow: "0.9rem"
   },
+  layout: {
+    appMaxWidth: 1200,
+    authMaxWidth: 900,
+    proseMaxWidth: "68ch",
+    heroProseMaxWidth: "60ch"
+  },
   gradient: {
     gameNightTile: "linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.8))",
     toolsTile: "linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.82))",

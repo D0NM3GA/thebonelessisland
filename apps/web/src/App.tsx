@@ -126,8 +126,6 @@ export function App() {
   const [guildMembers, setGuildMembers] = useState<GuildMember[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [isSelectedNightPanelCollapsed, setIsSelectedNightPanelCollapsed] = useState(false);
-  const [isNarrowViewport, setIsNarrowViewport] = useState(() => window.innerWidth < 1000);
-  const [isCompactViewport, setIsCompactViewport] = useState(() => window.innerWidth < 760);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [hoveredHomeTile, setHoveredHomeTile] = useState<"gameNights" | "bonelessTools" | null>(null);
   const [newsKeywords, setNewsKeywords] = useState("co-op, survival, strategy");
@@ -171,6 +169,8 @@ export function App() {
   const isAdmin = Boolean(profileData?.roleNames.includes("Parent"));
 
   const inputStyle = islandInputStyle;
+  const readableProseStyle = { maxWidth: islandTheme.layout.proseMaxWidth, lineHeight: 1.45 };
+  const heroProseStyle = { maxWidth: islandTheme.layout.heroProseMaxWidth, lineHeight: 1.45 };
 
   useEffect(() => {
     try {
@@ -251,15 +251,6 @@ export function App() {
     return () => {
       isCancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    const onResize = () => {
-      setIsNarrowViewport(window.innerWidth < 1000);
-      setIsCompactViewport(window.innerWidth < 760);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   useEffect(() => {
@@ -833,7 +824,7 @@ export function App() {
       <main
         style={{
           fontFamily: "Inter, Segoe UI, sans-serif",
-          maxWidth: 900,
+          maxWidth: islandTheme.layout.authMaxWidth,
           margin: "2rem auto",
           color: islandTheme.color.textPrimary,
           backgroundColor: islandTheme.color.appBg,
@@ -850,7 +841,7 @@ export function App() {
           }}
         >
           <h1 style={{ marginTop: 0, marginBottom: 10 }}>{pageTitle}</h1>
-          <p style={{ marginTop: 0, opacity: 0.95 }}>{pageBody}</p>
+          <p style={{ marginTop: 0, opacity: 0.95, ...readableProseStyle }}>{pageBody}</p>
           {authError ? (
             <p
               style={{
@@ -891,11 +882,11 @@ export function App() {
     <main
       style={{
         fontFamily: "Inter, Segoe UI, sans-serif",
-        maxWidth: 1200,
+        maxWidth: islandTheme.layout.appMaxWidth,
         margin: "1.25rem auto",
         color: islandTheme.color.textPrimary,
         backgroundColor: islandTheme.color.appBg,
-        padding: isNarrowViewport ? islandTheme.spacing.pagePaddingNarrow : islandTheme.spacing.pagePaddingWide,
+        padding: "clamp(0.9rem, 2vw, 1.2rem)",
         borderRadius: islandTheme.radius.surface
       }}
     >
@@ -1031,14 +1022,14 @@ export function App() {
                 backgroundImage: `url("${LOGO_BG_URL}")`,
                 backgroundPosition: "right center",
                 backgroundRepeat: "no-repeat",
-                backgroundSize: isNarrowViewport ? "250px" : "420px",
+                backgroundSize: "clamp(240px, 33vw, 420px)",
                 opacity: 0.16,
                 pointerEvents: "none"
               }}
             />
-            <div style={{ position: "relative", zIndex: 1, maxWidth: 640 }}>
-              <h1 style={{ marginTop: 0, fontSize: isNarrowViewport ? 28 : 40 }}>Welcome to the Island</h1>
-              <p style={{ fontSize: 16, opacity: 0.95 }}>
+            <div style={{ position: "relative", zIndex: 1, maxWidth: islandTheme.layout.heroProseMaxWidth }}>
+              <h1 style={{ marginTop: 0, fontSize: "clamp(1.75rem, 4vw, 2.5rem)" }}>Welcome to the Island</h1>
+              <p style={{ fontSize: 16, opacity: 0.95, ...heroProseStyle }}>
                 Welcome to The Boneless Island hub. Quick plan: sync your guild members, sync Steam libraries, then use
                 Game Nights to pick what everyone can actually play.
               </p>
@@ -1049,7 +1040,7 @@ export function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isCompactViewport ? "1fr" : "repeat(3, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
                 gap: 14,
                 alignItems: "stretch"
               }}
@@ -1059,7 +1050,6 @@ export function App() {
                 description="Create nights, vote on common-owned games, and finalize your pick."
                 imageUrl={GAME_NIGHTS_TILE_BG_URL}
                 accent="primary"
-                compact={isCompactViewport}
                 hovered={hoveredHomeTile === "gameNights"}
                 onClick={() => setPage("gameNights")}
                 onMouseEnter={() => setHoveredHomeTile("gameNights")}
@@ -1071,20 +1061,19 @@ export function App() {
                 description="Placeholder for planning tools like wishlist overlap and buy planning."
                 imageUrl={BONELESS_TOOLS_TILE_BG_URL}
                 accent="tool"
-                compact={isCompactViewport}
                 hovered={hoveredHomeTile === "bonelessTools"}
                 onClick={() => setPage("bonelessTools")}
                 onMouseEnter={() => setHoveredHomeTile("bonelessTools")}
                 onMouseLeave={() => setHoveredHomeTile(null)}
               />
 
-              <IslandComingSoonTile compact={isCompactViewport} />
+              <IslandComingSoonTile />
             </div>
           </IslandCard>
 
           <IslandCard style={{ marginTop: 12 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>News</h3>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               Future AI-curated gaming news will live here, filtered by keywords, genres, titles, or community tags.
               Admins will control what appears through the Admin page curation controls.
             </p>
@@ -1101,7 +1090,7 @@ export function App() {
                 Refresh activity
               </IslandButton>
             </div>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               Rich presence is prepared. For now this uses synced voice/presence snapshots from Discord API data.
             </p>
             {activeMembers.length ? (
@@ -1127,7 +1116,7 @@ export function App() {
         <>
           <IslandCard>
             <h2 style={{ marginTop: 0 }}>Game Nights</h2>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               Pick members, create nights, vote from common-owned games, then finalize or reopen as needed.
             </p>
           </IslandCard>
@@ -1248,7 +1237,7 @@ export function App() {
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: isNarrowViewport ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))",
+                          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
                           gap: 10
                         }}
                       >
@@ -1325,7 +1314,7 @@ export function App() {
                   </>
                 ) : null}
 
-                <div style={{ display: "grid", gridTemplateColumns: isNarrowViewport ? "1fr" : "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
                   <IslandCard as="div" style={{ padding: "0.65rem" }}>
                     <strong>Attendees</strong>
                     {hasNightAttendees ? (
@@ -1362,12 +1351,12 @@ export function App() {
       {page === "bonelessTools" ? (
         <IslandCard style={{ marginTop: 10 }}>
           <h2 style={{ marginTop: 0 }}>Boneless Tools</h2>
-          <p style={{ marginTop: 0, opacity: 0.9 }}>
+          <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
             Placeholder page for community planning tools.
           </p>
           <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Wishlist Planning (Coming next)</h3>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               Goal: let members share wishlisted games, see overlap, and plan group purchases around discounts or events.
             </p>
           </IslandCard>
@@ -1385,7 +1374,7 @@ export function App() {
       {page === "profile" ? (
         <IslandCard style={{ marginTop: 10 }}>
           <h2 style={{ marginTop: 0 }}>User Profile Settings</h2>
-          <p style={{ marginTop: 0, opacity: 0.9 }}>
+          <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
             Manage your personal account preferences and privacy options.
           </p>
 
@@ -1491,7 +1480,7 @@ export function App() {
       {page === "admin" ? (
         <IslandCard style={{ marginTop: 10 }}>
           <h2 style={{ marginTop: 0 }}>Admin: Testing & Operations</h2>
-          <p style={{ marginTop: 0, opacity: 0.9 }}>
+          <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
             This page groups operational and testing controls. Role gate is based on Discord role "Parent".
           </p>
 
@@ -1515,7 +1504,7 @@ export function App() {
 
           <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0 }}>Recommendation Tester</h3>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               Uses currently selected members from Game Nights member chips.
             </p>
             <p style={{ marginTop: 0 }}>
@@ -1539,7 +1528,7 @@ export function App() {
 
           <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0 }}>News Curation Controls (Placeholder)</h3>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               These controls are UI-only for now. Later they will drive which AI-curated articles show in Home - News.
             </p>
             <p style={{ marginTop: 0, marginBottom: 8 }}>Keywords / genres / titles</p>
@@ -1594,7 +1583,7 @@ export function App() {
             zIndex: 90,
             display: "grid",
             gap: 8,
-            width: isNarrowViewport ? "calc(100vw - 24px)" : 360,
+            width: "min(360px, calc(100vw - 24px))",
             maxWidth: "calc(100vw - 24px)"
           }}
         >

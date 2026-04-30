@@ -70,7 +70,6 @@ type IslandTileButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   imageUrl: string;
   accent: "primary" | "tool";
   hovered?: boolean;
-  compact?: boolean;
 };
 
 export function IslandTileButton({
@@ -79,7 +78,6 @@ export function IslandTileButton({
   imageUrl,
   accent,
   hovered = false,
-  compact = false,
   style,
   ...props
 }: IslandTileButtonProps) {
@@ -92,7 +90,7 @@ export function IslandTileButton({
       style={{
         ...islandButtonStyle("secondary"),
         width: "100%",
-        minHeight: compact ? 150 : 260,
+        minHeight: "clamp(160px, 24vw, 250px)",
         borderRadius: islandTheme.radius.surface,
         textAlign: "left",
         color: islandTheme.color.textInverted,
@@ -112,7 +110,9 @@ export function IslandTileButton({
       }}
     >
       <div>
-        <div style={{ fontSize: compact ? 36 : 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 10 }}>{title}</div>
+        <div style={{ fontSize: "clamp(1.75rem, 3.4vw, 2.25rem)", fontWeight: 800, lineHeight: 1.05, marginBottom: 10 }}>
+          {title}
+        </div>
         <div style={{ fontSize: 16, lineHeight: 1.3, opacity: 0.97, maxWidth: 280 }}>{description}</div>
       </div>
     </button>
@@ -188,13 +188,11 @@ export function IslandGameCard({ title, subtitle, imageUrl, selected, style, ...
 type IslandComingSoonTileProps = HTMLAttributes<HTMLDivElement> & {
   title?: string;
   description?: string;
-  compact?: boolean;
 };
 
 export function IslandComingSoonTile({
   title = "Coming Soon",
   description = "Reserved for future modules.",
-  compact = false,
   style,
   ...props
 }: IslandComingSoonTileProps) {
@@ -204,7 +202,7 @@ export function IslandComingSoonTile({
       aria-disabled="true"
       style={{
         width: "100%",
-        minHeight: compact ? 150 : 260,
+        minHeight: "clamp(160px, 24vw, 250px)",
         borderRadius: islandTheme.radius.surface,
         textAlign: "left",
         color: islandTheme.color.textMuted,
@@ -222,7 +220,7 @@ export function IslandComingSoonTile({
       <div>
         <div
           style={{
-            fontSize: compact ? 36 : 32,
+            fontSize: "clamp(1.75rem, 3.4vw, 2.25rem)",
             fontWeight: 800,
             lineHeight: 1.05,
             marginBottom: 10,
