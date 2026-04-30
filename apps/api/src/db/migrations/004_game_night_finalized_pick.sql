@@ -1,0 +1,5 @@
+ALTER TABLE game_nights
+ADD COLUMN IF NOT EXISTS selected_app_id INTEGER REFERENCES games(app_id) ON DELETE SET NULL;
+
+ALTER TABLE game_nights
+ADD COLUMN IF NOT EXISTS selected_at TIMESTAMPTZ;

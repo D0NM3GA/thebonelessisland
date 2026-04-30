@@ -5,6 +5,7 @@ import { ZodError } from "zod";
 import { env } from "./config.js";
 import { authRouter } from "./routes/auth.js";
 import { gameNightRouter } from "./routes/gameNights.js";
+import { membersRouter } from "./routes/members.js";
 import { profileRouter } from "./routes/profile.js";
 import { recommendationRouter } from "./routes/recommendations.js";
 import { steamRouter } from "./routes/steam.js";
@@ -36,6 +37,7 @@ app.use("/profile", profileRouter);
 app.use("/steam", steamRouter);
 app.use("/recommendations", recommendationRouter);
 app.use("/game-nights", gameNightRouter);
+app.use("/members", membersRouter);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error instanceof ZodError) {

@@ -63,14 +63,14 @@ client.once(Events.ClientReady, async (readyClient) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "whatcanweplay" && interaction.commandName !== "nightrecommend") return;
-  await interaction.deferReply();
-
-  if (!botApiSharedSecret) {
-    await interaction.editReply("BOT_API_SHARED_SECRET is missing; recommendations are locked until it is set.");
-    return;
-  }
-
   try {
+    await interaction.deferReply();
+
+    if (!botApiSharedSecret) {
+      await interaction.editReply("BOT_API_SHARED_SECRET is missing; recommendations are locked until it is set.");
+      return;
+    }
+
     let response: Response;
 
     if (interaction.commandName === "whatcanweplay") {
@@ -134,7 +134,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await interaction.editReply(lines.length ? `${lines.join("\n")}${audience}` : `No matches right now.${audience}`);
   } catch (error) {
     console.error(`${interaction.commandName} command failed`, error);
-    await interaction.editReply("Could not fetch recommendations right now. Please try again shortly.");
+    if (interaction.deferred || interaction.replied) {
+      await interaction
+        .editReply("Could not fetch recommendations right now. Please try again shortly.")
+        .catch(() => undefined);
+    }
   }
 });
 

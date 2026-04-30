@@ -1,0 +1,17 @@
+ALTER TABLE guild_members
+ADD COLUMN IF NOT EXISTS display_name TEXT;
+
+ALTER TABLE guild_members
+ADD COLUMN IF NOT EXISTS role_ids TEXT[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE guild_members
+ADD COLUMN IF NOT EXISTS role_names TEXT[] NOT NULL DEFAULT '{}';
+
+ALTER TABLE guild_members
+ADD COLUMN IF NOT EXISTS in_voice BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE guild_members
+ADD COLUMN IF NOT EXISTS voice_channel_id TEXT;
+
+ALTER TABLE guild_members
+ADD COLUMN IF NOT EXISTS rich_presence_text TEXT;

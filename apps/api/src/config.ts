@@ -17,6 +17,7 @@ const Env = z.object({
   DISCORD_CLIENT_SECRET: z.string().default(""),
   DISCORD_REDIRECT_URI: z.string().default("http://localhost:3000/auth/discord/callback"),
   DISCORD_GUILD_ID: z.string().default(""),
+  DISCORD_BOT_TOKEN: z.string().default(""),
   STEAM_WEB_API_KEY: z.string().default("")
 });
 
