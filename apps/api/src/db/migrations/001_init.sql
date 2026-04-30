@@ -1,0 +1,53 @@
+CREATE TABLE IF NOT EXISTS users (
+  id BIGSERIAL PRIMARY KEY,
+  discord_user_id TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  steam_visibility TEXT NOT NULL DEFAULT 'private',
+  feature_opt_in BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS discord_profiles (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  username TEXT NOT NULL,
+  avatar_url TEXT,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  roles TEXT[] NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS steam_links (
+  user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  steam_id64 TEXT NOT NULL UNIQUE,
+  linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_synced_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS games (
+  app_id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  min_players INTEGER NOT NULL DEFAULT 1,
+  max_players INTEGER NOT NULL DEFAULT 8,
+  median_session_minutes INTEGER NOT NULL DEFAULT 60
+);
+
+CREATE TABLE IF NOT EXISTS user_games (
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_id INTEGER NOT NULL REFERENCES games(app_id) ON DELETE CASCADE,
+  playtime_minutes INTEGER NOT NULL DEFAULT 0,
+  last_played_at TIMESTAMPTZ,
+  PRIMARY KEY (user_id, app_id)
+);
+
+CREATE TABLE IF NOT EXISTS game_nights (
+  id BIGSERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  scheduled_for TIMESTAMPTZ NOT NULL,
+  created_by_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS game_night_votes (
+  game_night_id BIGINT NOT NULL REFERENCES game_nights(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  app_id INTEGER NOT NULL REFERENCES games(app_id) ON DELETE CASCADE,
+  vote SMALLINT NOT NULL CHECK (vote BETWEEN -1 AND 1),
+  PRIMARY KEY (game_night_id, user_id, app_id)
+);

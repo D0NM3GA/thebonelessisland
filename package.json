@@ -1,0 +1,22 @@
+{
+  "name": "the-boneless-island",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @island/web\" \"npm run dev -w @island/api\" \"npm run dev -w @island/bot\"",
+    "build": "npm run build -ws",
+    "lint": "npm run lint -ws",
+    "format": "prettier --write .",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
