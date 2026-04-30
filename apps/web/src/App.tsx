@@ -1,4 +1,18 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  IslandActiveMemberRow,
+  IslandButton,
+  IslandCard,
+  IslandComingSoonTile,
+  IslandGameCard,
+  IslandMemberChip,
+  IslandNewsPlaceholderCard,
+  IslandStatusPill,
+  IslandTileButton,
+  islandCardStyle,
+  islandInputStyle
+} from "./islandUi.js";
+import { islandCopy, islandTheme } from "./theme.js";
 
 type PageId = "home" | "gameNights" | "bonelessTools" | "profile" | "admin";
 type ToastTone = "success" | "error" | "info";
@@ -87,8 +101,11 @@ const LOGO_BG_URL = "/boneless-island-logo.png";
 const GAME_NIGHTS_TILE_BG_URL = "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/570/header.jpg";
 const BONELESS_TOOLS_TILE_BG_URL =
   "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/730/header.jpg";
+const API_BASE_URL = "http://localhost:3000";
 
 export function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [page, setPage] = useState<PageId>("home");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [results, setResults] = useState<Recommendation[]>([]);
@@ -97,7 +114,7 @@ export function App() {
   const [profileJson, setProfileJson] = useState("Not loaded");
   const [profileData, setProfileData] = useState<MeProfile | null>(null);
   const [gameNights, setGameNights] = useState<GameNight[]>([]);
-  const [newNightTitle, setNewNightTitle] = useState("Friday Island Session");
+  const [newNightTitle, setNewNightTitle] = useState<string>(islandCopy.placeholders.title);
   const [newNightScheduledFor, setNewNightScheduledFor] = useState("");
   const [selectedNightId, setSelectedNightId] = useState<number | null>(null);
   const [voteAppId, setVoteAppId] = useState("");
@@ -153,48 +170,7 @@ export function App() {
   const hasNightVotes = nightVotes.length > 0;
   const isAdmin = Boolean(profileData?.roleNames.includes("Parent"));
 
-  const inputStyle: CSSProperties = {
-    background: "#0b1220",
-    color: "#e5e7eb",
-    border: "1px solid #334155",
-    borderRadius: 10,
-    padding: "0.5rem 0.65rem"
-  };
-
-  const buttonBase: CSSProperties = {
-    borderRadius: 10,
-    border: "1px solid #334155",
-    padding: "0.48rem 0.75rem",
-    cursor: "pointer",
-    fontWeight: 600
-  };
-
-  const buttonPrimary: CSSProperties = {
-    ...buttonBase,
-    background: "#2563eb",
-    borderColor: "#2563eb",
-    color: "#eff6ff"
-  };
-
-  const buttonSecondary: CSSProperties = {
-    ...buttonBase,
-    background: "#1e293b",
-    color: "#e2e8f0"
-  };
-
-  const buttonDanger: CSSProperties = {
-    ...buttonBase,
-    background: "#7f1d1d",
-    borderColor: "#7f1d1d",
-    color: "#fee2e2"
-  };
-
-  const sectionCardStyle: CSSProperties = {
-    background: "#111827",
-    border: "1px solid #253042",
-    borderRadius: 12,
-    padding: "0.95rem"
-  };
+  const inputStyle = islandInputStyle;
 
   useEffect(() => {
     try {
@@ -239,8 +215,42 @@ export function App() {
   }, [excludedOwnedGameAppIds]);
 
   useEffect(() => {
-    void loadProfile(true);
-    void loadGuildMembers(true);
+    const params = new URLSearchParams(window.location.search);
+    const authErrorCode = params.get("authError");
+    if (!authErrorCode) {
+      return;
+    }
+
+    const authErrorMessage =
+      authErrorCode === "not_in_guild"
+        ? "Access is limited to members of The Boneless Island Discord."
+        : authErrorCode === "guild_not_configured"
+          ? "Discord guild membership checks are not configured yet."
+          : "Discord login failed. Please try again.";
+    setAuthError(authErrorMessage);
+    params.delete("authError");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const bootstrapAuth = async () => {
+      const authed = await loadProfile(true);
+      if (isCancelled) return;
+      setIsAuthenticated(authed);
+      if (authed) {
+        await syncGuildMembers(true);
+      }
+    };
+
+    void bootstrapAuth();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -346,13 +356,22 @@ export function App() {
       setStatus("Loading profile...");
     }
     try {
-      const response = await fetch("http://localhost:3000/profile/me", { credentials: "include" });
+      const response = await fetch(`${API_BASE_URL}/profile/me`, { credentials: "include" });
       const data = (await response.json()) as { profile?: MeProfile | null };
+      if (response.status === 401 || response.status === 403) {
+        setProfileData(null);
+        setIsAuthenticated(false);
+        if (!silent) {
+          setStatus("Session expired. Login with Discord.");
+        }
+        return false;
+      }
       if (!response.ok) {
         throw new Error(`Profile load failed (${response.status})`);
       }
       const profile = data.profile ?? null;
       setProfileData(profile);
+      setIsAuthenticated(true);
       if (profile) {
         setProfileSteamVisibility(profile.steamVisibility);
         setProfileFeatureOptIn(profile.featureOptIn);
@@ -366,20 +385,23 @@ export function App() {
       if (!silent) {
         setStatus("Profile loaded");
       }
+      return true;
     } catch (error) {
       if (!silent) {
         setStatus(error instanceof Error ? error.message : "Profile load failed");
       }
+      return false;
     }
   }
 
   async function logout() {
     setStatus("Logging out...");
-    await fetch("http://localhost:3000/auth/logout", {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
       method: "POST",
       credentials: "include"
     }).catch(() => undefined);
     setProfileData(null);
+    setIsAuthenticated(false);
     setStatus("Logged out. Use Login with Discord.");
   }
 
@@ -465,24 +487,42 @@ export function App() {
     }
   }
 
-  async function syncGuildMembers() {
-    setStatus("Syncing guild members from Discord...");
+  async function syncGuildMembers(silent = false) {
+    if (!silent) {
+      setStatus("Syncing guild members from Discord...");
+    }
     try {
-      const response = await fetch("http://localhost:3000/members/sync", {
+      const response = await fetch(`${API_BASE_URL}/members/sync`, {
         method: "POST",
         credentials: "include"
       });
       const data = (await response.json().catch(() => null)) as
-        | { syncedMembers?: number; error?: string; details?: string }
+        | {
+            syncedMembers?: number;
+            error?: string;
+            details?: string;
+            voice?: { ok?: boolean; status?: number | null; count?: number; details?: string };
+          }
         | null;
       if (!response.ok) {
         throw new Error(data?.details ?? data?.error ?? `Member sync failed (${response.status})`);
       }
       await loadGuildMembers(true);
       await loadProfile(true);
-      setStatus(`Synced ${data?.syncedMembers ?? 0} guild member(s)`);
+      if (!silent) {
+        const voiceInfo = data?.voice;
+        const voiceDetails =
+          voiceInfo?.ok === false
+            ? ` Voice states unavailable (${voiceInfo.status ?? "no status"}). ${voiceInfo.details ?? ""}`.trim()
+            : voiceInfo?.ok
+              ? ` Voice states: ${voiceInfo.count ?? 0}.`
+              : "";
+        setStatus(`Synced ${data?.syncedMembers ?? 0} guild member(s).${voiceDetails}`);
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Member sync failed");
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Member sync failed");
+      }
     }
   }
 
@@ -783,29 +823,93 @@ export function App() {
     setStatus("Saved placeholder news curation settings (UI only for now)");
   }
 
+  if (isAuthenticated !== true) {
+    const pageTitle = isAuthenticated === null ? "Checking session..." : "Welcome to The Boneless Island";
+    const pageBody =
+      isAuthenticated === null
+        ? "Hang tight while we check your Discord session."
+        : "Sign in with Discord to access the community tools and game night planner.";
+    return (
+      <main
+        style={{
+          fontFamily: "Inter, Segoe UI, sans-serif",
+          maxWidth: 900,
+          margin: "2rem auto",
+          color: islandTheme.color.textPrimary,
+          backgroundColor: islandTheme.color.appBg,
+          padding: islandTheme.spacing.pagePaddingWide,
+          borderRadius: islandTheme.radius.surface
+        }}
+      >
+        <section
+          style={{
+            background: islandTheme.color.panelBg,
+            border: `1px solid ${islandTheme.color.cardBorder}`,
+            borderRadius: islandTheme.radius.card,
+            padding: islandTheme.spacing.pagePaddingWide
+          }}
+        >
+          <h1 style={{ marginTop: 0, marginBottom: 10 }}>{pageTitle}</h1>
+          <p style={{ marginTop: 0, opacity: 0.95 }}>{pageBody}</p>
+          {authError ? (
+            <p
+              style={{
+                border: `1px solid ${islandTheme.color.danger}`,
+                background: islandTheme.color.dangerSurface,
+                color: islandTheme.color.dangerText,
+                borderRadius: islandTheme.radius.control,
+                padding: "0.65rem 0.7rem"
+              }}
+            >
+              {authError}
+            </p>
+          ) : null}
+          {isAuthenticated === false ? (
+            <a
+              href={`${API_BASE_URL}/auth/discord/login`}
+              style={{
+                display: "inline-block",
+                marginTop: 4,
+                borderRadius: islandTheme.radius.control,
+                border: `1px solid ${islandTheme.color.primary}`,
+                background: islandTheme.color.primary,
+                color: islandTheme.color.primaryText,
+                padding: "0.55rem 0.9rem",
+                textDecoration: "none",
+                fontWeight: 600
+              }}
+            >
+              Login with Discord
+            </a>
+          ) : null}
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main
       style={{
         fontFamily: "Inter, Segoe UI, sans-serif",
         maxWidth: 1200,
         margin: "1.25rem auto",
-        color: "#e5e7eb",
-        backgroundColor: "#0f172a",
-        padding: isNarrowViewport ? "0.9rem" : "1.2rem",
-        borderRadius: 14
+        color: islandTheme.color.textPrimary,
+        backgroundColor: islandTheme.color.appBg,
+        padding: isNarrowViewport ? islandTheme.spacing.pagePaddingNarrow : islandTheme.spacing.pagePaddingWide,
+        borderRadius: islandTheme.radius.surface
       }}
     >
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setPage("home")} style={page === "home" ? buttonPrimary : buttonSecondary}>
+          <IslandButton variant={page === "home" ? "primary" : "secondary"} onClick={() => setPage("home")}>
             Home
-          </button>
+          </IslandButton>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
           {isAdmin ? (
-            <button onClick={() => setPage("admin")} style={page === "admin" ? buttonPrimary : buttonSecondary}>
+            <IslandButton variant={page === "admin" ? "primary" : "secondary"} onClick={() => setPage("admin")}>
               Admin
-            </button>
+            </IslandButton>
           ) : null}
           <div ref={userMenuRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 6 }}>
             <button
@@ -825,7 +929,7 @@ export function App() {
                 <img
                   src={profileData.avatarUrl}
                   alt={profileData.displayName}
-                  style={{ width: 34, height: 34, borderRadius: "999px", border: "1px solid #334155" }}
+                  style={{ width: 34, height: 34, borderRadius: "999px", border: `1px solid ${islandTheme.color.border}` }}
                 />
               ) : (
                 <div
@@ -833,11 +937,11 @@ export function App() {
                     width: 34,
                     height: 34,
                     borderRadius: "999px",
-                    border: "1px solid #334155",
+                    border: `1px solid ${islandTheme.color.border}`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    background: "#1e293b",
+                    background: islandTheme.color.secondary,
                     fontSize: 12
                   }}
                 >
@@ -846,30 +950,22 @@ export function App() {
               )}
               <div style={{ textAlign: "left" }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>{profileData?.displayName ?? "Not signed in"}</div>
-                <div style={{ fontSize: 11, opacity: 0.85 }}>{profileData?.richPresenceText ?? "Presence pending"}</div>
+                <div style={{ fontSize: 11, opacity: 0.85 }}>
+                  {profileData?.richPresenceText ?? islandCopy.presence.pending}
+                </div>
               </div>
             </button>
-            <span
-              style={{
-                borderRadius: 999,
-                padding: "0.22rem 0.55rem",
-                fontSize: 12,
-                border: "1px solid #334155",
-                background: profileData?.steamId64 ? "#14532d" : "#3f1d1d",
-                color: profileData?.steamId64 ? "#dcfce7" : "#fee2e2",
-                alignSelf: "flex-end"
-              }}
-            >
-              Steam: {profileData?.steamId64 ? "Synced" : "Not synced"}
-            </span>
+            <IslandStatusPill tone={profileData?.steamId64 ? "success" : "danger"}>
+              {profileData?.steamId64 ? islandCopy.labels.steamSynced : islandCopy.labels.steamNotSynced}
+            </IslandStatusPill>
             {isUserMenuOpen ? (
               <div
               style={{
                 marginTop: 2,
                 minWidth: 220,
-                background: "#111827",
-                border: "1px solid #334155",
-                borderRadius: 10,
+                background: islandTheme.color.panelBg,
+                border: `1px solid ${islandTheme.color.border}`,
+                borderRadius: islandTheme.radius.control,
                 padding: "0.55rem",
                 position: "absolute",
                 top: "100%",
@@ -881,33 +977,36 @@ export function App() {
                 Roles: {profileData?.roleNames.length ? profileData.roleNames.join(", ") : "No synced roles"}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button
+                <IslandButton
+                  variant="secondary"
                   onClick={() => {
                     setIsUserMenuOpen(false);
                     setPage("profile");
                   }}
-                  style={buttonSecondary}
+                  style={{ marginRight: 0 }}
                 >
                   Profile Settings
-                </button>
-                <button
+                </IslandButton>
+                <IslandButton
+                  variant="secondary"
                   onClick={() => {
                     setIsUserMenuOpen(false);
                     void loadProfile();
                   }}
-                  style={buttonSecondary}
+                  style={{ marginRight: 0 }}
                 >
                   Refresh Profile
-                </button>
-                <button
+                </IslandButton>
+                <IslandButton
+                  variant="danger"
                   onClick={() => {
                     setIsUserMenuOpen(false);
                     void logout();
                   }}
-                  style={buttonDanger}
+                  style={{ marginRight: 0 }}
                 >
                   Logout
-                </button>
+                </IslandButton>
               </div>
               </div>
             ) : null}
@@ -919,7 +1018,7 @@ export function App() {
         <>
           <section
             style={{
-              ...sectionCardStyle,
+              ...islandCardStyle,
               position: "relative",
               overflow: "hidden",
               minHeight: 220
@@ -946,7 +1045,7 @@ export function App() {
             </div>
           </section>
 
-          <section style={{ ...sectionCardStyle, marginTop: 12 }}>
+          <IslandCard style={{ marginTop: 12 }}>
             <div
               style={{
                 display: "grid",
@@ -955,184 +1054,85 @@ export function App() {
                 alignItems: "stretch"
               }}
             >
-              <button
+              <IslandTileButton
+                title="Game Nights"
+                description="Create nights, vote on common-owned games, and finalize your pick."
+                imageUrl={GAME_NIGHTS_TILE_BG_URL}
+                accent="primary"
+                compact={isCompactViewport}
+                hovered={hoveredHomeTile === "gameNights"}
                 onClick={() => setPage("gameNights")}
                 onMouseEnter={() => setHoveredHomeTile("gameNights")}
                 onMouseLeave={() => setHoveredHomeTile(null)}
-                style={{
-                  ...buttonBase,
-                  width: "100%",
-                  minHeight: isCompactViewport ? 150 : 260,
-                  borderRadius: 14,
-                  textAlign: "left",
-                  color: "#f8fafc",
-                  padding: "1rem",
-                  border: "1px solid #3b82f6",
-                  backgroundImage: `linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.8)), url("${GAME_NIGHTS_TILE_BG_URL}")`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  boxShadow:
-                    hoveredHomeTile === "gameNights"
-                      ? "0 0 0 1px #60a5fa, 0 0 24px rgba(96,165,250,0.55)"
-                      : "0 4px 14px rgba(2,6,23,0.45)",
-                  transition: "box-shadow 160ms ease, transform 160ms ease",
-                  transform: hoveredHomeTile === "gameNights" ? "translateY(-2px)" : "translateY(0)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                  overflow: "hidden"
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: isCompactViewport ? 36 : 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 10 }}>
-                    Game Nights
-                  </div>
-                  <div style={{ fontSize: 16, lineHeight: 1.3, opacity: 0.97, maxWidth: 280 }}>
-                    Create nights, vote on common-owned games, and finalize your pick.
-                  </div>
-                </div>
-              </button>
+              />
 
-              <button
+              <IslandTileButton
+                title="Boneless Tools"
+                description="Placeholder for planning tools like wishlist overlap and buy planning."
+                imageUrl={BONELESS_TOOLS_TILE_BG_URL}
+                accent="tool"
+                compact={isCompactViewport}
+                hovered={hoveredHomeTile === "bonelessTools"}
                 onClick={() => setPage("bonelessTools")}
                 onMouseEnter={() => setHoveredHomeTile("bonelessTools")}
                 onMouseLeave={() => setHoveredHomeTile(null)}
-                style={{
-                  ...buttonBase,
-                  width: "100%",
-                  minHeight: isCompactViewport ? 150 : 260,
-                  borderRadius: 14,
-                  textAlign: "left",
-                  color: "#f8fafc",
-                  padding: "1rem",
-                  border: "1px solid #22d3ee",
-                  backgroundImage: `linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.82)), url("${BONELESS_TOOLS_TILE_BG_URL}")`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  boxShadow:
-                    hoveredHomeTile === "bonelessTools"
-                      ? "0 0 0 1px #22d3ee, 0 0 24px rgba(34,211,238,0.55)"
-                      : "0 4px 14px rgba(2,6,23,0.45)",
-                  transition: "box-shadow 160ms ease, transform 160ms ease",
-                  transform: hoveredHomeTile === "bonelessTools" ? "translateY(-2px)" : "translateY(0)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                  overflow: "hidden"
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: isCompactViewport ? 36 : 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 10 }}>
-                    Boneless Tools
-                  </div>
-                  <div style={{ fontSize: 16, lineHeight: 1.3, opacity: 0.97, maxWidth: 280 }}>
-                    Placeholder for planning tools like wishlist overlap and buy planning.
-                  </div>
-                </div>
-              </button>
+              />
 
-              <div
-                aria-disabled="true"
-                style={{
-                  width: "100%",
-                  minHeight: isCompactViewport ? 150 : 260,
-                  borderRadius: 14,
-                  textAlign: "left",
-                  color: "#94a3b8",
-                  padding: "1rem",
-                  border: "1px dashed #334155",
-                  background: "linear-gradient(160deg, #0b1220, #0f172a)",
-                  boxShadow: "0 4px 14px rgba(2,6,23,0.35)",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-end",
-                  overflow: "hidden"
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: isCompactViewport ? 36 : 32, fontWeight: 800, lineHeight: 1.05, marginBottom: 10, color: "#cbd5e1" }}>
-                    Coming Soon
-                  </div>
-                  <div style={{ fontSize: 16, lineHeight: 1.3 }}>Reserved for future modules.</div>
-                </div>
-              </div>
+              <IslandComingSoonTile compact={isCompactViewport} />
             </div>
-          </section>
+          </IslandCard>
 
-          <section style={{ ...sectionCardStyle, marginTop: 12 }}>
+          <IslandCard style={{ marginTop: 12 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>News</h3>
             <p style={{ marginTop: 0, opacity: 0.9 }}>
               Future AI-curated gaming news will live here, filtered by keywords, genres, titles, or community tags.
               Admins will control what appears through the Admin page curation controls.
             </p>
             <div style={{ display: "grid", gap: 8 }}>
-              <article style={{ border: "1px solid #334155", borderRadius: 10, padding: "0.7rem", background: "#0b1220" }}>
-                <strong>Placeholder headline #1</strong>
-                <div style={{ fontSize: 13, opacity: 0.85 }}>Source: curated feed · tag: co-op</div>
-              </article>
-              <article style={{ border: "1px solid #334155", borderRadius: 10, padding: "0.7rem", background: "#0b1220" }}>
-                <strong>Placeholder headline #2</strong>
-                <div style={{ fontSize: 13, opacity: 0.85 }}>Source: curated feed · tag: survival</div>
-              </article>
+              <IslandNewsPlaceholderCard title={islandCopy.news.placeholderOneTitle} meta={islandCopy.news.placeholderOneMeta} />
+              <IslandNewsPlaceholderCard title={islandCopy.news.placeholderTwoTitle} meta={islandCopy.news.placeholderTwoMeta} />
             </div>
-          </section>
+          </IslandCard>
 
-          <section style={{ ...sectionCardStyle, marginTop: 12 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Who's active in Discord right now</h3>
+          <IslandCard style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 8 }}>Who's active in Discord right now</h3>
+              <IslandButton variant="secondary" onClick={() => void syncGuildMembers()}>
+                Refresh activity
+              </IslandButton>
+            </div>
             <p style={{ marginTop: 0, opacity: 0.9 }}>
               Rich presence is prepared. For now this uses synced voice/presence snapshots from Discord API data.
             </p>
             {activeMembers.length ? (
               <div style={{ display: "grid", gap: 8 }}>
                 {activeMembers.map((member) => (
-                  <div
+                  <IslandActiveMemberRow
                     key={member.discordUserId}
-                    style={{
-                      border: "1px solid #334155",
-                      borderRadius: 10,
-                      padding: "0.55rem 0.7rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      background: "#0b1220"
-                    }}
-                  >
-                    {member.avatarUrl ? (
-                      <img
-                        src={member.avatarUrl}
-                        alt={member.displayName}
-                        style={{ width: 34, height: 34, borderRadius: "999px", border: "1px solid #334155" }}
-                      />
-                    ) : null}
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{member.displayName}</div>
-                      <div style={{ fontSize: 12, opacity: 0.9 }}>
-                        {member.richPresenceText ?? "Presence not yet available"}
-                        {member.inVoice ? " - in voice" : ""}
-                      </div>
-                    </div>
-                  </div>
+                    displayName={member.displayName}
+                    avatarUrl={member.avatarUrl}
+                    presenceText={member.richPresenceText ?? islandCopy.presence.unavailable}
+                    inVoice={member.inVoice}
+                  />
                 ))}
               </div>
             ) : (
-              <p style={{ opacity: 0.88 }}>
-                No active members shown. Ask an admin to run member sync from the Admin page.
-              </p>
+              <p style={{ opacity: 0.88 }}>{islandCopy.emptyStates.activeMembers}</p>
             )}
-          </section>
+          </IslandCard>
         </>
       ) : null}
 
       {page === "gameNights" ? (
         <>
-          <section style={sectionCardStyle}>
+          <IslandCard>
             <h2 style={{ marginTop: 0 }}>Game Nights</h2>
             <p style={{ marginTop: 0, opacity: 0.9 }}>
               Pick members, create nights, vote from common-owned games, then finalize or reopen as needed.
             </p>
-          </section>
+          </IslandCard>
 
-          <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+          <IslandCard style={{ marginTop: 10 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Select Night Members</h3>
             <p style={{ marginTop: 0, opacity: 0.9 }}>Use member chips to define the night attendee group.</p>
             <p style={{ marginTop: 0 }}>
@@ -1140,45 +1140,41 @@ export function App() {
             </p>
             <p>
               <input
-                placeholder="Search members"
+                placeholder={islandCopy.placeholders.memberSearch}
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
                 style={inputStyle}
               />
-              <button onClick={selectAllFilteredMembers} style={{ ...buttonSecondary, marginLeft: 8 }}>
+              <IslandButton variant="secondary" onClick={selectAllFilteredMembers} style={{ marginLeft: 8 }}>
                 Select filtered
-              </button>
-              <button onClick={clearSelectedMembers} style={{ ...buttonSecondary, marginLeft: 8 }}>
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={clearSelectedMembers} style={{ marginLeft: 8 }}>
                 Clear
-              </button>
-              <button onClick={useSelectedNightAttendeesAsSelection} style={{ ...buttonSecondary, marginLeft: 8 }}>
+              </IslandButton>
+              <IslandButton
+                variant="secondary"
+                onClick={useSelectedNightAttendeesAsSelection}
+                style={{ marginLeft: 8 }}
+              >
                 Use selected night attendees
-              </button>
+              </IslandButton>
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {filteredGuildMembers.map((member) => {
                 const selected = selectedMemberIds.includes(member.discordUserId);
                 return (
-                  <button
+                  <IslandMemberChip
                     key={member.discordUserId}
                     onClick={() => toggleSelectedMember(member.discordUserId)}
-                    style={{
-                      ...buttonBase,
-                      borderRadius: 999,
-                      background: selected ? "#2563eb" : "#1e293b",
-                      color: "#e5e7eb",
-                      border: selected ? "1px solid #2563eb" : "1px solid #334155",
-                      padding: "0.26rem 0.62rem"
-                    }}
-                  >
-                    {selected ? "✓ " : ""} {member.displayName}
-                  </button>
+                    selected={selected}
+                    label={member.displayName}
+                  />
                 );
               })}
             </div>
-          </section>
+          </IslandCard>
 
-          <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+          <IslandCard style={{ marginTop: 10 }}>
             <h3 style={{ marginTop: 0 }}>Create Night</h3>
             <p style={{ marginTop: 0, opacity: 0.9 }}>Creates a new game night with selected members as attendees.</p>
             <p>
@@ -1194,16 +1190,16 @@ export function App() {
                 onChange={(e) => setNewNightScheduledFor(e.target.value)}
                 style={{ ...inputStyle, marginLeft: 8 }}
               />
-              <button onClick={createGameNight} style={{ ...buttonPrimary, marginLeft: 8 }}>
+              <IslandButton variant="primary" onClick={createGameNight} style={{ marginLeft: 8 }}>
                 Create Night
-              </button>
-              <button onClick={loadGameNights} style={{ ...buttonSecondary, marginLeft: 8 }}>
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={loadGameNights} style={{ marginLeft: 8 }}>
                 Refresh Nights
-              </button>
+              </IslandButton>
             </p>
-          </section>
+          </IslandCard>
 
-          <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+          <IslandCard style={{ marginTop: 10 }}>
             <h3 style={{ marginTop: 0 }}>Created Nights</h3>
             {hasGameNights ? (
               <ul>
@@ -1212,18 +1208,22 @@ export function App() {
                     {night.title} - {new Date(night.scheduledFor).toLocaleString()} - attendees: {night.attendeeCount}
                     {night.selectedGameName ? ` - FINAL: ${night.selectedGameName}` : ""}
                     {!night.selectedGameName && night.topGameName ? ` - top: ${night.topGameName}` : ""}
-                    <button onClick={() => loadVotes(night.id, night.title)} style={{ ...buttonSecondary, marginLeft: 8 }}>
+                    <IslandButton
+                      variant="secondary"
+                      onClick={() => loadVotes(night.id, night.title)}
+                      style={{ marginLeft: 8 }}
+                    >
                       Open
-                    </button>
+                    </IslandButton>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p style={{ opacity: 0.9 }}>No game nights yet.</p>
+              <p style={{ opacity: 0.9 }}>{islandCopy.emptyStates.noNights}</p>
             )}
-          </section>
+          </IslandCard>
 
-          <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+          <IslandCard style={{ marginTop: 10 }}>
             <h3 style={{ marginTop: 0 }}>
               Selected Night: {selectedNight ? `${selectedNight.title}` : "none"}
             </h3>
@@ -1235,9 +1235,9 @@ export function App() {
                   Finalized: {selectedNight.selectedGameName ?? "No"} | Top vote: {selectedNight.topGameName ?? "n/a"}
                 </p>
                 <p>
-                  <button onClick={() => setIsSelectedNightPanelCollapsed((v) => !v)} style={buttonSecondary}>
+                  <IslandButton variant="secondary" onClick={() => setIsSelectedNightPanelCollapsed((v) => !v)}>
                     {isSelectedNightPanelCollapsed ? "Expand details" : "Collapse details"}
-                  </button>
+                  </IslandButton>
                 </p>
                 {!isSelectedNightPanelCollapsed ? (
                   <>
@@ -1255,36 +1255,14 @@ export function App() {
                         {availableGames.map((game) => {
                           const selected = String(game.appId) === voteAppId;
                           return (
-                            <button
+                            <IslandGameCard
                               key={game.appId}
                               onClick={() => setVoteAppId(String(game.appId))}
-                              style={{
-                                ...buttonBase,
-                                textAlign: "left",
-                                border: selected ? "2px solid #60a5fa" : "1px solid #334155",
-                                background: selected ? "#1e3a8a" : "#0b1220",
-                                color: "#e5e7eb",
-                                padding: 8
-                              }}
-                            >
-                              {game.headerImageUrl ? (
-                                <img
-                                  src={game.headerImageUrl}
-                                  alt={game.name}
-                                  style={{
-                                    width: "100%",
-                                    height: 90,
-                                    objectFit: "cover",
-                                    borderRadius: 6,
-                                    border: "1px solid #334155"
-                                  }}
-                                />
-                              ) : null}
-                              <div style={{ marginTop: 6, fontWeight: 600 }}>{game.name}</div>
-                              <div style={{ fontSize: 12, opacity: 0.95 }}>
-                                owners {game.owners} | votes {game.voteTotal}
-                              </div>
-                            </button>
+                              selected={selected}
+                              title={game.name}
+                              subtitle={`owners ${game.owners} | votes ${game.voteTotal}`}
+                              imageUrl={game.headerImageUrl}
+                            />
                           );
                         })}
                       </div>
@@ -1312,39 +1290,43 @@ export function App() {
                         <option value="0">Neutral (0)</option>
                         <option value="-1">Downvote (-1)</option>
                       </select>
-                      <button onClick={castVote} style={{ ...buttonSecondary, marginLeft: 8 }}>
+                      <IslandButton variant="secondary" onClick={castVote} style={{ marginLeft: 8 }}>
                         Cast vote
-                      </button>
-                      <button onClick={() => finalizeSelectedNight()} style={{ ...buttonPrimary, marginLeft: 8 }}>
+                      </IslandButton>
+                      <IslandButton variant="primary" onClick={() => finalizeSelectedNight()} style={{ marginLeft: 8 }}>
                         Finalize top vote
-                      </button>
-                      <button onClick={unfinalizeSelectedNight} style={{ ...buttonDanger, marginLeft: 8 }}>
+                      </IslandButton>
+                      <IslandButton variant="danger" onClick={unfinalizeSelectedNight} style={{ marginLeft: 8 }}>
                         Reopen voting
-                      </button>
+                      </IslandButton>
                     </p>
 
                     <p>
-                      <button onClick={joinSelectedNight} style={buttonSecondary}>
+                      <IslandButton variant="secondary" onClick={joinSelectedNight}>
                         Join night
-                      </button>
-                      <button onClick={leaveSelectedNight} style={{ ...buttonSecondary, marginLeft: 8 }}>
+                      </IslandButton>
+                      <IslandButton variant="secondary" onClick={leaveSelectedNight} style={{ marginLeft: 8 }}>
                         Leave night
-                      </button>
-                      <button onClick={addSelectedMembersToNight} style={{ ...buttonSecondary, marginLeft: 8 }}>
+                      </IslandButton>
+                      <IslandButton variant="secondary" onClick={addSelectedMembersToNight} style={{ marginLeft: 8 }}>
                         Add selected members
-                      </button>
-                      <button onClick={removeSelectedMembersFromNight} style={{ ...buttonSecondary, marginLeft: 8 }}>
+                      </IslandButton>
+                      <IslandButton
+                        variant="secondary"
+                        onClick={removeSelectedMembersFromNight}
+                        style={{ marginLeft: 8 }}
+                      >
                         Remove selected members
-                      </button>
-                      <button onClick={recommendForSelectedNight} style={{ ...buttonPrimary, marginLeft: 8 }}>
+                      </IslandButton>
+                      <IslandButton variant="primary" onClick={recommendForSelectedNight} style={{ marginLeft: 8 }}>
                         Recommend for selected night
-                      </button>
+                      </IslandButton>
                     </p>
                   </>
                 ) : null}
 
                 <div style={{ display: "grid", gridTemplateColumns: isNarrowViewport ? "1fr" : "1fr 1fr", gap: 10 }}>
-                  <div style={{ ...sectionCardStyle, padding: "0.65rem" }}>
+                  <IslandCard as="div" style={{ padding: "0.65rem" }}>
                     <strong>Attendees</strong>
                     {hasNightAttendees ? (
                       <ul>
@@ -1355,8 +1337,8 @@ export function App() {
                     ) : (
                       <p style={{ opacity: 0.9 }}>No attendees loaded yet.</p>
                     )}
-                  </div>
-                  <div style={{ ...sectionCardStyle, padding: "0.65rem" }}>
+                  </IslandCard>
+                  <IslandCard as="div" style={{ padding: "0.65rem" }}>
                     <strong>Vote Totals</strong>
                     {hasNightVotes ? (
                       <ul>
@@ -1369,45 +1351,45 @@ export function App() {
                     ) : (
                       <p style={{ opacity: 0.9 }}>No votes yet.</p>
                     )}
-                  </div>
+                  </IslandCard>
                 </div>
               </>
             )}
-          </section>
+          </IslandCard>
         </>
       ) : null}
 
       {page === "bonelessTools" ? (
-        <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+        <IslandCard style={{ marginTop: 10 }}>
           <h2 style={{ marginTop: 0 }}>Boneless Tools</h2>
           <p style={{ marginTop: 0, opacity: 0.9 }}>
             Placeholder page for community planning tools.
           </p>
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Wishlist Planning (Coming next)</h3>
             <p style={{ marginTop: 0, opacity: 0.9 }}>
               Goal: let members share wishlisted games, see overlap, and plan group purchases around discounts or events.
             </p>
-          </div>
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          </IslandCard>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Future Tool Slots</h3>
             <ul style={{ marginBottom: 0 }}>
               <li>Event budget and buy planning</li>
               <li>Genre interest mapping</li>
               <li>Weekly community poll helpers</li>
             </ul>
-          </div>
-        </section>
+          </IslandCard>
+        </IslandCard>
       ) : null}
 
       {page === "profile" ? (
-        <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+        <IslandCard style={{ marginTop: 10 }}>
           <h2 style={{ marginTop: 0 }}>User Profile Settings</h2>
           <p style={{ marginTop: 0, opacity: 0.9 }}>
             Manage your personal account preferences and privacy options.
           </p>
 
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Account</h3>
             <p style={{ marginTop: 0, marginBottom: 4 }}>
               <strong>Display Name:</strong> {profileData?.displayName ?? "Not signed in"}
@@ -1415,9 +1397,9 @@ export function App() {
             <p style={{ marginTop: 0, marginBottom: 0 }}>
               <strong>Discord Username:</strong> @{profileData?.username ?? "unknown"}
             </p>
-          </div>
+          </IslandCard>
 
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>Privacy & Library Preferences</h3>
             <p style={{ marginTop: 0, marginBottom: 8 }}>Steam library visibility</p>
             <select
@@ -1440,20 +1422,20 @@ export function App() {
                 placeholder="Search your owned games"
                 style={{ ...inputStyle, flex: 1, minWidth: 240 }}
               />
-              <button onClick={() => void loadOwnedGames()} style={buttonSecondary}>
+              <IslandButton variant="secondary" onClick={() => void loadOwnedGames()}>
                 Refresh owned games
-              </button>
+              </IslandButton>
             </div>
             {profileData?.steamId64 ? (
               <div
                 style={{
                   marginTop: 8,
-                  border: "1px solid #334155",
-                  borderRadius: 10,
+                  border: `1px solid ${islandTheme.color.border}`,
+                  borderRadius: islandTheme.radius.control,
                   padding: "0.55rem",
                   maxHeight: 220,
                   overflowY: "auto",
-                  background: "#0b1220"
+                  background: islandTheme.color.panelMutedBg
                 }}
               >
                 {filteredOwnedGames.length ? (
@@ -1498,40 +1480,40 @@ export function App() {
             </label>
 
             <p style={{ marginBottom: 0 }}>
-              <button onClick={saveProfileSettings} style={{ ...buttonPrimary, marginTop: 10 }}>
+              <IslandButton variant="primary" onClick={saveProfileSettings} style={{ marginTop: 10 }}>
                 Save Profile Settings
-              </button>
+              </IslandButton>
             </p>
-          </div>
-        </section>
+          </IslandCard>
+        </IslandCard>
       ) : null}
 
       {page === "admin" ? (
-        <section style={{ ...sectionCardStyle, marginTop: 10 }}>
+        <IslandCard style={{ marginTop: 10 }}>
           <h2 style={{ marginTop: 0 }}>Admin: Testing & Operations</h2>
           <p style={{ marginTop: 0, opacity: 0.9 }}>
             This page groups operational and testing controls. Role gate is based on Discord role "Parent".
           </p>
 
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0 }}>Data Sync</h3>
             <p>
-              <button onClick={() => void loadProfile()} style={buttonSecondary}>
+              <IslandButton variant="secondary" onClick={() => void loadProfile()}>
                 Refresh Profile
-              </button>
-              <button onClick={() => void loadGuildMembers()} style={{ ...buttonSecondary, marginLeft: 8 }}>
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={() => void loadGuildMembers()} style={{ marginLeft: 8 }}>
                 Load Guild Members
-              </button>
-              <button onClick={syncGuildMembers} style={{ ...buttonPrimary, marginLeft: 8 }}>
+              </IslandButton>
+              <IslandButton variant="primary" onClick={() => void syncGuildMembers()} style={{ marginLeft: 8 }}>
                 Sync Guild Members
-              </button>
-              <button onClick={syncSteamGames} style={{ ...buttonSecondary, marginLeft: 8 }}>
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={syncSteamGames} style={{ marginLeft: 8 }}>
                 Sync Steam Games
-              </button>
+              </IslandButton>
             </p>
-          </div>
+          </IslandCard>
 
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0 }}>Recommendation Tester</h3>
             <p style={{ marginTop: 0, opacity: 0.9 }}>
               Uses currently selected members from Game Nights member chips.
@@ -1539,9 +1521,9 @@ export function App() {
             <p style={{ marginTop: 0 }}>
               Selected members: <strong>{selectedMemberIds.length}</strong>
             </p>
-            <button onClick={runRecommendation} style={buttonPrimary}>
+            <IslandButton variant="primary" onClick={runRecommendation}>
               Run What Can We Play
-            </button>
+            </IslandButton>
             {hasRecommendations ? (
               <ul>
                 {results.map((game) => (
@@ -1553,9 +1535,9 @@ export function App() {
             ) : (
               <p style={{ opacity: 0.9 }}>No tester results yet.</p>
             )}
-          </div>
+          </IslandCard>
 
-          <div style={{ ...sectionCardStyle, marginTop: 8 }}>
+          <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0 }}>News Curation Controls (Placeholder)</h3>
             <p style={{ marginTop: 0, opacity: 0.9 }}>
               These controls are UI-only for now. Later they will drive which AI-curated articles show in Home - News.
@@ -1565,20 +1547,20 @@ export function App() {
             <p style={{ marginTop: 10, marginBottom: 8 }}>Approved sources</p>
             <input value={newsSources} onChange={(e) => setNewsSources(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
             <p style={{ marginBottom: 0 }}>
-              <button onClick={saveNewsControlsPlaceholder} style={{ ...buttonPrimary, marginTop: 10 }}>
+              <IslandButton variant="primary" onClick={saveNewsControlsPlaceholder} style={{ marginTop: 10 }}>
                 Save placeholder curation settings
-              </button>
+              </IslandButton>
             </p>
-          </div>
+          </IslandCard>
 
           <details style={{ marginTop: 8 }}>
             <summary style={{ cursor: "pointer" }}>Profile payload (debug)</summary>
             <pre
               style={{
-                background: "#0b1220",
-                color: "#e5e7eb",
-                border: "1px solid #334155",
-                borderRadius: 10,
+                background: islandTheme.color.panelMutedBg,
+                color: islandTheme.color.textPrimary,
+                border: `1px solid ${islandTheme.color.border}`,
+                borderRadius: islandTheme.radius.control,
                 padding: "0.7rem",
                 overflowX: "auto",
                 marginTop: 8
@@ -1587,7 +1569,7 @@ export function App() {
               {profileJson}
             </pre>
           </details>
-        </section>
+        </IslandCard>
       ) : null}
 
       <style>{`
@@ -1619,17 +1601,29 @@ export function App() {
           {toasts.map((toast) => {
             const toneStyle =
               toast.tone === "error"
-                ? { border: "1px solid #7f1d1d", background: "#3f1d1d", color: "#fee2e2" }
+                ? {
+                    border: `1px solid ${islandTheme.color.danger}`,
+                    background: islandTheme.color.dangerSurface,
+                    color: islandTheme.color.dangerText
+                  }
                 : toast.tone === "success"
-                  ? { border: "1px solid #14532d", background: "#14532d", color: "#dcfce7" }
-                  : { border: "1px solid #1e3a8a", background: "#1e3a8a", color: "#dbeafe" };
+                  ? {
+                      border: `1px solid ${islandTheme.color.success}`,
+                      background: islandTheme.color.success,
+                      color: islandTheme.color.successText
+                    }
+                  : {
+                      border: `1px solid ${islandTheme.color.info}`,
+                      background: islandTheme.color.info,
+                      color: islandTheme.color.infoText
+                    };
             return (
               <div
                 key={toast.id}
                 style={{
-                  borderRadius: 10,
+                  borderRadius: islandTheme.radius.control,
                   padding: "0.58rem 0.6rem 0.58rem 0.7rem",
-                  boxShadow: "0 8px 24px rgba(2, 6, 23, 0.42)",
+                  boxShadow: islandTheme.shadow.toast,
                   fontSize: 13,
                   display: "flex",
                   alignItems: "center",

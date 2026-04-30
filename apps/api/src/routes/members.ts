@@ -24,6 +24,13 @@ type DiscordVoiceState = {
   channel_id?: string | null;
 };
 
+type VoiceSyncDiagnostics = {
+  ok: boolean;
+  status: number | null;
+  count: number;
+  details?: string;
+};
+
 export const membersRouter = express.Router();
 membersRouter.use(requireSession);
 
@@ -109,19 +116,6 @@ membersRouter.post("/sync", async (_req, res) => {
   const rolesPayload = rolesResponse.ok ? ((await rolesResponse.json()) as DiscordRole[]) : [];
   const roleNameById = new Map<string, string>(rolesPayload.map((role) => [role.id, role.name]));
 
-  const voiceResponse = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/voice-states`, {
-    headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }
-  }).catch(() => null);
-  const voiceStates = voiceResponse?.ok ? ((await voiceResponse.json()) as DiscordVoiceState[]) : [];
-  const voiceChannelByUserId = new Map<string, string>();
-  for (const state of voiceStates) {
-    const userId = state.user_id?.trim();
-    const channelId = state.channel_id?.trim();
-    if (userId && channelId) {
-      voiceChannelByUserId.set(userId, channelId);
-    }
-  }
-
   const data = (await response.json()) as DiscordGuildMember[];
   const normalized = data
     .map((member) => {
@@ -133,10 +127,7 @@ membersRouter.post("/sync", async (_req, res) => {
       const displayName = member.nick?.trim() || member.user?.global_name?.trim() || username;
       const roleIds = (member.roles ?? []).filter(Boolean);
       const roleNames = roleIds.map((roleId) => roleNameById.get(roleId) ?? `role:${roleId}`);
-      const voiceChannelId = voiceChannelByUserId.get(id) ?? null;
-      const inVoice = Boolean(voiceChannelId);
-      const richPresenceText = inVoice ? "In a voice channel" : "Offline or not in voice";
-      return { id, username, displayName, avatarUrl, roleIds, roleNames, inVoice, voiceChannelId, richPresenceText };
+      return { id, username, displayName, avatarUrl, roleIds, roleNames };
     })
     .filter(
       (
@@ -148,11 +139,52 @@ membersRouter.post("/sync", async (_req, res) => {
         avatarUrl: string | null;
         roleIds: string[];
         roleNames: string[];
-        inVoice: boolean;
-        voiceChannelId: string | null;
-        richPresenceText: string;
       } => Boolean(row)
     );
+
+  const voiceDiagnostics: VoiceSyncDiagnostics = {
+    ok: true,
+    status: 200,
+    count: 0
+  };
+  const voiceChannelByUserId = new Map<string, string>();
+  for (const member of normalized) {
+    const voiceStateResponse = await fetch(
+      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/voice-states/${member.id}`,
+      {
+        headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }
+      }
+    ).catch(() => null);
+
+    if (!voiceStateResponse) {
+      voiceDiagnostics.ok = false;
+      voiceDiagnostics.status = null;
+      voiceDiagnostics.details = "Voice state request failed before Discord responded.";
+      continue;
+    }
+
+    if (voiceStateResponse.status === 404) {
+      // User is not currently connected to a voice channel.
+      continue;
+    }
+
+    if (!voiceStateResponse.ok) {
+      const body = await voiceStateResponse.text().catch(() => "");
+      voiceDiagnostics.ok = false;
+      voiceDiagnostics.status = voiceStateResponse.status;
+      if (!voiceDiagnostics.details) {
+        voiceDiagnostics.details = body.slice(0, 300) || "Discord rejected voice state request.";
+      }
+      continue;
+    }
+
+    const voiceState = (await voiceStateResponse.json()) as DiscordVoiceState;
+    const channelId = voiceState.channel_id?.trim();
+    if (channelId) {
+      voiceChannelByUserId.set(member.id, channelId);
+      voiceDiagnostics.count += 1;
+    }
+  }
 
   const client = await db.connect();
   try {
@@ -160,6 +192,9 @@ membersRouter.post("/sync", async (_req, res) => {
     await client.query(`UPDATE guild_members SET in_guild = FALSE WHERE guild_id = $1`, [env.DISCORD_GUILD_ID]);
 
     for (const member of normalized) {
+      const voiceChannelId = voiceChannelByUserId.get(member.id) ?? null;
+      const inVoice = Boolean(voiceChannelId);
+      const richPresenceText = inVoice ? "In a voice channel" : "Offline or not in voice";
       await client.query(
         `
           INSERT INTO guild_members (
@@ -198,9 +233,9 @@ membersRouter.post("/sync", async (_req, res) => {
           member.avatarUrl,
           member.roleIds,
           member.roleNames,
-          member.inVoice,
-          member.voiceChannelId,
-          member.richPresenceText
+          inVoice,
+          voiceChannelId,
+          richPresenceText
         ]
       );
     }
@@ -213,5 +248,5 @@ membersRouter.post("/sync", async (_req, res) => {
     client.release();
   }
 
-  res.json({ syncedMembers: normalized.length });
+  res.json({ syncedMembers: normalized.length, voice: voiceDiagnostics });
 });

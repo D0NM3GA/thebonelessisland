@@ -7,6 +7,11 @@ import { db } from "../db/client.js";
 const discordScope = encodeURIComponent("identify guilds.members.read");
 export const authRouter = express.Router();
 
+function redirectWithAuthError(res: express.Response, reason: string) {
+  const separator = env.WEB_ORIGIN.includes("?") ? "&" : "?";
+  res.redirect(`${env.WEB_ORIGIN}${separator}authError=${encodeURIComponent(reason)}`);
+}
+
 const tokenResponseSchema = z.object({
   access_token: z.string().min(1)
 });
@@ -67,6 +72,25 @@ authRouter.get("/discord/callback", async (req, res) => {
     }
 
     const me = discordUserSchema.parse(await meResp.json());
+
+    if (!env.DISCORD_GUILD_ID) {
+      req.session = null;
+      redirectWithAuthError(res, "guild_not_configured");
+      return;
+    }
+
+    const guildMemberResp = await fetch(
+      `https://discord.com/api/users/@me/guilds/${env.DISCORD_GUILD_ID}/member`,
+      {
+        headers: { authorization: `Bearer ${tokenJson.access_token}` }
+      }
+    );
+    if (!guildMemberResp.ok) {
+      req.session = null;
+      redirectWithAuthError(res, "not_in_guild");
+      return;
+    }
+
     const upsert = await db.query<{ id: string }>(
       `
         INSERT INTO users (discord_user_id)

@@ -118,6 +118,13 @@ DESIGN & TONE:
 - Avoid corporate or SaaS styling
 - Features should feel like toys + tools, not dashboards
 
+BRAND DETAILS (HIGH PRIORITY):
+- Primary demographic is adult gamers (mostly men in their 30s) from the Discord community.
+- Themed setting is a tropical island: beach, palms, sand, shoreline, warm-weather vibe.
+- Core mascot identity is boneless chicken nuggets with personality (arms/legs/faces, often gaming).
+- New copy, placeholder text, and visual concepts should reflect this identity by default.
+- Keep tone fun and mature: playful without being juvenile, ironic without being cynical.
+
 PRIVACY & TRUST:
 - Everything opt-in
 - Minimal permissions

@@ -1,0 +1,30 @@
+---
+description: Boneless Island brand voice and visual style
+alwaysApply: true
+---
+
+# Boneless Island Brand Style
+
+Use this rule for all UX copy, UI wording, placeholder content, and visual direction.
+
+## Core Identity
+- Audience: mostly adult gamers in their 30s from the existing Discord community.
+- Setting: tropical island world (beach, palm trees, warm sunsets, ocean tones).
+- Mascot theme: boneless chicken nuggets as island citizens (expressive, playful, gaming-focused).
+
+## Voice and Copy
+- Write like a friendly gamer community host: playful, clear, never corporate.
+- Prefer island/worldbuilding language where natural (island, shore, campfire, crew, dock, tide, etc.).
+- Keep humor light and self-aware; avoid cringe, spammy slang, or trying too hard.
+- Placeholder text should feel in-world (example: "Queue up a beach session" vs "Enter value").
+
+## Visual Direction
+- Favor tropical palettes: ocean blues, sunset oranges, sandy neutrals, palm greens.
+- Use rounded, friendly shapes and warm contrast over sterile dashboard styling.
+- Backgrounds and imagery should support the island + nugget identity.
+- Avoid generic SaaS visuals, harsh enterprise tables, and overly clinical layouts.
+
+## UX Principles
+- Community-first and welcoming for returning members.
+- Features should feel like useful tools with personality, not productivity software.
+- Preserve readability/accessibility while keeping the playful theme.
