@@ -1,5 +1,6 @@
 import express from "express";
 import { z } from "zod";
+import { env } from "../config.js";
 import { db } from "../db/client.js";
 import { requireSession } from "../lib/auth.js";
 import { whatCanWePlay } from "../lib/recommend.js";
@@ -30,14 +31,21 @@ async function getAuthedUser(discordUserId: string): Promise<AuthedUser | null> 
 }
 
 export const gameNightRouter = express.Router();
-gameNightRouter.use(requireSession);
 
 async function gameNightExists(id: number): Promise<boolean> {
   const result = await db.query<{ id: number }>(`SELECT id FROM game_nights WHERE id = $1`, [id]);
   return Boolean(result.rows[0]);
 }
 
-gameNightRouter.get("/", async (_req, res) => {
+function canAccessFromSessionOrBot(req: express.Request): boolean {
+  if (Boolean(req.session?.userId)) {
+    return true;
+  }
+  const botSecret = req.get("x-island-bot-secret");
+  return Boolean(env.BOT_API_SHARED_SECRET) && botSecret === env.BOT_API_SHARED_SECRET;
+}
+
+gameNightRouter.get("/", requireSession, async (_req, res) => {
   const discordUserId = String(res.locals.userId);
   const user = await getAuthedUser(discordUserId);
   if (!user) {
@@ -98,7 +106,7 @@ gameNightRouter.get("/", async (_req, res) => {
   });
 });
 
-gameNightRouter.post("/", async (req, res) => {
+gameNightRouter.post("/", requireSession, async (req, res) => {
   const body = createGameNightSchema.parse(req.body);
   const discordUserId = String(res.locals.userId);
   const user = await getAuthedUser(discordUserId);
@@ -132,7 +140,7 @@ gameNightRouter.post("/", async (req, res) => {
   res.status(201).json({ id: gameNightId });
 });
 
-gameNightRouter.get("/:id/attendees", async (req, res) => {
+gameNightRouter.get("/:id/attendees", requireSession, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid game night id" });
@@ -172,7 +180,7 @@ gameNightRouter.get("/:id/attendees", async (req, res) => {
   });
 });
 
-gameNightRouter.post("/:id/attendees/me", async (req, res) => {
+gameNightRouter.post("/:id/attendees/me", requireSession, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid game night id" });
@@ -203,7 +211,7 @@ gameNightRouter.post("/:id/attendees/me", async (req, res) => {
   res.json({ ok: true });
 });
 
-gameNightRouter.delete("/:id/attendees/me", async (req, res) => {
+gameNightRouter.delete("/:id/attendees/me", requireSession, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid game night id" });
@@ -226,7 +234,7 @@ gameNightRouter.delete("/:id/attendees/me", async (req, res) => {
   res.json({ ok: true });
 });
 
-gameNightRouter.get("/:id/votes", async (req, res) => {
+gameNightRouter.get("/:id/votes", requireSession, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid game night id" });
@@ -255,7 +263,7 @@ gameNightRouter.get("/:id/votes", async (req, res) => {
   });
 });
 
-gameNightRouter.post("/:id/votes", async (req, res) => {
+gameNightRouter.post("/:id/votes", requireSession, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid game night id" });
@@ -296,6 +304,11 @@ gameNightRouter.post("/:id/votes", async (req, res) => {
 });
 
 gameNightRouter.post("/:id/recommendations", async (req, res) => {
+  if (!canAccessFromSessionOrBot(req)) {
+    res.status(401).json({ error: "Not authorized to access game night recommendations" });
+    return;
+  }
+
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Invalid game night id" });
