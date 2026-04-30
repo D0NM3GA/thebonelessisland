@@ -2,6 +2,11 @@
 
 Use this as the default style baseline for new screens, placeholders, and UX copy.
 
+## Source of Truth
+- Theme tokens + shared copy: `apps/web/src/theme.ts`
+- Reusable UI primitives: `apps/web/src/islandUi.tsx`
+- Apply tokens/primitives first before introducing new one-off styles.
+
 ## Brand Intent
 - Community vibe: friendly adult gamer hangout, not a corporate dashboard.
 - Setting: tropical island hub (sand, palms, shoreline, warm sky glow).

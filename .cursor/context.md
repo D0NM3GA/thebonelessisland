@@ -136,6 +136,8 @@ IMPLEMENTATION GUIDANCE:
 - Start rule-based for recommendations (no ML initially)
 - Optimize for clarity, debuggability, and iteration
 - Build Phase 1 small but foundational
+- Keep web styling token-driven via `apps/web/src/theme.ts` and UI primitives in `apps/web/src/islandUi.tsx`
+- Default to shared themed components before creating one-off inline UI patterns
 
 RECOMMENDED PHASE 1 SCOPE:
 - Discord OAuth login
