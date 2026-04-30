@@ -104,3 +104,26 @@ steamRouter.post("/sync-owned-games", async (_req, res) => {
     res.status(502).json({ error: "Unable to sync Steam games right now" });
   }
 });
+
+steamRouter.get("/my-games", async (_req, res) => {
+  const discordUserId = String(res.locals.userId);
+  const result = await db.query<{ app_id: number; name: string }>(
+    `
+      SELECT g.app_id, g.name
+      FROM users u
+      INNER JOIN user_games ug ON ug.user_id = u.id
+      INNER JOIN games g ON g.app_id = ug.app_id
+      WHERE u.discord_user_id = $1
+      ORDER BY g.name ASC
+      LIMIT 5000
+    `,
+    [discordUserId]
+  );
+
+  res.json({
+    games: result.rows.map((row) => ({
+      appId: row.app_id,
+      name: row.name
+    }))
+  });
+});
