@@ -28,3 +28,13 @@ Use this rule for all UX copy, UI wording, placeholder content, and visual direc
 - Community-first and welcoming for returning members.
 - Features should feel like useful tools with personality, not productivity software.
 - Preserve readability/accessibility while keeping the playful theme.
+
+## Scene + Themes
+- Every page renders inside the full-bleed scene shell (sky / sun-or-moon / ocean / beach / parallax palms).
+- Day mode = blue sky + clouds + sun; Night mode = navy sky + stars + moon. Sun/moon arc-dips behind the horizon during the switch.
+- Theme toggle lives in the user-menu dropdown. Scene + cards must remain readable in both modes.
+- Use translucent glass panels (`backdrop-filter` + `panelBg` token) over the scene; avoid opaque slate slabs.
+
+## Game Night Flow
+- Game-night voting (Hype/Maybe/Skip) was deliberately removed. Do NOT re-introduce.
+- Hosts pick the game directly or accept the AI session-composer recommendation; crew RSVPs.

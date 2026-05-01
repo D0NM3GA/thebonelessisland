@@ -38,6 +38,8 @@ export const islandInputStyle: CSSProperties = {
 
 export const islandCardStyle: CSSProperties = {
   background: islandTheme.color.panelBg,
+  backdropFilter: islandTheme.glass.blur,
+  WebkitBackdropFilter: islandTheme.glass.blur,
   border: `1px solid ${islandTheme.color.cardBorder}`,
   borderRadius: islandTheme.radius.card,
   padding: islandTheme.spacing.cardPadding

@@ -1,0 +1,663 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { dayThemeVars, islandTheme, nightThemeVars } from "../theme.js";
+import { DayNightProvider, useDayNight } from "./useDayNight.js";
+
+type IslandSceneShellProps = {
+  children: ReactNode;
+};
+
+export function IslandSceneShell({ children }: IslandSceneShellProps) {
+  return (
+    <DayNightProvider>
+      <SceneGlobalStyles />
+      <SceneBackdrop />
+      <PalmFrameLeft />
+      <PalmFrameRight />
+      {children}
+    </DayNightProvider>
+  );
+}
+
+function SceneBackdrop() {
+  const { mode } = useDayNight();
+  return (
+    <div
+      aria-hidden="true"
+      data-theme={mode}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: -10,
+        overflow: "hidden",
+        pointerEvents: "none",
+        transition: "background 1200ms ease",
+        background:
+          mode === "day"
+            ? "radial-gradient(ellipse 70% 50% at 50% 0%, #fef3c7 0%, transparent 55%), linear-gradient(180deg, #87ceeb 0%, #a8d6ee 30%, #c8e3f1 55%, #e8d4a8 78%, #d4b677 100%)"
+            : "radial-gradient(ellipse 80% 60% at 70% 0%, rgba(96,165,250,0.18), transparent 60%), radial-gradient(ellipse 80% 50% at 20% 5%, rgba(192,132,252,0.14), transparent 60%), linear-gradient(180deg, #0b1d3a 0%, #0f172a 35%, #08111f 70%, #06101c 100%)"
+      }}
+    >
+      <Stars active={mode === "night"} />
+      <Clouds active={mode === "day"} />
+      <Celestial mode={mode} />
+      <OceanBand mode={mode} />
+      <BeachBand mode={mode} />
+      <SceneVignette mode={mode} />
+    </div>
+  );
+}
+
+function Stars({ active }: { active: boolean }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        opacity: active ? 0.85 : 0,
+        transition: "opacity 1500ms ease",
+        animation: "islandTwinkle 4s ease-in-out infinite",
+        backgroundImage: [
+          "radial-gradient(1px 1px at 12% 18%, white, transparent)",
+          "radial-gradient(1px 1px at 22% 38%, white, transparent)",
+          "radial-gradient(1.5px 1.5px at 35% 12%, white, transparent)",
+          "radial-gradient(1px 1px at 48% 28%, white, transparent)",
+          "radial-gradient(1px 1px at 62% 8%, white, transparent)",
+          "radial-gradient(1.5px 1.5px at 75% 22%, white, transparent)",
+          "radial-gradient(1px 1px at 85% 35%, white, transparent)",
+          "radial-gradient(1px 1px at 92% 14%, white, transparent)",
+          "radial-gradient(1px 1px at 18% 48%, white, transparent)",
+          "radial-gradient(1px 1px at 55% 42%, white, transparent)",
+          "radial-gradient(1.5px 1.5px at 8% 28%, white, transparent)",
+          "radial-gradient(1px 1px at 42% 52%, white, transparent)"
+        ].join(", ")
+      }}
+    />
+  );
+}
+
+function Clouds({ active }: { active: boolean }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "-10%",
+        right: "-10%",
+        top: 0,
+        height: "40%",
+        opacity: active ? 1 : 0,
+        transition: "opacity 1500ms ease",
+        pointerEvents: "none"
+      }}
+    >
+      <Cloud className="island-cloud-a" left="8%" top="15%" width={180} drift="90s" />
+      <Cloud className="island-cloud-b" left="50%" top="8%" width={240} drift="120s" delay="-40s" />
+      <Cloud className="island-cloud-c" left="75%" top="22%" width={160} drift="100s" delay="-60s" />
+    </div>
+  );
+}
+
+type CloudProps = {
+  className: string;
+  left: string;
+  top: string;
+  width: number;
+  drift: string;
+  delay?: string;
+};
+
+function Cloud({ className, left, top, width, drift, delay = "0s" }: CloudProps) {
+  return (
+    <div
+      className={className}
+      style={{
+        position: "absolute",
+        left,
+        top,
+        width,
+        height: width * 0.2,
+        background: "white",
+        borderRadius: 100,
+        filter: "blur(0.5px)",
+        opacity: 0.92,
+        animation: `islandCloudDrift ${drift} linear infinite`,
+        animationDelay: delay
+      }}
+    />
+  );
+}
+
+function Celestial({ mode }: { mode: "day" | "night" }) {
+  const { isTransitioning } = useDayNight();
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [renderMode, setRenderMode] = useState(mode);
+
+  useEffect(() => {
+    if (!ref.current) {
+      setRenderMode(mode);
+      return;
+    }
+    const el = ref.current;
+    el.style.transition = "transform 1100ms cubic-bezier(.55,0,.6,.4), opacity 700ms ease";
+    el.style.setProperty("--celestial-y", "60vh");
+    el.style.opacity = "0";
+    const flipTimer = window.setTimeout(() => {
+      setRenderMode(mode);
+      el.style.transition = "none";
+      el.style.setProperty("--celestial-y", "60vh");
+      void el.offsetWidth;
+      el.style.transition = "transform 1500ms cubic-bezier(.2,.6,.3,1), opacity 900ms ease";
+      el.style.setProperty("--celestial-y", "0px");
+      el.style.opacity = "1";
+    }, 1100);
+    return () => window.clearTimeout(flipTimer);
+  }, [mode]);
+
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        left: "50%",
+        top: "7%",
+        width: 160,
+        height: 160,
+        transform: "translate(-50%, 0) translateY(var(--celestial-y, 0))",
+        opacity: isTransitioning ? undefined : 1,
+        pointerEvents: "none"
+      }}
+    >
+      {renderMode === "day" ? <SunDisc /> : <MoonDisc />}
+    </div>
+  );
+}
+
+function SunDisc() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        borderRadius: 999,
+        background:
+          "radial-gradient(circle, #fff8d4 0%, #fde68a 30%, #f59e0b 70%, transparent 78%)",
+        boxShadow: "0 0 60px rgba(253, 224, 71, 0.6), 0 0 120px rgba(251, 146, 60, 0.4)"
+      }}
+    />
+  );
+}
+
+function MoonDisc() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        borderRadius: 999,
+        background:
+          "radial-gradient(circle at 38% 38%, #fffbe7 0%, #e2e8f0 35%, #94a3b8 70%, transparent 78%)",
+        boxShadow: "0 0 60px rgba(186, 230, 253, 0.4), 0 0 120px rgba(147, 197, 253, 0.25)"
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          width: 22,
+          height: 22,
+          left: "35%",
+          top: "28%",
+          borderRadius: 999,
+          background: "rgba(100, 116, 139, 0.25)"
+        }}
+      />
+      <span
+        style={{
+          position: "absolute",
+          width: 14,
+          height: 14,
+          left: "58%",
+          top: "55%",
+          borderRadius: 999,
+          background: "rgba(100, 116, 139, 0.25)",
+          boxShadow: "-36px 12px 0 rgba(100,116,139,0.18)"
+        }}
+      />
+    </div>
+  );
+}
+
+function OceanBand({ mode }: { mode: "day" | "night" }) {
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: "50%",
+          height: "30%",
+          background:
+            mode === "day"
+              ? "linear-gradient(180deg, #4a9fc4 0%, #2d7a99 60%, #1e5f7a 100%)"
+              : "linear-gradient(180deg, #0e3a52 0%, #082238 60%, #050f1c 100%)",
+          transition: "background 1200ms ease",
+          opacity: 0.92
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: "50%",
+          height: "8%",
+          backgroundImage: `repeating-linear-gradient(110deg,
+            rgba(255,255,255,0) 0px,
+            rgba(255,255,255,0) 28px,
+            rgba(255,255,255,0.10) 28px,
+            rgba(255,255,255,0.10) 30px,
+            rgba(255,255,255,0) 30px,
+            rgba(255,255,255,0) 60px
+          )`,
+          backgroundSize: "220px 100%",
+          mixBlendMode: "screen",
+          opacity: 0.85,
+          animation: `islandWaveDrift ${islandTheme.motion.dur.ambient} linear infinite`
+        }}
+      />
+    </>
+  );
+}
+
+function BeachBand({ mode }: { mode: "day" | "night" }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: "8%",
+        background:
+          mode === "day"
+            ? "linear-gradient(180deg, #f4e4c1 0%, #e8d4a8 60%, #c39d5e 100%)"
+            : "linear-gradient(180deg, #8b7355 0%, #6b5640 60%, #3d2f22 100%)",
+        boxShadow: "inset 0 8px 14px rgba(255, 255, 255, 0.12), inset 0 -8px 14px rgba(0, 0, 0, 0.18)",
+        transition: "background 1200ms ease, filter 1200ms ease",
+        filter: mode === "day" ? "brightness(1)" : "brightness(0.55)"
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 12,
+          backgroundImage:
+            "repeating-radial-gradient(circle at 50% 100%, rgba(255,255,255,0.85) 0 6px, transparent 6px 16px)",
+          backgroundSize: "32px 12px",
+          opacity: 0.7
+        }}
+      />
+    </div>
+  );
+}
+
+function SceneVignette({ mode }: { mode: "day" | "night" }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background:
+          mode === "day"
+            ? "radial-gradient(ellipse at 50% 35%, transparent 50%, rgba(30, 60, 90, 0.18) 100%)"
+            : "radial-gradient(ellipse at 50% 35%, transparent 40%, rgba(8, 16, 30, 0.55) 100%)",
+        transition: "background 1200ms ease",
+        pointerEvents: "none"
+      }}
+    />
+  );
+}
+
+function usePalmParallax(side: "left" | "right") {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let ticking = false;
+    const update = () => {
+      const el = ref.current;
+      if (!el) {
+        ticking = false;
+        return;
+      }
+      const y = window.scrollY;
+      const vh = window.innerHeight;
+      const t = Math.min(1, y / (vh * 0.9));
+      const lift = -t * 200;
+      const out = t * 160;
+      const scale = 1 - t * 0.3;
+      const flip = side === "right" ? " scaleX(-1)" : "";
+      const dx = side === "right" ? out : -out;
+      el.style.transform = `translate(${dx}px, ${lift}px) scale(${scale})${flip}`;
+      el.style.opacity = `${1 - t * 0.4}`;
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(update);
+        ticking = true;
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", update);
+    update();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", update);
+    };
+  }, [side]);
+
+  return ref;
+}
+
+function PalmFrameLeft() {
+  const ref = usePalmParallax("left");
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: "-3vw",
+        width: "30vw",
+        maxWidth: 460,
+        minWidth: 220,
+        height: "100vh",
+        zIndex: -5,
+        pointerEvents: "none",
+        willChange: "transform"
+      }}
+    >
+      <PalmTreeSvg suffix="L" />
+    </div>
+  );
+}
+
+function PalmFrameRight() {
+  const ref = usePalmParallax("right");
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      style={{
+        position: "fixed",
+        top: 0,
+        right: "-3vw",
+        width: "30vw",
+        maxWidth: 460,
+        minWidth: 220,
+        height: "100vh",
+        zIndex: -5,
+        pointerEvents: "none",
+        willChange: "transform",
+        transform: "scaleX(-1)"
+      }}
+    >
+      <PalmTreeSvg suffix="R" />
+    </div>
+  );
+}
+
+const TRUNK_PATH = "M 50 920 C 65 720, 88 520, 120 360 C 138 280, 158 240, 180 220";
+
+const TRUNK_RINGS = [
+  "M 30 880 q 26 -8 52 0",
+  "M 32 825 q 26 -8 52 0",
+  "M 38 770 q 26 -8 52 0",
+  "M 46 715 q 26 -8 52 0",
+  "M 56 660 q 26 -8 52 0",
+  "M 66 605 q 26 -8 52 0",
+  "M 78 550 q 26 -8 52 0",
+  "M 90 495 q 26 -8 52 0",
+  "M 102 440 q 26 -8 52 0",
+  "M 114 385 q 26 -8 52 0",
+  "M 128 332 q 24 -8 50 0",
+  "M 144 282 q 22 -7 46 0",
+  "M 158 240 q 20 -6 42 0"
+];
+
+const FROND_PATHS: Array<{ frondClass: string; d: string; rib?: string }> = [
+  {
+    frondClass: "frond-1",
+    d: "M 180 220 C 240 150, 330 100, 420 60 C 380 110, 310 160, 250 200 C 230 220, 210 235, 195 240 Z",
+    rib: "M 180 220 Q 280 145, 418 65"
+  },
+  {
+    frondClass: "frond-2",
+    d: "M 180 220 C 270 220, 380 240, 440 290 C 380 270, 300 255, 220 245 C 200 240, 190 232, 195 240 Z",
+    rib: "M 180 220 Q 310 240, 438 292"
+  },
+  {
+    frondClass: "frond-3",
+    d: "M 180 220 C 200 130, 220 40, 240 -40 C 230 60, 215 150, 200 235 Z",
+    rib: "M 180 220 Q 215 100, 240 -38"
+  },
+  {
+    frondClass: "frond-4",
+    d: "M 180 220 C 130 140, 60 80, -20 40 C 60 110, 130 175, 195 240 Z",
+    rib: "M 180 220 Q 90 130, -20 42"
+  },
+  {
+    frondClass: "frond-5",
+    d: "M 180 220 C 100 220, -10 240, -60 290 C 0 270, 80 255, 175 245 C 195 240, 200 232, 195 240 Z",
+    rib: "M 180 220 Q 60 240, -58 292"
+  },
+  {
+    frondClass: "frond-6",
+    d: "M 180 220 C 230 290, 290 380, 320 480 C 280 400, 240 320, 200 240 Z",
+    rib: "M 180 220 Q 250 360, 320 482"
+  },
+  {
+    frondClass: "frond-1",
+    d: "M 180 220 C 130 290, 70 370, 30 470 C 80 390, 130 320, 195 240 Z",
+    rib: "M 180 220 Q 110 360, 30 472"
+  },
+  {
+    frondClass: "frond-2",
+    d: "M 180 220 C 250 180, 340 165, 420 170 C 350 190, 280 215, 200 235 Z",
+    rib: "M 180 220 Q 290 180, 420 170"
+  },
+  {
+    frondClass: "frond-3",
+    d: "M 180 220 C 110 180, 20 165, -60 170 C 10 190, 90 215, 195 235 Z",
+    rib: "M 180 220 Q 70 180, -60 170"
+  },
+  {
+    frondClass: "frond-4",
+    d: "M 180 220 C 230 110, 280 30, 320 -30 C 290 60, 240 150, 200 235 Z",
+    rib: "M 180 220 Q 250 100, 322 -28"
+  },
+  {
+    frondClass: "frond-5",
+    d: "M 180 220 C 130 110, 80 30, 40 -30 C 70 60, 120 150, 195 235 Z",
+    rib: "M 180 220 Q 110 100, 38 -28"
+  },
+  {
+    frondClass: "frond-6",
+    d: "M 180 220 C 200 290, 200 360, 195 440 C 188 360, 188 290, 200 235 Z"
+  }
+];
+
+function PalmTreeSvg({ suffix }: { suffix: "L" | "R" }) {
+  const trunkId = `trunk-${suffix}`;
+  const frondId = `frond-${suffix}`;
+  const clipId = `trunk-clip-${suffix}`;
+  return (
+    <svg
+      viewBox="0 0 400 900"
+      preserveAspectRatio="xMidYMax meet"
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "block",
+        filter: "drop-shadow(0 30px 40px rgba(0,0,0,0.4))"
+      }}
+    >
+      <defs>
+        <linearGradient id={trunkId} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor="#3a2417" />
+          <stop offset="0.5" stopColor="#7a4d2a" />
+          <stop offset="1" stopColor="#2a1810" />
+        </linearGradient>
+        <radialGradient id={frondId} cx="0.5" cy="0.5">
+          <stop offset="0" stopColor="#3aa05c" />
+          <stop offset="1" stopColor="#0d4a22" />
+        </radialGradient>
+        <clipPath id={clipId}>
+          <path
+            d={TRUNK_PATH}
+            stroke="black"
+            strokeWidth={42}
+            fill="none"
+            strokeLinecap="round"
+          />
+        </clipPath>
+      </defs>
+
+      <path
+        d={TRUNK_PATH}
+        stroke={`url(#${trunkId})`}
+        strokeWidth={42}
+        fill="none"
+        strokeLinecap="round"
+      />
+
+      <g clipPath={`url(#${clipId})`} fill="none" stroke="#1a0e08" strokeWidth={3} opacity={0.6} strokeLinecap="round">
+        {TRUNK_RINGS.map((d, i) => (
+          <path key={i} d={d} />
+        ))}
+      </g>
+
+      <path
+        d="M 55 920 C 70 720, 92 520, 124 360 C 142 280, 162 240, 184 220"
+        stroke="rgba(255,200,140,0.18)"
+        strokeWidth={6}
+        fill="none"
+        strokeLinecap="round"
+      />
+
+      <g
+        className={`island-palm-canopy island-palm-canopy-${suffix.toLowerCase()}`}
+        style={{ transformOrigin: "180px 220px" }}
+      >
+        <g>
+          <ellipse cx={170} cy={225} rx={14} ry={16} fill="#2a1810" stroke="#1a0e08" strokeWidth={2} />
+          <ellipse cx={188} cy={232} rx={13} ry={15} fill="#3a2417" stroke="#1a0e08" strokeWidth={2} />
+          <ellipse cx={202} cy={222} rx={12} ry={14} fill="#2a1810" stroke="#1a0e08" strokeWidth={2} />
+          <ellipse cx={158} cy={240} rx={11} ry={13} fill="#3a2417" stroke="#1a0e08" strokeWidth={2} />
+          <ellipse cx={195} cy={250} rx={12} ry={14} fill="#2a1810" stroke="#1a0e08" strokeWidth={2} />
+          <ellipse cx={167} cy={220} rx={3} ry={2} fill="rgba(255,255,255,0.18)" />
+          <ellipse cx={185} cy={227} rx={3} ry={2} fill="rgba(255,255,255,0.18)" />
+        </g>
+        {FROND_PATHS.map((f, i) => (
+          <g key={i} className={`island-frond ${"island-" + f.frondClass}`} style={{ transformOrigin: "180px 220px" }}>
+            <path d={f.d} fill={`url(#${frondId})`} stroke="#0a3a1a" strokeWidth={2} />
+            {f.rib ? <path d={f.rib} stroke="#0a3a1a" strokeWidth={1.5} fill="none" /> : null}
+          </g>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
+function buildVarBlock(vars: Record<string, string>): string {
+  return Object.entries(vars)
+    .map(([k, v]) => `${k}: ${v};`)
+    .join("\n          ");
+}
+
+function SceneGlobalStyles() {
+  const { font } = islandTheme;
+  return (
+    <style>
+      {`
+        :root {
+          ${buildVarBlock(nightThemeVars)}
+        }
+        :root[data-theme="day"] {
+          ${buildVarBlock(dayThemeVars)}
+        }
+        html, body {
+          margin: 0;
+          background: var(--bi-app-bg);
+        }
+        body {
+          min-height: 100vh;
+          font-family: ${font.body};
+          color: var(--bi-text-primary);
+          -webkit-font-smoothing: antialiased;
+          overflow-x: hidden;
+          transition: color 600ms ease;
+        }
+        h1, h2, h3, h4, h5, h6 {
+          font-family: ${font.display};
+          letter-spacing: -0.01em;
+        }
+        code, pre, kbd, samp {
+          font-family: ${font.mono};
+        }
+        .island-display { font-family: ${font.display}; font-weight: 700; letter-spacing: -0.01em; }
+        .island-mono { font-family: ${font.mono}; }
+
+        .island-palm-canopy-l { animation: islandPalmSwayLeft 7s ease-in-out infinite; }
+        .island-palm-canopy-r { animation: islandPalmSwayRight 8s ease-in-out infinite; animation-delay: -2s; }
+        .island-frond-1 { animation: islandFrondFlex 5s ease-in-out infinite; }
+        .island-frond-2 { animation: islandFrondFlex 6s ease-in-out infinite; animation-delay: -1s; }
+        .island-frond-3 { animation: islandFrondFlex 5.5s ease-in-out infinite; animation-delay: -2s; }
+        .island-frond-4 { animation: islandFrondFlex 6.5s ease-in-out infinite; animation-delay: -3s; }
+        .island-frond-5 { animation: islandFrondFlex 5s ease-in-out infinite; animation-delay: -4s; }
+        .island-frond-6 { animation: islandFrondFlex 7s ease-in-out infinite; animation-delay: -2.5s; }
+
+        @keyframes islandPalmSwayLeft {
+          0%, 100% { transform: rotate(-2deg); }
+          50% { transform: rotate(2.5deg); }
+        }
+        @keyframes islandPalmSwayRight {
+          0%, 100% { transform: rotate(-2deg); }
+          50% { transform: rotate(2.5deg); }
+        }
+        @keyframes islandFrondFlex {
+          0%, 100% { transform: rotate(-1.5deg); }
+          50% { transform: rotate(2deg); }
+        }
+        @keyframes islandWaveDrift {
+          from { background-position: 0 0; }
+          to { background-position: -220px 0; }
+        }
+        @keyframes islandTwinkle {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(0.6); }
+        }
+        @keyframes islandCloudDrift {
+          from { transform: translateX(0); }
+          to { transform: translateX(120vw); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .island-palm-canopy-l,
+          .island-palm-canopy-r,
+          .island-frond,
+          .island-cloud-a,
+          .island-cloud-b,
+          .island-cloud-c {
+            animation: none !important;
+          }
+        }
+      `}
+    </style>
+  );
+}
