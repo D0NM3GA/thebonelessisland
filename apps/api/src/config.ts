@@ -18,7 +18,13 @@ const Env = z.object({
   DISCORD_REDIRECT_URI: z.string().default("http://localhost:3000/auth/discord/callback"),
   DISCORD_GUILD_ID: z.string().default(""),
   DISCORD_BOT_TOKEN: z.string().default(""),
-  STEAM_WEB_API_KEY: z.string().default("")
+  STEAM_WEB_API_KEY: z.string().default(""),
+  IGDB_IMAGE_FALLBACK_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  IGDB_CLIENT_ID: z.string().default(""),
+  IGDB_CLIENT_SECRET: z.string().default("")
 });
 
 export const env = Env.parse(process.env);

@@ -55,6 +55,7 @@ Use this as the default style baseline for new screens, placeholders, and UX cop
 - `IslandTileButton`: preferred for home/feature promo tiles with background imagery.
 - `IslandMemberChip`: preferred for selectable member pills/chips.
 - `IslandGameCard`: preferred for selectable game rows/cards in recommendation and vote flows.
+- `IslandGameBlade`: preferred for dense, interactive vote lists with inline actions.
 - `IslandComingSoonTile`: preferred placeholder tile for reserved feature slots.
 - `IslandNewsPlaceholderCard`: preferred shell for temporary/placeholder news entries.
 - `IslandActiveMemberRow`: preferred row for "who's active" member status blocks.

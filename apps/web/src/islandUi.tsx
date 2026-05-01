@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, CSSProperties, HTMLAttributes, ReactNode } from "react";
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import { islandTheme } from "./theme.js";
 
 export type IslandButtonVariant = "primary" | "secondary" | "danger";
@@ -149,10 +149,34 @@ type IslandGameCardProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   title: string;
   subtitle: string;
   imageUrl?: string | null;
+  imageFallbackUrls?: string[];
   selected: boolean;
 };
 
-export function IslandGameCard({ title, subtitle, imageUrl, selected, style, ...props }: IslandGameCardProps) {
+export function IslandGameCard({
+  title,
+  subtitle,
+  imageUrl,
+  imageFallbackUrls = [],
+  selected,
+  style,
+  ...props
+}: IslandGameCardProps) {
+  const imageKey = `${imageUrl ?? ""}|${imageFallbackUrls.join("|")}`;
+  const imageCandidates = useMemo(
+    () =>
+      Array.from(new Set([imageUrl ?? "", ...imageFallbackUrls].filter((value) => value.trim().length > 0))),
+    [imageKey]
+  );
+  const [imageIndex, setImageIndex] = useState(0);
+  const [showImageFallback, setShowImageFallback] = useState(false);
+  const activeImageUrl = !showImageFallback ? imageCandidates[imageIndex] ?? null : null;
+
+  useEffect(() => {
+    setImageIndex(0);
+    setShowImageFallback(false);
+  }, [imageKey]);
+
   return (
     <button
       {...props}
@@ -166,10 +190,19 @@ export function IslandGameCard({ title, subtitle, imageUrl, selected, style, ...
         ...style
       }}
     >
-      {imageUrl ? (
+      {activeImageUrl ? (
         <img
-          src={imageUrl}
+          src={activeImageUrl}
           alt={title}
+          onError={() => {
+            setImageIndex((current) => {
+              if (current + 1 < imageCandidates.length) {
+                return current + 1;
+              }
+              setShowImageFallback(true);
+              return current;
+            });
+          }}
           style={{
             width: "100%",
             height: 90,
@@ -178,10 +211,272 @@ export function IslandGameCard({ title, subtitle, imageUrl, selected, style, ...
             border: `1px solid ${islandTheme.color.border}`
           }}
         />
-      ) : null}
+      ) : (
+        <div
+          aria-hidden="true"
+          style={{
+            width: "100%",
+            height: 90,
+            borderRadius: 6,
+            border: `1px solid ${islandTheme.color.border}`,
+            background: "linear-gradient(140deg, #0b1220, #132640)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: islandTheme.color.textSubtle,
+            fontSize: 12,
+            letterSpacing: 0.2
+          }}
+        >
+          Island art incoming
+        </div>
+      )}
       <div style={{ marginTop: 6, fontWeight: 600 }}>{title}</div>
       <div style={{ fontSize: 12, opacity: 0.95 }}>{subtitle}</div>
     </button>
+  );
+}
+
+type IslandGameBladeProps = HTMLAttributes<HTMLDivElement> & {
+  title: string;
+  subtitle: string;
+  meta?: string;
+  tags?: string[];
+  imageUrl?: string | null;
+  imageFallbackUrls?: string[];
+  selected: boolean;
+  hovered?: boolean;
+  isVoting?: boolean;
+  justVoted?: boolean;
+  voteFlashLabel?: string;
+  voteFlashTone?: "up" | "neutral" | "down";
+  currentUserVote?: number | null;
+  onSelect?: () => void;
+  onVote?: (vote: -1 | 0 | 1) => void;
+};
+
+export function IslandGameBlade({
+  title,
+  subtitle,
+  meta,
+  tags = [],
+  imageUrl,
+  imageFallbackUrls = [],
+  selected,
+  hovered = false,
+  isVoting = false,
+  justVoted = false,
+  voteFlashLabel,
+  voteFlashTone = "up",
+  currentUserVote = null,
+  onSelect,
+  onVote,
+  style,
+  ...props
+}: IslandGameBladeProps) {
+  const imageKey = `${imageUrl ?? ""}|${imageFallbackUrls.join("|")}`;
+  const imageCandidates = useMemo(
+    () =>
+      Array.from(new Set([imageUrl ?? "", ...imageFallbackUrls].filter((value) => value.trim().length > 0))),
+    [imageKey]
+  );
+  const [imageIndex, setImageIndex] = useState(0);
+  const [showImageFallback, setShowImageFallback] = useState(false);
+  const activeImageUrl = !showImageFallback ? imageCandidates[imageIndex] ?? null : null;
+
+  useEffect(() => {
+    setImageIndex(0);
+    setShowImageFallback(false);
+  }, [imageKey]);
+
+  return (
+    <div
+      {...props}
+      onClick={() => onSelect?.()}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect?.();
+        }
+      }}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        borderRadius: islandTheme.radius.control,
+        border: selected ? `1px solid ${islandTheme.color.primaryGlow}` : `1px solid ${islandTheme.color.border}`,
+        minHeight: 98,
+        background: islandTheme.color.panelBg,
+        boxShadow: hovered ? "0 0 0 1px rgba(96,165,250,0.6), 0 10px 24px rgba(10,20,45,0.5)" : "0 6px 16px rgba(2,6,23,0.28)",
+        transform: hovered ? "translateY(-2px) scale(1.01)" : "translateY(0) scale(1)",
+        transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease",
+        animation: justVoted ? "islandBladePulse 700ms ease-out" : undefined,
+        ...style
+      }}
+    >
+      {justVoted && voteFlashLabel ? (
+        <div
+          style={{
+            position: "absolute",
+            right: 8,
+            top: 8,
+            zIndex: 3,
+            borderRadius: 999,
+            padding: "0.2rem 0.46rem",
+            fontSize: 11,
+            fontWeight: 700,
+            border:
+              voteFlashTone === "up"
+                ? "1px solid #38bdf8"
+                : voteFlashTone === "down"
+                  ? "1px solid #f87171"
+                  : "1px solid #facc15",
+            background:
+              voteFlashTone === "up" ? "rgba(8,47,73,0.9)" : voteFlashTone === "down" ? "rgba(69,10,10,0.9)" : "rgba(66,32,6,0.9)",
+            color: voteFlashTone === "up" ? "#bae6fd" : voteFlashTone === "down" ? "#fee2e2" : "#fef9c3",
+            animation: "islandVoteBadgePop 700ms ease-out"
+          }}
+        >
+          {voteFlashLabel}
+        </div>
+      ) : null}
+      {activeImageUrl ? (
+        <>
+          <img
+            src={activeImageUrl}
+            alt=""
+            aria-hidden="true"
+            onError={() => {
+              setImageIndex((current) => {
+                if (current + 1 < imageCandidates.length) {
+                  return current + 1;
+                }
+                setShowImageFallback(true);
+                return current;
+              });
+            }}
+            style={{ position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `linear-gradient(100deg, rgba(8,16,34,0.82), rgba(8,16,34,0.46)), url("${activeImageUrl}")`,
+              backgroundPosition: "center",
+              backgroundSize: hovered ? "112%" : "106%",
+              transition: "background-size 180ms ease"
+            }}
+          />
+        </>
+      ) : (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(140deg, #0b1220, #132640)"
+          }}
+        />
+      )}
+
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "grid",
+          gridTemplateColumns: "1fr auto",
+          alignItems: "center",
+          gap: 10,
+          padding: "0.58rem 0.62rem"
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+          <div style={{ fontSize: 12, opacity: 0.95 }}>{subtitle}</div>
+          {meta ? <div style={{ fontSize: 11, opacity: 0.84 }}>{meta}</div> : null}
+          <div style={{ marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {tags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                style={{
+                  fontSize: 10,
+                  borderRadius: 999,
+                  border: "1px solid rgba(203,213,225,0.42)",
+                  padding: "0.12rem 0.42rem",
+                  background: "rgba(2,6,23,0.25)"
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+            <span
+              style={{
+                fontSize: 10,
+                borderRadius: 999,
+                border: `1px solid ${selected ? islandTheme.color.primaryGlow : "rgba(203,213,225,0.42)"}`,
+                padding: "0.12rem 0.42rem",
+                color: selected ? islandTheme.color.primaryText : islandTheme.color.textSubtle,
+                background: selected ? islandTheme.color.primary : "rgba(2,6,23,0.25)"
+              }}
+            >
+              {selected ? "Selected" : "Pick for finalize"}
+            </span>
+            <span
+              style={{
+                fontSize: 10,
+                borderRadius: 999,
+                border: "1px solid rgba(203,213,225,0.42)",
+                padding: "0.12rem 0.42rem",
+                background: "rgba(2,6,23,0.25)"
+              }}
+            >
+              {currentUserVote === 1 ? "Your vote: +1" : currentUserVote === 0 ? "Your vote: 0" : currentUserVote === -1 ? "Your vote: -1" : "Not voted"}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gap: 6, justifyItems: "end" }}>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onVote?.(1);
+            }}
+            disabled={isVoting}
+            style={{ ...islandButtonStyle("primary"), padding: "0.26rem 0.58rem", marginRight: 0, fontSize: 11 }}
+          >
+            Hype +1
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onVote?.(0);
+            }}
+            disabled={isVoting}
+            style={{ ...islandButtonStyle("secondary"), padding: "0.24rem 0.58rem", marginRight: 0, fontSize: 11 }}
+          >
+            Maybe 0
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onVote?.(-1);
+            }}
+            disabled={isVoting}
+            style={{ ...islandButtonStyle("danger"), padding: "0.24rem 0.58rem", marginRight: 0, fontSize: 11 }}
+          >
+            Skip -1
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

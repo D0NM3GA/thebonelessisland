@@ -4,11 +4,12 @@ import {
   IslandButton,
   IslandCard,
   IslandComingSoonTile,
-  IslandGameCard,
+  IslandGameBlade,
   IslandMemberChip,
   IslandNewsPlaceholderCard,
   IslandStatusPill,
   IslandTileButton,
+  islandButtonStyle,
   islandCardStyle,
   islandInputStyle
 } from "./islandUi.js";
@@ -21,6 +22,11 @@ type ToastItem = {
   id: number;
   message: string;
   tone: ToastTone;
+};
+type VoteFlash = {
+  appId: number;
+  label: string;
+  tone: "up" | "neutral" | "down";
 };
 
 type Recommendation = {
@@ -50,6 +56,7 @@ type GameNightVote = {
   appId: number;
   name: string;
   totalVote: number;
+  currentUserVote: number | null;
 };
 
 type GameNightAttendee = {
@@ -62,12 +69,14 @@ type AvailableGame = {
   name: string;
   owners: number;
   voteTotal: number;
+  currentUserVote: number | null;
   maxPlayers: number;
   medianSessionMinutes: number;
   developers: string[];
   tags: string[];
   headerImageUrl: string | null;
 };
+type VoteSortMode = "topVoted" | "mostOwned" | "aToZ";
 
 type GuildMember = {
   discordUserId: string;
@@ -101,7 +110,66 @@ const LOGO_BG_URL = "/boneless-island-logo.png";
 const GAME_NIGHTS_TILE_BG_URL = "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/570/header.jpg";
 const BONELESS_TOOLS_TILE_BG_URL =
   "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/730/header.jpg";
+const GAME_NIGHT_BANNER_IMAGES = [
+  "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/1085660/header.jpg",
+  "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/582010/header.jpg",
+  "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/236390/header.jpg",
+  "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/252490/header.jpg",
+  "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/1172470/header.jpg",
+  "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/1245620/header.jpg"
+] as const;
 const API_BASE_URL = "http://localhost:3000";
+
+function getGameNightBanner(gameNightId: number) {
+  return GAME_NIGHT_BANNER_IMAGES[gameNightId % GAME_NIGHT_BANNER_IMAGES.length];
+}
+
+function formatGameNightDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Time TBD";
+  }
+  return date.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function getGameImageCandidates(appId: number, headerImageUrl: string | null) {
+  const candidates = [
+    headerImageUrl ?? "",
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_467x181.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_467x181.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_467x181.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_sm_120.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_sm_120.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_capsule.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_capsule.jpg`
+  ].filter((value) => value.trim().length > 0);
+  return Array.from(new Set(candidates));
+}
+
+function isLikelyBetaOrPublicTestGame(game: AvailableGame) {
+  const name = game.name.toLowerCase();
+  const tags = game.tags.map((tag) => tag.toLowerCase());
+  const tokens = [name, ...tags].join(" ");
+  const keywordPattern = /\b(beta|playtest|public test|test server|technical test|tech test|ptb|ptr)\b/;
+  return keywordPattern.test(tokens);
+}
 
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -118,10 +186,17 @@ export function App() {
   const [newNightScheduledFor, setNewNightScheduledFor] = useState("");
   const [selectedNightId, setSelectedNightId] = useState<number | null>(null);
   const [voteAppId, setVoteAppId] = useState("");
-  const [voteValue, setVoteValue] = useState("1");
+  const [votingGameAppId, setVotingGameAppId] = useState<number | null>(null);
   const [nightVotes, setNightVotes] = useState<GameNightVote[]>([]);
   const [nightAttendees, setNightAttendees] = useState<GameNightAttendee[]>([]);
   const [availableGames, setAvailableGames] = useState<AvailableGame[]>([]);
+  const [hideBetaAndPublicTests, setHideBetaAndPublicTests] = useState(true);
+  const [gameVoteSearch, setGameVoteSearch] = useState("");
+  const [voteSortMode, setVoteSortMode] = useState<VoteSortMode>("topVoted");
+  const [groupVoteGamesByTag, setGroupVoteGamesByTag] = useState(true);
+  const [collapsedVoteGroups, setCollapsedVoteGroups] = useState<Record<string, boolean>>({});
+  const [hoveredVoteGameAppId, setHoveredVoteGameAppId] = useState<number | null>(null);
+  const [recentVoteFlash, setRecentVoteFlash] = useState<VoteFlash | null>(null);
   const [currentUserAttendingSelectedNight, setCurrentUserAttendingSelectedNight] = useState(false);
   const [guildMembers, setGuildMembers] = useState<GuildMember[]>([]);
   const [memberSearch, setMemberSearch] = useState("");
@@ -137,6 +212,8 @@ export function App() {
   const [excludedOwnedGameAppIds, setExcludedOwnedGameAppIds] = useState<number[]>([]);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const nextToastIdRef = useRef(1);
+  const toastTimerByIdRef = useRef<Map<number, number>>(new Map());
+  const recentVotePulseTimeoutRef = useRef<number | null>(null);
 
   const filteredGuildMembers = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
@@ -152,9 +229,55 @@ export function App() {
     () => gameNights.find((night) => night.id === selectedNightId) ?? null,
     [gameNights, selectedNightId]
   );
+  const filteredAvailableGames = useMemo(
+    () => (hideBetaAndPublicTests ? availableGames.filter((game) => !isLikelyBetaOrPublicTestGame(game)) : availableGames),
+    [availableGames, hideBetaAndPublicTests]
+  );
+  const searchedAvailableGames = useMemo(() => {
+    const query = gameVoteSearch.trim().toLowerCase();
+    if (!query) return filteredAvailableGames;
+    return filteredAvailableGames.filter((game) => {
+      const tagText = game.tags.join(" ").toLowerCase();
+      return game.name.toLowerCase().includes(query) || tagText.includes(query);
+    });
+  }, [filteredAvailableGames, gameVoteSearch]);
+  const visibleAvailableGames = useMemo(() => {
+    return [...searchedAvailableGames].sort((left, right) => {
+      if (voteSortMode === "mostOwned") {
+        if (right.owners !== left.owners) return right.owners - left.owners;
+        return left.name.localeCompare(right.name);
+      }
+      if (voteSortMode === "aToZ") {
+        return left.name.localeCompare(right.name);
+      }
+      if (right.voteTotal !== left.voteTotal) return right.voteTotal - left.voteTotal;
+      return left.name.localeCompare(right.name);
+    });
+  }, [searchedAvailableGames, voteSortMode]);
+  const groupedVoteGames = useMemo(() => {
+    if (!groupVoteGamesByTag) {
+      return [{ key: "All Games", games: visibleAvailableGames }];
+    }
+
+    const groups = new Map<string, AvailableGame[]>();
+    for (const game of visibleAvailableGames) {
+      const key = game.tags[0]?.trim() || "Other";
+      const existing = groups.get(key);
+      if (existing) existing.push(game);
+      else groups.set(key, [game]);
+    }
+    return Array.from(groups.entries())
+      .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
+      .map(([key, games]) => ({ key, games }));
+  }, [groupVoteGamesByTag, visibleAvailableGames]);
+  const betaOrPublicTestCount = availableGames.length - filteredAvailableGames.length;
   const selectedVoteGame = useMemo(
-    () => availableGames.find((game) => String(game.appId) === voteAppId) ?? null,
-    [availableGames, voteAppId]
+    () => filteredAvailableGames.find((game) => String(game.appId) === voteAppId) ?? null,
+    [filteredAvailableGames, voteAppId]
+  );
+  const selectedNightBannerUrl = useMemo(
+    () => (selectedNight ? getGameNightBanner(selectedNight.id) : GAME_NIGHTS_TILE_BG_URL),
+    [selectedNight]
   );
   const filteredOwnedGames = useMemo(() => {
     const query = ownedGameSearch.trim().toLowerCase();
@@ -163,7 +286,7 @@ export function App() {
   }, [ownedGames, ownedGameSearch]);
   const hasRecommendations = results.length > 0;
   const hasGameNights = gameNights.length > 0;
-  const hasAvailableGames = availableGames.length > 0;
+  const hasAvailableGames = visibleAvailableGames.length > 0;
   const hasNightAttendees = nightAttendees.length > 0;
   const hasNightVotes = nightVotes.length > 0;
   const isAdmin = Boolean(profileData?.roleNames.includes("Parent"));
@@ -260,6 +383,73 @@ export function App() {
   }, [isAdmin, page]);
 
   useEffect(() => {
+    if (!selectedNightId) return;
+    const exists = gameNights.some((night) => night.id === selectedNightId);
+    if (exists) return;
+    setSelectedNightId(null);
+    setNightVotes([]);
+    setNightAttendees([]);
+    setAvailableGames([]);
+    setCurrentUserAttendingSelectedNight(false);
+  }, [gameNights, selectedNightId]);
+
+  useEffect(() => {
+    if (!visibleAvailableGames.length) {
+      if (voteAppId !== "") {
+        setVoteAppId("");
+      }
+      return;
+    }
+    if (!visibleAvailableGames.some((game) => String(game.appId) === voteAppId)) {
+      setVoteAppId(String(visibleAvailableGames[0].appId));
+    }
+  }, [visibleAvailableGames, voteAppId]);
+
+  useEffect(() => {
+    if (page !== "gameNights" || !selectedNightId || !visibleAvailableGames.length) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName.toLowerCase();
+        const isTypingField =
+          tagName === "input" || tagName === "textarea" || tagName === "select" || target.isContentEditable;
+        if (isTypingField) {
+          return;
+        }
+      }
+
+      const currentIndex = visibleAvailableGames.findIndex((game) => String(game.appId) === voteAppId);
+      const resolvedIndex = currentIndex >= 0 ? currentIndex : 0;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const nextIndex =
+          event.key === "ArrowDown"
+            ? Math.min(resolvedIndex + 1, visibleAvailableGames.length - 1)
+            : Math.max(resolvedIndex - 1, 0);
+        setVoteAppId(String(visibleAvailableGames[nextIndex].appId));
+        return;
+      }
+
+      const selectedGame = visibleAvailableGames[resolvedIndex];
+      if (!selectedGame) return;
+      if (event.key === "1") {
+        event.preventDefault();
+        void castVoteForGame(selectedGame.appId, 1, selectedGame.name);
+      } else if (event.key === "2") {
+        event.preventDefault();
+        void castVoteForGame(selectedGame.appId, 0, selectedGame.name);
+      } else if (event.key === "3") {
+        event.preventDefault();
+        void castVoteForGame(selectedGame.appId, -1, selectedGame.name);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [castVoteForGame, page, selectedNightId, visibleAvailableGames, voteAppId]);
+
+  useEffect(() => {
     if (!isUserMenuOpen) return;
 
     const onMouseDown = (event: MouseEvent) => {
@@ -308,11 +498,143 @@ export function App() {
     const tone: ToastTone = isError ? "error" : "success";
     setToasts((current) => [...current, { id, message: status, tone }]);
     const timeoutId = window.setTimeout(() => {
+      toastTimerByIdRef.current.delete(id);
       setToasts((current) => current.filter((item) => item.id !== id));
     }, 4200);
-
-    return () => window.clearTimeout(timeoutId);
+    toastTimerByIdRef.current.set(id, timeoutId);
   }, [status]);
+
+  useEffect(
+    () => () => {
+      for (const timeoutId of toastTimerByIdRef.current.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      toastTimerByIdRef.current.clear();
+      if (recentVotePulseTimeoutRef.current !== null) {
+        window.clearTimeout(recentVotePulseTimeoutRef.current);
+        recentVotePulseTimeoutRef.current = null;
+      }
+    },
+    []
+  );
+
+  function dismissToast(toastId: number) {
+    const timeoutId = toastTimerByIdRef.current.get(toastId);
+    if (typeof timeoutId === "number") {
+      window.clearTimeout(timeoutId);
+      toastTimerByIdRef.current.delete(toastId);
+    }
+    setToasts((current) => current.filter((item) => item.id !== toastId));
+  }
+
+  useEffect(() => {
+    if (isAuthenticated !== true) return;
+
+    let syncing = false;
+    const runBackgroundSync = async () => {
+      if (syncing || document.hidden) return;
+      syncing = true;
+      try {
+        await syncGuildMembers(true);
+      } finally {
+        syncing = false;
+      }
+    };
+
+    void runBackgroundSync();
+    const intervalId = window.setInterval(() => {
+      void runBackgroundSync();
+    }, 60000);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void runBackgroundSync();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated !== true || page !== "gameNights") return;
+
+    let syncing = false;
+    const runNightListSync = async () => {
+      if (syncing || document.hidden) return;
+      syncing = true;
+      try {
+        await loadGameNights(true);
+      } finally {
+        syncing = false;
+      }
+    };
+
+    void runNightListSync();
+    const intervalId = window.setInterval(() => {
+      void runNightListSync();
+    }, 20000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isAuthenticated, page]);
+
+  useEffect(() => {
+    if (isAuthenticated !== true || page !== "gameNights" || !selectedNightId) return;
+
+    let syncing = false;
+    const runSelectedNightSync = async () => {
+      if (syncing || document.hidden) return;
+      syncing = true;
+      try {
+        await loadVotes(selectedNightId, undefined, true);
+      } finally {
+        syncing = false;
+      }
+    };
+
+    void runSelectedNightSync();
+    const intervalId = window.setInterval(() => {
+      void runSelectedNightSync();
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isAuthenticated, page, selectedNightId]);
+
+  useEffect(() => {
+    if (isAuthenticated !== true || !profileData?.steamId64) return;
+
+    let syncing = false;
+    const runSteamSync = async () => {
+      if (syncing || document.hidden) return;
+      syncing = true;
+      try {
+        await syncSteamGames(true);
+      } finally {
+        syncing = false;
+      }
+    };
+
+    void runSteamSync();
+    const intervalId = window.setInterval(() => {
+      void runSteamSync();
+    }, 10 * 60 * 1000);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        void runSteamSync();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [isAuthenticated, profileData?.steamId64]);
 
   async function runRecommendation() {
     if (!selectedMemberIds.length) {
@@ -440,8 +762,10 @@ export function App() {
     }
   }
 
-  async function syncSteamGames() {
-    setStatus("Syncing owned Steam games...");
+  async function syncSteamGames(silent = false) {
+    if (!silent) {
+      setStatus("Syncing owned Steam games...");
+    }
     try {
       const response = await fetch("http://localhost:3000/steam/sync-owned-games", {
         method: "POST",
@@ -451,9 +775,14 @@ export function App() {
       if (!response.ok) {
         throw new Error(data?.error ?? `Steam sync failed (${response.status})`);
       }
-      setStatus(`Steam sync complete (${data?.syncedGames ?? 0} game(s))`);
+      await loadOwnedGames(true);
+      if (!silent) {
+        setStatus(`Steam sync complete (${data?.syncedGames ?? 0} game(s))`);
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Steam sync failed");
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Steam sync failed");
+      }
     }
   }
 
@@ -549,8 +878,14 @@ export function App() {
     });
   }
 
-  async function loadGameNights() {
-    setStatus("Loading game nights...");
+  function toggleVoteGroup(groupKey: string) {
+    setCollapsedVoteGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
+  }
+
+  async function loadGameNights(silent = false) {
+    if (!silent) {
+      setStatus("Loading game nights...");
+    }
     try {
       const response = await fetch("http://localhost:3000/game-nights", { credentials: "include" });
       const data = (await response.json().catch(() => null)) as { gameNights?: GameNight[]; error?: string } | null;
@@ -558,9 +893,13 @@ export function App() {
         throw new Error(data?.error ?? `Game nights request failed (${response.status})`);
       }
       setGameNights(data?.gameNights ?? []);
-      setStatus(`Loaded ${data?.gameNights?.length ?? 0} game night(s)`);
+      if (!silent) {
+        setStatus(`Loaded ${data?.gameNights?.length ?? 0} game night(s)`);
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Game nights request failed");
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Game nights request failed");
+      }
     }
   }
 
@@ -592,23 +931,38 @@ export function App() {
     }
   }
 
-  async function loadVotes(gameNightId: number, nightTitle?: string) {
-    setStatus(`Loading votes for ${nightTitle ?? "selected game night"}...`);
+  async function loadVotes(gameNightId: number, nightTitle?: string, silent = false) {
+    if (!silent) {
+      setStatus(`Loading votes for ${nightTitle ?? "selected game night"}...`);
+    }
     try {
       const response = await fetch(`http://localhost:3000/game-nights/${gameNightId}/votes`, {
         credentials: "include"
       });
-      const data = (await response.json().catch(() => null)) as { votes?: GameNightVote[]; error?: string } | null;
+      const data = (await response.json().catch(() => null)) as
+        | { votes?: Array<GameNightVote & { currentUserVote?: number | null }>; error?: string }
+        | null;
       if (!response.ok) {
         throw new Error(data?.error ?? `Vote load failed (${response.status})`);
       }
       setSelectedNightId(gameNightId);
-      setNightVotes(data?.votes ?? []);
+      setNightVotes(
+        (data?.votes ?? []).map((row) => ({
+          appId: row.appId,
+          name: row.name,
+          totalVote: row.totalVote,
+          currentUserVote: row.currentUserVote ?? null
+        }))
+      );
       await loadAttendees(gameNightId);
       await loadAvailableGames(gameNightId);
-      setStatus(`Loaded ${data?.votes?.length ?? 0} vote row(s)`);
+      if (!silent) {
+        setStatus(`Loaded ${data?.votes?.length ?? 0} vote row(s)`);
+      }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Vote load failed");
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Vote load failed");
+      }
     }
   }
 
@@ -616,15 +970,17 @@ export function App() {
     const response = await fetch(`http://localhost:3000/game-nights/${gameNightId}/available-games`, {
       credentials: "include"
     });
-    const data = (await response.json().catch(() => null)) as { games?: AvailableGame[]; error?: string } | null;
+    const data = (await response.json().catch(() => null)) as
+      | { games?: Array<AvailableGame & { currentUserVote?: number | null }>; error?: string }
+      | null;
     if (!response.ok) {
       throw new Error(data?.error ?? `Available game load failed (${response.status})`);
     }
-    const games = data?.games ?? [];
+    const games = (data?.games ?? []).map((game) => ({
+      ...game,
+      currentUserVote: game.currentUserVote ?? null
+    }));
     setAvailableGames(games);
-    if (games.length > 0 && !games.some((game) => String(game.appId) === voteAppId)) {
-      setVoteAppId(String(games[0].appId));
-    }
   }
 
   async function loadAttendees(gameNightId: number) {
@@ -721,14 +1077,43 @@ export function App() {
     }
   }
 
-  async function castVote() {
+  async function castVoteForGame(appId: number, vote: -1 | 0 | 1, gameName: string) {
     if (!selectedNightId) return setStatus("Pick a game night first");
-    const appId = Number(voteAppId);
     if (!Number.isInteger(appId) || appId <= 0) return setStatus("Select a game first");
 
+    setVoteAppId(String(appId));
+    setVotingGameAppId(appId);
+    const previousAvailableGames = availableGames;
+    const previousNightVotes = nightVotes;
+    const previousVote = availableGames.find((game) => game.appId === appId)?.currentUserVote ?? 0;
+    const delta = vote - previousVote;
+    const normalizedVote = vote;
+    setAvailableGames((current) =>
+      current.map((game) =>
+        game.appId === appId
+          ? { ...game, voteTotal: game.voteTotal + delta, currentUserVote: normalizedVote }
+          : game
+      )
+    );
+    setNightVotes((current) => {
+      const existing = current.find((row) => row.appId === appId);
+      if (existing) {
+        return current.map((row) =>
+          row.appId === appId
+            ? { ...row, totalVote: row.totalVote + delta, currentUserVote: normalizedVote }
+            : row
+        );
+      }
+      const shouldAddRow = delta !== 0 || normalizedVote !== 0;
+      if (!shouldAddRow) {
+        return current;
+      }
+      return [...current, { appId, name: gameName, totalVote: delta, currentUserVote: normalizedVote }].sort(
+        (left, right) => right.totalVote - left.totalVote || left.name.localeCompare(right.name)
+      );
+    });
     setStatus("Saving vote...");
     try {
-      const vote = Number(voteValue);
       const response = await fetch(`http://localhost:3000/game-nights/${selectedNightId}/votes`, {
         method: "POST",
         credentials: "include",
@@ -737,10 +1122,28 @@ export function App() {
       });
       const data = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
       if (!response.ok) throw new Error(data?.error ?? `Vote save failed (${response.status})`);
-      await loadVotes(selectedNightId);
-      setStatus("Vote saved");
+      await loadVotes(selectedNightId, undefined, true);
+      const flash: VoteFlash =
+        vote === 1
+          ? { appId, label: "+1 Hype", tone: "up" }
+          : vote === 0
+            ? { appId, label: "0 Maybe", tone: "neutral" }
+            : { appId, label: "-1 Skip", tone: "down" };
+      setRecentVoteFlash(flash);
+      if (recentVotePulseTimeoutRef.current !== null) {
+        window.clearTimeout(recentVotePulseTimeoutRef.current);
+      }
+      recentVotePulseTimeoutRef.current = window.setTimeout(() => {
+        setRecentVoteFlash((current) => (current?.appId === appId ? null : current));
+        recentVotePulseTimeoutRef.current = null;
+      }, 900);
+      setStatus(`Vote saved: ${gameName}`);
     } catch (error) {
+      setAvailableGames(previousAvailableGames);
+      setNightVotes(previousNightVotes);
       setStatus(error instanceof Error ? error.message : "Vote save failed");
+    } finally {
+      setVotingGameAppId((current) => (current === appId ? null : current));
     }
   }
 
@@ -979,16 +1382,6 @@ export function App() {
                   Profile Settings
                 </IslandButton>
                 <IslandButton
-                  variant="secondary"
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    void loadProfile();
-                  }}
-                  style={{ marginRight: 0 }}
-                >
-                  Refresh Profile
-                </IslandButton>
-                <IslandButton
                   variant="danger"
                   onClick={() => {
                     setIsUserMenuOpen(false);
@@ -1030,8 +1423,8 @@ export function App() {
             <div style={{ position: "relative", zIndex: 1, maxWidth: islandTheme.layout.heroProseMaxWidth }}>
               <h1 style={{ marginTop: 0, fontSize: "clamp(1.75rem, 4vw, 2.5rem)" }}>Welcome to the Island</h1>
               <p style={{ fontSize: 16, opacity: 0.95, ...heroProseStyle }}>
-                Welcome to The Boneless Island hub. Quick plan: sync your guild members, sync Steam libraries, then use
-                Game Nights to pick what everyone can actually play.
+                Welcome to The Boneless Island hub. Crew activity and Steam libraries sync automatically in the
+                background so you can jump straight into planning nights.
               </p>
             </div>
           </section>
@@ -1086,13 +1479,11 @@ export function App() {
           <IslandCard style={{ marginTop: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <h3 style={{ marginTop: 0, marginBottom: 8 }}>Who's active in Discord right now</h3>
-              <IslandButton variant="secondary" onClick={() => void syncGuildMembers()}>
-                Refresh activity
-              </IslandButton>
             </div>
             <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
               Rich presence is prepared. For now this uses synced voice/presence snapshots from Discord API data.
             </p>
+            <p style={{ marginTop: 0, fontSize: 12, opacity: 0.82 }}>Auto-updates every minute while you're online.</p>
             {activeMembers.length ? (
               <div style={{ display: "grid", gap: 8 }}>
                 {activeMembers.map((member) => (
@@ -1115,98 +1506,200 @@ export function App() {
       {page === "gameNights" ? (
         <>
           <IslandCard>
-            <h2 style={{ marginTop: 0 }}>Game Nights</h2>
-            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
-              Pick members, create nights, vote from common-owned games, then finalize or reopen as needed.
-            </p>
-          </IslandCard>
-
-          <IslandCard style={{ marginTop: 10 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Select Night Members</h3>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>Use member chips to define the night attendee group.</p>
-            <p style={{ marginTop: 0 }}>
-              Selected: <strong>{selectedMemberIds.length}</strong>
-            </p>
-            <p>
-              <input
-                placeholder={islandCopy.placeholders.memberSearch}
-                value={memberSearch}
-                onChange={(e) => setMemberSearch(e.target.value)}
-                style={inputStyle}
+            <div
+              style={{
+                position: "relative",
+                borderRadius: islandTheme.radius.card,
+                overflow: "hidden",
+                minHeight: 230,
+                border: `1px solid ${islandTheme.color.border}`
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundImage: `linear-gradient(140deg, rgba(5,12,28,0.25), rgba(5,12,28,0.92)), url("${selectedNightBannerUrl}")`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center"
+                }}
               />
-              <IslandButton variant="secondary" onClick={selectAllFilteredMembers} style={{ marginLeft: 8 }}>
-                Select filtered
-              </IslandButton>
-              <IslandButton variant="secondary" onClick={clearSelectedMembers} style={{ marginLeft: 8 }}>
-                Clear
-              </IslandButton>
-              <IslandButton
-                variant="secondary"
-                onClick={useSelectedNightAttendeesAsSelection}
-                style={{ marginLeft: 8 }}
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  padding: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  minHeight: "100%",
+                  justifyContent: "space-between"
+                }}
               >
-                Use selected night attendees
-              </IslandButton>
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {filteredGuildMembers.map((member) => {
-                const selected = selectedMemberIds.includes(member.discordUserId);
-                return (
-                  <IslandMemberChip
-                    key={member.discordUserId}
-                    onClick={() => toggleSelectedMember(member.discordUserId)}
-                    selected={selected}
-                    label={member.displayName}
-                  />
-                );
-              })}
+                <div>
+                  <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: "clamp(1.6rem, 3.3vw, 2.1rem)" }}>
+                    Game Night Dock
+                  </h2>
+                  <p style={{ marginTop: 0, opacity: 0.96, ...heroProseStyle }}>
+                    Plan a night in minutes: pick your crew, set the time, then vote on games everyone already owns.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <IslandStatusPill tone="success">Nights live: {gameNights.length}</IslandStatusPill>
+                  <IslandStatusPill tone={selectedNight ? "success" : "danger"}>
+                    Lobby: {selectedNight ? selectedNight.title : "none selected"}
+                  </IslandStatusPill>
+                </div>
+                <p style={{ marginTop: 4, marginBottom: 0, fontSize: 12, opacity: 0.85 }}>
+                  Live sync is on: crew every 60s, night list every 20s, selected lobby every 15s.
+                </p>
+              </div>
             </div>
           </IslandCard>
 
           <IslandCard style={{ marginTop: 10 }}>
-            <h3 style={{ marginTop: 0 }}>Create Night</h3>
-            <p style={{ marginTop: 0, opacity: 0.9 }}>Creates a new game night with selected members as attendees.</p>
-            <p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <h3 style={{ marginTop: 0, marginBottom: 6 }}>1) Pick your island crew</h3>
+                <p style={{ marginTop: 0, marginBottom: 0, opacity: 0.9 }}>
+                  Selected crew: <strong>{selectedMemberIds.length}</strong>
+                </p>
+              </div>
+              <IslandButton
+                variant="secondary"
+                onClick={() => setIsSelectedNightPanelCollapsed((value) => !value)}
+                style={{ marginRight: 0 }}
+              >
+                {isSelectedNightPanelCollapsed ? "Show crew selector" : "Hide crew selector"}
+              </IslandButton>
+            </div>
+
+            {!isSelectedNightPanelCollapsed ? (
+              <>
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    placeholder={islandCopy.placeholders.memberSearch}
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    style={{ ...inputStyle, flex: 1, minWidth: 240 }}
+                  />
+                  <IslandButton variant="secondary" onClick={selectAllFilteredMembers} style={{ marginRight: 0 }}>
+                    Select filtered
+                  </IslandButton>
+                  <IslandButton variant="secondary" onClick={clearSelectedMembers} style={{ marginRight: 0 }}>
+                    Clear
+                  </IslandButton>
+                  <IslandButton variant="secondary" onClick={useSelectedNightAttendeesAsSelection} style={{ marginRight: 0 }}>
+                    Use current attendees
+                  </IslandButton>
+                </div>
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    maxHeight: 190,
+                    overflowY: "auto",
+                    border: `1px solid ${islandTheme.color.border}`,
+                    borderRadius: islandTheme.radius.control,
+                    padding: "0.55rem",
+                    background: islandTheme.color.panelMutedBg
+                  }}
+                >
+                  {filteredGuildMembers.map((member) => {
+                    const selected = selectedMemberIds.includes(member.discordUserId);
+                    return (
+                      <IslandMemberChip
+                        key={member.discordUserId}
+                        onClick={() => toggleSelectedMember(member.discordUserId)}
+                        selected={selected}
+                        label={member.displayName}
+                      />
+                    );
+                  })}
+                </div>
+              </>
+            ) : null}
+          </IslandCard>
+
+          <IslandCard style={{ marginTop: 10 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>2) Drop a new game night</h3>
+            <p style={{ marginTop: 0, opacity: 0.9, ...readableProseStyle }}>
+              Start with a title and time. Your selected crew gets added automatically when the lobby is created.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <input
-                placeholder="Game night title"
+                placeholder="Friday sunset co-op session"
                 value={newNightTitle}
                 onChange={(e) => setNewNightTitle(e.target.value)}
-                style={inputStyle}
+                style={{ ...inputStyle, flex: 1, minWidth: 220 }}
               />
               <input
                 type="datetime-local"
                 value={newNightScheduledFor}
                 onChange={(e) => setNewNightScheduledFor(e.target.value)}
-                style={{ ...inputStyle, marginLeft: 8 }}
+                style={{ ...inputStyle, minWidth: 220 }}
               />
-              <IslandButton variant="primary" onClick={createGameNight} style={{ marginLeft: 8 }}>
-                Create Night
+              <IslandButton variant="primary" onClick={createGameNight} style={{ marginRight: 0 }}>
+                Create lobby
               </IslandButton>
-              <IslandButton variant="secondary" onClick={loadGameNights} style={{ marginLeft: 8 }}>
-                Refresh Nights
-              </IslandButton>
-            </p>
+            </div>
           </IslandCard>
 
           <IslandCard style={{ marginTop: 10 }}>
-            <h3 style={{ marginTop: 0 }}>Created Nights</h3>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>3) Open a lobby</h3>
             {hasGameNights ? (
-              <ul>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))",
+                  gap: 10
+                }}
+              >
                 {gameNights.map((night) => (
-                  <li key={night.id}>
-                    {night.title} - {new Date(night.scheduledFor).toLocaleString()} - attendees: {night.attendeeCount}
-                    {night.selectedGameName ? ` - FINAL: ${night.selectedGameName}` : ""}
-                    {!night.selectedGameName && night.topGameName ? ` - top: ${night.topGameName}` : ""}
-                    <IslandButton
-                      variant="secondary"
-                      onClick={() => loadVotes(night.id, night.title)}
-                      style={{ marginLeft: 8 }}
+                  <button
+                    key={night.id}
+                    onClick={() => void loadVotes(night.id, night.title)}
+                    style={{
+                      ...islandButtonStyle("secondary"),
+                      textAlign: "left",
+                      padding: 0,
+                      overflow: "hidden",
+                      border: selectedNightId === night.id ? `1px solid ${islandTheme.color.primaryGlow}` : `1px solid ${islandTheme.color.border}`,
+                      boxShadow: selectedNightId === night.id ? islandTheme.shadow.tileGameNightHover : islandTheme.shadow.tileIdle
+                    }}
+                  >
+                    <div
+                      style={{
+                        minHeight: 122,
+                        padding: "0.7rem",
+                        backgroundImage: `linear-gradient(160deg, rgba(10,18,35,0.2), rgba(10,18,35,0.86)), url("${getGameNightBanner(night.id)}")`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center"
+                      }}
                     >
-                      Open
-                    </IslandButton>
-                  </li>
+                      <div style={{ fontWeight: 800, fontSize: 17 }}>{night.title}</div>
+                      <div style={{ opacity: 0.95 }}>{formatGameNightDate(night.scheduledFor)}</div>
+                    </div>
+                    <div style={{ padding: "0.7rem" }}>
+                      <div style={{ fontSize: 13, opacity: 0.95 }}>Crew: {night.attendeeCount}</div>
+                      <div style={{ fontSize: 13, opacity: 0.95 }}>
+                        {night.selectedGameName
+                          ? `Final pick: ${night.selectedGameName}`
+                          : night.topGameName
+                            ? `Top vote: ${night.topGameName}`
+                            : "No votes yet"}
+                      </div>
+                      <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <IslandStatusPill tone={night.currentUserAttending ? "success" : "danger"}>
+                          {night.currentUserAttending ? "You're in" : "Not joined"}
+                        </IslandStatusPill>
+                      </div>
+                    </div>
+                  </button>
                 ))}
-              </ul>
+              </div>
             ) : (
               <p style={{ opacity: 0.9 }}>{islandCopy.emptyStates.noNights}</p>
             )}
@@ -1214,136 +1707,271 @@ export function App() {
 
           <IslandCard style={{ marginTop: 10 }}>
             <h3 style={{ marginTop: 0 }}>
-              Selected Night: {selectedNight ? `${selectedNight.title}` : "none"}
+              Night lobby: {selectedNight ? `${selectedNight.title}` : "pick a night card above"}
             </h3>
             {!selectedNight ? (
-              <p style={{ opacity: 0.9 }}>Open a night above to manage votes and attendees.</p>
+              <p style={{ opacity: 0.9 }}>Pick a game night card to reveal attendees, voting, and final pick controls.</p>
             ) : (
               <>
-                <p style={{ marginTop: 0, opacity: 0.9 }}>
-                  Finalized: {selectedNight.selectedGameName ?? "No"} | Top vote: {selectedNight.topGameName ?? "n/a"}
-                </p>
-                <p>
-                  <IslandButton variant="secondary" onClick={() => setIsSelectedNightPanelCollapsed((v) => !v)}>
-                    {isSelectedNightPanelCollapsed ? "Expand details" : "Collapse details"}
+                <div
+                  style={{
+                    marginBottom: 10,
+                    borderRadius: islandTheme.radius.control,
+                    border: `1px solid ${islandTheme.color.border}`,
+                    overflow: "hidden"
+                  }}
+                >
+                  <div
+                    style={{
+                      minHeight: 136,
+                      padding: "0.85rem",
+                      backgroundImage: `linear-gradient(165deg, rgba(9,16,32,0.2), rgba(9,16,32,0.9)), url("${selectedNightBannerUrl}")`,
+                      backgroundPosition: "center",
+                      backgroundSize: "cover"
+                    }}
+                  >
+                    <div style={{ fontSize: 20, fontWeight: 800 }}>{selectedNight.title}</div>
+                    <div style={{ marginTop: 4, opacity: 0.95 }}>{formatGameNightDate(selectedNight.scheduledFor)}</div>
+                    <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <IslandStatusPill tone={selectedNight.selectedGameName ? "success" : "danger"}>
+                        {selectedNight.selectedGameName ? `Final: ${selectedNight.selectedGameName}` : "Not finalized"}
+                      </IslandStatusPill>
+                      <IslandStatusPill tone={selectedNight.topGameName ? "success" : "danger"}>
+                        {selectedNight.topGameName ? `Top vote: ${selectedNight.topGameName}` : "No top vote yet"}
+                      </IslandStatusPill>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                  <IslandButton
+                    variant={currentUserAttendingSelectedNight ? "danger" : "secondary"}
+                    onClick={currentUserAttendingSelectedNight ? leaveSelectedNight : joinSelectedNight}
+                    style={{ marginRight: 0 }}
+                  >
+                    {currentUserAttendingSelectedNight ? "Leave this night" : "Join this night"}
                   </IslandButton>
-                </p>
-                {!isSelectedNightPanelCollapsed ? (
-                  <>
-                    <p style={{ marginBottom: 6 }}>
-                      <strong>Available Games</strong> ({availableGames.length})
-                    </p>
-                    {hasAvailableGames ? (
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
-                          gap: 10
-                        }}
-                      >
-                        {availableGames.map((game) => {
-                          const selected = String(game.appId) === voteAppId;
-                          return (
-                            <IslandGameCard
-                              key={game.appId}
-                              onClick={() => setVoteAppId(String(game.appId))}
-                              selected={selected}
-                              title={game.name}
-                              subtitle={`owners ${game.owners} | votes ${game.voteTotal}`}
-                              imageUrl={game.headerImageUrl}
-                            />
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p style={{ opacity: 0.9 }}>
-                        No common games for all attendees yet. Ensure attendees have synced Steam libraries.
-                      </p>
-                    )}
+                  <IslandButton variant="secondary" onClick={addSelectedMembersToNight} style={{ marginRight: 0 }}>
+                    Add selected crew
+                  </IslandButton>
+                  <IslandButton variant="secondary" onClick={removeSelectedMembersFromNight} style={{ marginRight: 0 }}>
+                    Remove selected crew
+                  </IslandButton>
+                  <IslandButton variant="primary" onClick={recommendForSelectedNight} style={{ marginRight: 0 }}>
+                    Recommend picks
+                  </IslandButton>
+                </div>
 
-                    <p>
-                      <select value={voteAppId} onChange={(e) => setVoteAppId(e.target.value)} style={inputStyle}>
-                        <option value="">Select available game</option>
-                        {availableGames.map((game) => (
-                          <option key={game.appId} value={String(game.appId)}>
-                            {game.name} (votes {game.voteTotal})
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={voteValue}
-                        onChange={(e) => setVoteValue(e.target.value)}
-                        style={{ ...inputStyle, marginLeft: 8 }}
-                      >
-                        <option value="1">Upvote (+1)</option>
-                        <option value="0">Neutral (0)</option>
-                        <option value="-1">Downvote (-1)</option>
-                      </select>
-                      <IslandButton variant="secondary" onClick={castVote} style={{ marginLeft: 8 }}>
-                        Cast vote
-                      </IslandButton>
-                      <IslandButton variant="primary" onClick={() => finalizeSelectedNight()} style={{ marginLeft: 8 }}>
-                        Finalize top vote
-                      </IslandButton>
-                      <IslandButton variant="danger" onClick={unfinalizeSelectedNight} style={{ marginLeft: 8 }}>
-                        Reopen voting
-                      </IslandButton>
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ marginBottom: 6, fontWeight: 700 }}>Vote on common games</div>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={hideBetaAndPublicTests}
+                      onChange={(event) => setHideBetaAndPublicTests(event.target.checked)}
+                    />
+                    Hide betas and public test builds
+                  </label>
+                  {hideBetaAndPublicTests && betaOrPublicTestCount > 0 ? (
+                    <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.82 }}>
+                      Filtered out {betaOrPublicTestCount} beta/public test title(s).
                     </p>
+                  ) : null}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+                    <input
+                      value={gameVoteSearch}
+                      onChange={(event) => setGameVoteSearch(event.target.value)}
+                      placeholder="Search the game dock"
+                      style={{ ...inputStyle, minWidth: 220, flex: 1 }}
+                    />
+                    <span style={{ fontSize: 12, opacity: 0.86 }}>
+                      Showing {visibleAvailableGames.length} of {filteredAvailableGames.length}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                    <IslandButton
+                      variant={voteSortMode === "topVoted" ? "primary" : "secondary"}
+                      onClick={() => setVoteSortMode("topVoted")}
+                      style={{ marginRight: 0 }}
+                    >
+                      Top voted
+                    </IslandButton>
+                    <IslandButton
+                      variant={voteSortMode === "mostOwned" ? "primary" : "secondary"}
+                      onClick={() => setVoteSortMode("mostOwned")}
+                      style={{ marginRight: 0 }}
+                    >
+                      Most owned
+                    </IslandButton>
+                    <IslandButton
+                      variant={voteSortMode === "aToZ" ? "primary" : "secondary"}
+                      onClick={() => setVoteSortMode("aToZ")}
+                      style={{ marginRight: 0 }}
+                    >
+                      A-Z
+                    </IslandButton>
+                    <IslandButton
+                      variant={groupVoteGamesByTag ? "primary" : "secondary"}
+                      onClick={() => setGroupVoteGamesByTag((value) => !value)}
+                      style={{ marginRight: 0 }}
+                    >
+                      {groupVoteGamesByTag ? "Grouped by tag" : "Single list"}
+                    </IslandButton>
+                  </div>
+                  <p style={{ marginTop: 0, marginBottom: 8, fontSize: 12, opacity: 0.8 }}>
+                    Keyboard: ↑/↓ to move selection, 1 = Hype, 2 = Maybe, 3 = Skip.
+                  </p>
+                  {hasAvailableGames ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 8,
+                        maxHeight: 360,
+                        overflowY: "auto",
+                        border: `1px solid ${islandTheme.color.border}`,
+                        borderRadius: islandTheme.radius.control,
+                        padding: "0.55rem",
+                        background: islandTheme.color.panelMutedBg
+                      }}
+                    >
+                      {groupedVoteGames.map((group) => (
+                        <div key={group.key} style={{ display: "grid", gap: 6 }}>
+                          {groupVoteGamesByTag ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleVoteGroup(group.key)}
+                              style={{
+                                ...islandButtonStyle("secondary"),
+                                textAlign: "left",
+                                marginRight: 0,
+                                fontSize: 12,
+                                padding: "0.35rem 0.5rem"
+                              }}
+                            >
+                              {collapsedVoteGroups[group.key] ? "▶" : "▼"} {group.key} ({group.games.length})
+                            </button>
+                          ) : null}
+                          {!collapsedVoteGroups[group.key]
+                            ? group.games.map((game) => {
+                                const selected = String(game.appId) === voteAppId;
+                                return (
+                                  <IslandGameBlade
+                                    key={game.appId}
+                                    onSelect={() => setVoteAppId(String(game.appId))}
+                                    onVote={(vote) => void castVoteForGame(game.appId, vote, game.name)}
+                                    selected={selected}
+                                    currentUserVote={game.currentUserVote}
+                                    hovered={hoveredVoteGameAppId === game.appId}
+                                    isVoting={votingGameAppId === game.appId}
+                                    justVoted={recentVoteFlash?.appId === game.appId}
+                                    voteFlashLabel={recentVoteFlash?.appId === game.appId ? recentVoteFlash.label : undefined}
+                                    voteFlashTone={recentVoteFlash?.appId === game.appId ? recentVoteFlash.tone : undefined}
+                                    onMouseEnter={() => setHoveredVoteGameAppId(game.appId)}
+                                    onMouseLeave={() =>
+                                      setHoveredVoteGameAppId((current) => (current === game.appId ? null : current))
+                                    }
+                                    title={game.name}
+                                    subtitle={`owners ${game.owners} | votes ${game.voteTotal}`}
+                                    meta={`${game.maxPlayers} players • ${game.medianSessionMinutes}m median`}
+                                    tags={game.tags.slice(0, 3)}
+                                    imageUrl={game.headerImageUrl}
+                                    imageFallbackUrls={getGameImageCandidates(game.appId, game.headerImageUrl)}
+                                  />
+                                );
+                              })
+                            : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ opacity: 0.9 }}>
+                      {hideBetaAndPublicTests && betaOrPublicTestCount > 0
+                        ? "Only beta/public test titles are available right now. Turn off the filter to include them."
+                        : gameVoteSearch.trim()
+                          ? "No games match this search yet."
+                          : "No shared games yet. Ask attendees to sync Steam so we can surface titles everyone owns."}
+                    </p>
+                  )}
+                </div>
 
-                    <p>
-                      <IslandButton variant="secondary" onClick={joinSelectedNight}>
-                        Join night
-                      </IslandButton>
-                      <IslandButton variant="secondary" onClick={leaveSelectedNight} style={{ marginLeft: 8 }}>
-                        Leave night
-                      </IslandButton>
-                      <IslandButton variant="secondary" onClick={addSelectedMembersToNight} style={{ marginLeft: 8 }}>
-                        Add selected members
-                      </IslandButton>
-                      <IslandButton
-                        variant="secondary"
-                        onClick={removeSelectedMembersFromNight}
-                        style={{ marginLeft: 8 }}
-                      >
-                        Remove selected members
-                      </IslandButton>
-                      <IslandButton variant="primary" onClick={recommendForSelectedNight} style={{ marginLeft: 8 }}>
-                        Recommend for selected night
-                      </IslandButton>
-                    </p>
-                  </>
-                ) : null}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                  <select value={voteAppId} onChange={(e) => setVoteAppId(e.target.value)} style={inputStyle}>
+                    <option value="">Select available game</option>
+                    {visibleAvailableGames.map((game) => (
+                      <option key={game.appId} value={String(game.appId)}>
+                        {game.name} (votes {game.voteTotal})
+                      </option>
+                    ))}
+                  </select>
+                  <IslandButton
+                    variant="primary"
+                    onClick={() => void finalizeSelectedNight(selectedVoteGame?.appId)}
+                    style={{ marginRight: 0 }}
+                  >
+                    Finalize selected game
+                  </IslandButton>
+                  <IslandButton variant="danger" onClick={unfinalizeSelectedNight} style={{ marginRight: 0 }}>
+                    Reopen voting
+                  </IslandButton>
+                </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 10 }}>
                   <IslandCard as="div" style={{ padding: "0.65rem" }}>
-                    <strong>Attendees</strong>
+                    <strong>Attendees ({nightAttendees.length})</strong>
                     {hasNightAttendees ? (
-                      <ul>
+                      <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {nightAttendees.map((row) => (
-                          <li key={row.discordUserId}>{row.username}</li>
+                          <IslandMemberChip
+                            key={row.discordUserId}
+                            onClick={() => toggleSelectedMember(row.discordUserId)}
+                            selected={selectedMemberIds.includes(row.discordUserId)}
+                            label={row.username}
+                          />
                         ))}
-                      </ul>
+                      </div>
                     ) : (
                       <p style={{ opacity: 0.9 }}>No attendees loaded yet.</p>
                     )}
                   </IslandCard>
                   <IslandCard as="div" style={{ padding: "0.65rem" }}>
-                    <strong>Vote Totals</strong>
+                    <strong>Vote totals</strong>
                     {hasNightVotes ? (
-                      <ul>
+                      <ul style={{ marginBottom: 0 }}>
                         {nightVotes.map((row) => (
                           <li key={row.appId}>
                             {row.name}: {row.totalVote}
+                            {row.currentUserVote !== null ? ` (you: ${row.currentUserVote > 0 ? "+" : ""}${row.currentUserVote})` : ""}
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <p style={{ opacity: 0.9 }}>No votes yet.</p>
+                      <p style={{ opacity: 0.9, marginBottom: 0 }}>No votes yet.</p>
                     )}
                   </IslandCard>
                 </div>
               </>
             )}
+          </IslandCard>
+
+          <IslandCard as="div" style={{ marginTop: 10 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Quick host actions</h3>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <IslandButton variant="secondary" onClick={joinSelectedNight} style={{ marginRight: 0 }}>
+                Join selected lobby
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={leaveSelectedNight} style={{ marginRight: 0 }}>
+                Leave selected lobby
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={addSelectedMembersToNight} style={{ marginRight: 0 }}>
+                Add selected crew
+              </IslandButton>
+              <IslandButton variant="secondary" onClick={removeSelectedMembersFromNight} style={{ marginRight: 0 }}>
+                Remove selected crew
+              </IslandButton>
+              <IslandButton variant="primary" onClick={() => void finalizeSelectedNight()} style={{ marginRight: 0 }}>
+                Finalize top vote
+              </IslandButton>
+            </div>
           </IslandCard>
         </>
       ) : null}
@@ -1411,10 +2039,10 @@ export function App() {
                 placeholder="Search your owned games"
                 style={{ ...inputStyle, flex: 1, minWidth: 240 }}
               />
-              <IslandButton variant="secondary" onClick={() => void loadOwnedGames()}>
-                Refresh owned games
-              </IslandButton>
             </div>
+            <p style={{ marginTop: 8, marginBottom: 0, fontSize: 12, opacity: 0.82 }}>
+              Library visibility and game list update automatically while you're online.
+            </p>
             {profileData?.steamId64 ? (
               <div
                 style={{
@@ -1447,7 +2075,7 @@ export function App() {
                     </label>
                   ))
                 ) : (
-                  <p style={{ margin: 0, opacity: 0.85 }}>No matching games. Sync Steam games first if needed.</p>
+                  <p style={{ margin: 0, opacity: 0.85 }}>No matching games yet. Steam updates automatically while online.</p>
                 )}
               </div>
             ) : (
@@ -1486,19 +2114,9 @@ export function App() {
 
           <IslandCard as="div" style={{ marginTop: 8 }}>
             <h3 style={{ marginTop: 0 }}>Data Sync</h3>
-            <p>
-              <IslandButton variant="secondary" onClick={() => void loadProfile()}>
-                Refresh Profile
-              </IslandButton>
-              <IslandButton variant="secondary" onClick={() => void loadGuildMembers()} style={{ marginLeft: 8 }}>
-                Load Guild Members
-              </IslandButton>
-              <IslandButton variant="primary" onClick={() => void syncGuildMembers()} style={{ marginLeft: 8 }}>
-                Sync Guild Members
-              </IslandButton>
-              <IslandButton variant="secondary" onClick={syncSteamGames} style={{ marginLeft: 8 }}>
-                Sync Steam Games
-              </IslandButton>
+            <p style={{ marginTop: 0, marginBottom: 0, opacity: 0.9, ...readableProseStyle }}>
+              Automatic sync is enabled for profile, Discord member activity, game nights, and Steam libraries. This
+              page now reflects live state instead of using manual sync controls.
             </p>
           </IslandCard>
 
@@ -1572,6 +2190,34 @@ export function App() {
             transform: translateY(0) scale(1);
           }
         }
+        @keyframes islandBladePulse {
+          0% {
+            transform: translateY(0) scale(1);
+            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.65);
+          }
+          40% {
+            transform: translateY(-1px) scale(1.012);
+            box-shadow: 0 0 0 7px rgba(56, 189, 248, 0.18);
+          }
+          100% {
+            transform: translateY(0) scale(1);
+            box-shadow: 0 0 0 0 rgba(56, 189, 248, 0);
+          }
+        }
+        @keyframes islandVoteBadgePop {
+          0% {
+            opacity: 0;
+            transform: translateY(-5px) scale(0.9);
+          }
+          20% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-8px) scale(0.98);
+          }
+        }
       `}</style>
 
       {toasts.length ? (
@@ -1624,7 +2270,7 @@ export function App() {
               >
                 <span>{toast.message}</span>
                 <button
-                  onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}
+                  onClick={() => dismissToast(toast.id)}
                   aria-label="Dismiss notification"
                   style={{
                     border: "none",

@@ -47,10 +47,39 @@ API health: `http://localhost:3000/health`
 ## Member activity and voice status
 
 - "Who's active in Discord right now" is based on synced snapshots in `guild_members`.
-- Refresh activity in the UI (or call `POST /members/sync`) to update member/voice data.
+- The web app now auto-syncs profile/member/game-night data in the background for live updates.
+- `POST /members/sync` can still be called directly for operational/manual sync workflows.
 - Voice status is resolved by per-user Discord voice state lookups:
   - `GET /guilds/{guildId}/voice-states/{userId}`
 - If a user is not in voice, Discord returns `404` for that user, which is treated as normal.
+
+## Game image sourcing
+
+- Game image enrichment is modularized in `apps/api/src/lib/gameCatalogEnrichment.ts`.
+- Image provider order is declarative via `GAME_IMAGE_PROVIDER_PRIORITY`.
+- Current provider chain: `steam -> cheapshark -> igdb` (IGDB scaffolded and disabled by default).
+- Game metadata now stores image provenance/check fields:
+  - `header_image_provider`
+  - `header_image_checked_at`
+- New env vars for optional IGDB fallback:
+  - `IGDB_IMAGE_FALLBACK_ENABLED`
+  - `IGDB_CLIENT_ID`
+  - `IGDB_CLIENT_SECRET`
+
+## Game night voting UX
+
+- Voting UI uses compact interactive "game blades" optimized for long lists.
+- Votes can be cast inline per game blade (`Hype +1`, `Maybe 0`, `Skip -1`) with optimistic updates.
+- Per-user vote state is shown directly on each game blade and in vote totals.
+- Vote list supports:
+  - search
+  - sort modes (`Top voted`, `Most owned`, `A-Z`)
+  - optional grouping by primary game tag with collapsible sections
+- Keyboard shortcuts on the vote list:
+  - `ArrowUp` / `ArrowDown` to move selected game
+  - `1` = `Hype +1`
+  - `2` = `Maybe 0`
+  - `3` = `Skip -1`
 
 ## UI design system
 
