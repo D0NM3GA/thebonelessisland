@@ -1,0 +1,44 @@
+---
+description: Frontend architecture, routing, auth flow, page structure, and real vs mock data status
+globs: apps/web/src/**
+alwaysApply: false
+---
+
+# Frontend Architecture
+
+## Entry point
+`main.tsx` wraps `<App>` in `<IslandSceneShell>` (scene backdrop + palms + day/night vars) inside `React.StrictMode`. The scene is always visible — including behind the login screen.
+
+## Auth & routing
+- `App.tsx` owns all state, all `apiFetch` calls, and all page routing.
+- `isAuthenticated` starts `null` → `LoginScreen` until resolved.
+- `page: PageId` is a string union, toggled by `setPage` passed as `onNavigate`.
+- `isAdmin = profileData?.roleNames.includes("Parent")`.
+- Pages never call `apiFetch` directly — they receive data + callbacks as props.
+
+## Pages (apps/web/src/pages/)
+| Page | Real data | Still mock |
+|------|-----------|------------|
+| `Home` | Featured game, friends online, activity feed, drift log | Bot/ritual CTAs, "Open →" nav links |
+| `Games` | Game nights + RSVP, session composer recs, Steam news, crew wishlist | Stream drawer (STREAMS_MOCK), mode chips (Tonight/Weekend/etc.) are local state only |
+| `Library` | Full crew library + owner avatars + MINE badge | DETAILS button is non-functional |
+| `Community` | Activity timeline | Crew carousel, clips, forums, clubs, events, leaderboards are hardcoded mock |
+| `Admin` | News cards CRUD, server settings, recommendation tester | Data Sync, Members, Game Nights mod, Forums, Tournaments, Library subpages are stub UIs |
+| `Profile` | MeProfile, owned games display + exclusion toggles | Excluded game IDs are client-only (not sent to API) |
+| `Achievements` | — | Entire page is placeholder |
+
+## Components (apps/web/src/components/)
+- `Topbar` — fixed glass header; global search is local state only (not wired to API)
+- `UserMenu` — day/night toggle via `useDayNight`, Steam panel, profile/admin links, logout
+- `SteamOnboarding` — post-login modal; skip state persisted per user in `localStorage`
+- `steam.tsx` — Steam brand components + `steamSignInUrl()` pointing to `/steam/openid/start`
+
+## Background sync intervals (App.tsx)
+- Featured/activity/news: every 5 min
+- Guild member sync: every 1 min
+- Game nights list: every 20s (on Games page)
+- Selected night refresh: every 15s
+- Steam sync: every 10 min (when linked)
+
+## Key types (apps/web/src/types.ts)
+`PageId`, `MeProfile`, `GuildMember`, `GameNight`, `GameNightAttendee`, `CrewOwnedGame`, `CrewWishlistGame`, `FeaturedRecommendation`, `GameNewsItem`, `ActivityEvent`, `NewsCard`, `ServerSetting`

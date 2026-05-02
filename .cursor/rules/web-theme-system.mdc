@@ -1,0 +1,61 @@
+---
+description: Theme tokens, CSS variables, day/night system, islandUi primitives, and scene shell
+globs: apps/web/src/**
+alwaysApply: false
+---
+
+# Theme & UI System
+
+## Token object: `islandTheme` (apps/web/src/theme.ts)
+```ts
+islandTheme.color.*        // CSS var refs: appBg, panelBg, panelMutedBg, textPrimary/secondary/muted/subtle/inverted,
+                           // border, cardBorder, primary, primaryText, primaryStrong, primaryGlow,
+                           // secondary, info, infoText, toolAccent, danger, dangerSurface, dangerText, success, successText
+islandTheme.radius.*       // control(10px), card(12px), surface(14px)
+islandTheme.spacing.*      // cardPadding, pagePaddingWide, pagePaddingNarrow
+islandTheme.layout.*       // appMaxWidth(1200), authMaxWidth(900), proseMaxWidth(68ch)
+islandTheme.glass.*        // blur, blurStrong, edge
+islandTheme.motion.dur.*   // fast, med, slow, ambient
+islandTheme.motion.ease.*  // out, inOut, spring
+islandTheme.font.*         // display, body, mono (full font-family stacks)
+islandTheme.shadow.*       // tileIdle, tileComingSoon, tileGameNightHover, tileToolsHover, toast
+islandTheme.gradient.*     // gameNightTile, toolsTile, comingSoonTile
+```
+
+## CSS variables (`--bi-*` prefix)
+Injected by `SceneGlobalStyles` in `IslandSceneShell`:
+- Night values on `:root` by default
+- Day values on `:root[data-theme="day"]`
+
+`useDayNight` sets `document.documentElement.dataset.theme` on toggle. Components stay token-driven — never hardcode colors that have a `--bi-*` equivalent.
+
+## Day/night context (apps/web/src/scene/useDayNight.tsx)
+```ts
+const { mode, toggle, set, isTransitioning } = useDayNight()
+// mode: "day" | "night"  — persisted to localStorage key "island.theme"
+// isTransitioning: true for ~2.4s after toggle (coordinates sun/moon dip animation)
+```
+Toggle lives in `UserMenu`. Don't add a second toggle elsewhere.
+
+## islandUi primitives (apps/web/src/islandUi.tsx)
+Prefer these before writing inline one-off styled elements:
+| Export | Use for |
+|--------|---------|
+| `IslandButton` | Any action button (variant: primary / secondary / danger) |
+| `IslandCard` | Glass panel container (as: section / div / article) |
+| `IslandTileButton` | Large image CTA tiles (game-night, tools) |
+| `IslandMemberChip` | Pill toggle for member selection |
+| `IslandGameCard` | Compact game row with image fallback |
+| `IslandGameBlade` | Rich game row — **not used in voting context; voting is removed** |
+| `IslandComingSoonTile` | Dashed placeholder tile |
+| `IslandActiveMemberRow` | Avatar + name + presence row |
+| `IslandStatusPill` | Success / danger pill badge |
+| `islandCardStyle` | Raw card `CSSProperties` for inline use |
+| `islandInputStyle` | Raw input `CSSProperties` for inline use |
+
+## Global utility classes
+`.island-display` → Bricolage Grotesque display font  
+`.island-mono` → JetBrains Mono
+
+## Scene shell (apps/web/src/scene/IslandSceneShell.tsx)
+Fixed full-viewport backdrop behind all content (`zIndex: -10`). Contains: sky gradient, stars/clouds, sun/moon with arc-dip animation, ocean wave band, beach band, vignette. Left/right palm SVGs with scroll parallax. Do not duplicate scene elements inside pages.
