@@ -49,7 +49,7 @@ API health: `http://localhost:3000/health`
 ## Information architecture
 
 Top nav (fixed topbar with backdrop blur — `position: fixed` so it stays anchored during overscroll/rubber-band):
-- **Home** — hero with online count + display headline + CTAs, Featured Game card, Friends Online widget (live Discord presence), Discord-style Activity Feed (5-tab filter), Drift Log news cards, Bot CTA + Crew Ritual cards
+- **Home** — hero with online count + display headline + CTAs, Featured Game card, Friends Online widget (live Discord presence), Discord-style Activity Feed (5-tab filter, capped at 5 events with "View full feed" link to Community), Drift Log news cards, Bot CTA + Crew Ritual cards
 - **Games** — AI session composer (combined AI pick + crew roster + invite), Patches & Updates rolodex (sticky right column), scheduled game nights with RSVP, group wishlist with hype bars, library snapshot, live streams drawer (right-edge tab)
 - **Community** — crew carousel (admin button gated to Parent), recent clips, activity timeline, forums table, clubs, upcoming events, weekly leaderboards
 - **Achievements** — placeholder

@@ -19,7 +19,7 @@ alwaysApply: false
 ## Pages (apps/web/src/pages/)
 | Page | Real data | Still mock |
 |------|-----------|------------|
-| `Home` | Featured game, friends online, activity feed, drift log | Bot/ritual CTAs, "Open →" nav links |
+| `Home` | Featured game, friends online, activity feed (capped at 5, "View full feed" → Community), drift log | Bot/ritual CTAs |
 | `Games` | Game nights + RSVP, session composer recs, Steam news, crew wishlist | Stream drawer (STREAMS_MOCK), mode chips (Tonight/Weekend/etc.) are local state only |
 | `Library` | Full crew library + owner avatars + MINE badge | DETAILS button is non-functional |
 | `Community` | Activity timeline | Crew carousel, clips, forums, clubs, events, leaderboards are hardcoded mock |
@@ -28,7 +28,7 @@ alwaysApply: false
 | `Achievements` | — | Entire page is placeholder |
 
 ## Components (apps/web/src/components/)
-- `Topbar` — fixed glass header; global search is local state only (not wired to API)
+- `Topbar` — `position: fixed` glass header (62px spacer div in App.tsx); global search is local state only (not wired to API)
 - `UserMenu` — day/night toggle via `useDayNight`, Steam panel, profile/admin links, logout
 - `SteamOnboarding` — post-login modal; skip state persisted per user in `localStorage`
 - `steam.tsx` — Steam brand components + `steamSignInUrl()` pointing to `/steam/openid/start`

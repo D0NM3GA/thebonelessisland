@@ -52,7 +52,7 @@ CORE FEATURE PILLARS:
 - Hero with day/night scene + parallax palms + sun-or-moon arc-dip on theme switch
 - Featured Game card
 - Friends Online widget (live Discord presence)
-- Discord-style Activity Feed (friends/achievements/milestones/patches tabs)
+- Discord-style Activity Feed (friends/achievements/milestones/patches tabs) — capped at 5 events; "View full feed" footer button + "Open community →" header link both navigate to Community page
 - Drift Log news cards (curated patches/updates)
 - Bot CTA + Crew ritual cards
 
@@ -162,6 +162,8 @@ CURRENT STATE:
 - Curated news cards live (`news_cards`). `GET /news-cards` is session-only; `POST/PATCH/DELETE` gated by `requireParentRole` (env `PARENT_ROLE_NAME`, default `Parent`). Powers Home Drift Log + Admin → News Curation CRUD UI.
 - Game night create/RSVP/finalize endpoints live (UI no longer surfaces voting)
 - Design implementation: 8 phases shipped (foundation, topbar, home, games, library, community, admin, cleanup)
+- Topbar: `position: fixed` (not sticky) — prevents overscroll/rubber-band drift. 62px spacer div in App.tsx compensates for removed document flow.
+- Home Activity Feed: capped at 5 events (`ACTIVITY_FEED_LIMIT`). "View full feed — N more →" button + section header "Open community →" both navigate to Community. `SectionHead` now accepts optional `onAction` callback.
 - Real-data wired pages: Home (Featured + Friends Online + Activity Feed + Drift Log), Games (AI session composer reads composer recs / falls back to featured, Patches rolodex from Steam News, Group Wishlist from real crew wishlists), Library (full crew list with avatars + MINE badge), Community (activity timeline), Admin (News Curation CRUD), Profile, Topbar, scheduled-nights cards. Live streams drawer + remaining Community cards (crew carousel, clips, forums, clubs, events, leaderboards) + most other Admin sub-pages remain mock until ingestion pipelines land.
 
 ASSISTANT EXPECTATIONS:

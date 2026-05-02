@@ -68,7 +68,7 @@ export function HomePage({
           featured={featured}
           onNavigate={onNavigate}
         />
-        <ActivityFeed events={activityEvents} />
+        <ActivityFeed events={activityEvents} onNavigate={onNavigate} />
         <DriftLog cards={newsCards} />
         <BotAndRitualRow />
       </div>
@@ -750,18 +750,23 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
   }
 }
 
-function ActivityFeed({ events }: { events: ActivityEvent[] }) {
+const ACTIVITY_FEED_LIMIT = 5;
+
+function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavigate: (page: PageId) => void }) {
   const [tab, setTab] = useState<ActivityCategory>("all");
   const visible = useMemo(
     () => (tab === "all" ? events : events.filter((e) => e.category === tab)),
     [events, tab]
   );
+  const sliced = visible.slice(0, ACTIVITY_FEED_LIMIT);
+  const hasMore = visible.length > ACTIVITY_FEED_LIMIT;
   return (
     <section id="activity" style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Activity feed"
         meta="Latest from your crew — RSVPs, game picks, and library syncs."
         action="Open community →"
+        onAction={() => onNavigate("community")}
       />
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
         <div
@@ -796,17 +801,39 @@ function ActivityFeed({ events }: { events: ActivityEvent[] }) {
             );
           })}
         </div>
-        <div style={{ padding: 6, maxHeight: 480, overflowY: "auto" }}>
-          {visible.length === 0 ? (
+        <div style={{ padding: 6 }}>
+          {sliced.length === 0 ? (
             <div style={{ padding: "24px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
               {events.length === 0
                 ? "No island activity yet — schedule a game night or sync your library to get the dock buzzing."
                 : "Nothing in this category right now."}
             </div>
           ) : (
-            visible.map((event, i) => <ActivityRow key={event.id} event={event} firstRow={i === 0} />)
+            sliced.map((event, i) => <ActivityRow key={event.id} event={event} firstRow={i === 0} />)
           )}
         </div>
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => onNavigate("community")}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "12px 16px",
+              background: "transparent",
+              border: "none",
+              borderTop: `1px solid ${islandTheme.color.cardBorder}`,
+              color: islandTheme.color.primaryGlow,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              textAlign: "center",
+              font: "inherit"
+            }}
+          >
+            View full feed — {visible.length - ACTIVITY_FEED_LIMIT} more event{visible.length - ACTIVITY_FEED_LIMIT !== 1 ? "s" : ""} →
+          </button>
+        )}
       </IslandCard>
     </section>
   );
@@ -1124,11 +1151,13 @@ function hexToRgba(hex: string, alpha: number): string {
 function SectionHead({
   title,
   meta,
-  action
+  action,
+  onAction
 }: {
   title: string;
   meta: string;
   action: string;
+  onAction?: () => void;
 }) {
   return (
     <div
@@ -1153,7 +1182,7 @@ function SectionHead({
       </div>
       <a
         href="#"
-        onClick={(e) => e.preventDefault()}
+        onClick={(e) => { e.preventDefault(); onAction?.(); }}
         style={{
           color: islandTheme.color.primaryGlow,
           fontSize: 13,
