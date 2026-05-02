@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { IslandButton, IslandCard, islandInputStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type { NewsCard, Recommendation, ServerSetting } from "../types.js";
@@ -14,7 +14,8 @@ type AdminSection =
   | "forums"
   | "tournaments"
   | "library"
-  | "audit";
+  | "audit"
+  | "ai-settings";
 
 type NewsCardInput = {
   title: string;
@@ -41,6 +42,8 @@ type AdminPageProps = {
   serverSettings: ServerSetting[] | null;
   onLoadServerSettings: () => void;
   onUpdateServerSetting: (key: string, value: string) => void;
+  onTestAIConnection: (opts: { provider: string; model?: string; apiKey?: string }) => Promise<{ ok: boolean; provider?: string; model?: string; error?: string }>;
+  onTriggerNewsCuration: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
 };
 
 export function AdminPage(props: AdminPageProps) {
@@ -48,7 +51,7 @@ export function AdminPage(props: AdminPageProps) {
 
   const handleSelectSection = (s: AdminSection) => {
     setSection(s);
-    if (s === "server-config" && props.serverSettings === null) {
+    if ((s === "server-config" || s === "ai-settings") && props.serverSettings === null) {
       props.onLoadServerSettings();
     }
   };
@@ -66,9 +69,16 @@ export function AdminPage(props: AdminPageProps) {
           onUpdate={props.onUpdateServerSetting}
         />
       ) : null}
+      {section === "ai-settings" ? (
+        <AISettingsSubpage
+          settings={props.serverSettings}
+          onUpdate={props.onUpdateServerSetting}
+          onTest={props.onTestAIConnection}
+        />
+      ) : null}
       {section === "news" ? <NewsCurationSubpage {...props} /> : null}
       {section === "recommendations" ? <RecommendationsSubpage {...props} /> : null}
-      {section === "data-sync" ? <DataSyncSubpage /> : null}
+      {section === "data-sync" ? <DataSyncSubpage onTriggerCuration={props.onTriggerNewsCuration} /> : null}
       {section === "members" ? <MembersSubpage /> : null}
       {section === "game-nights" ? <GameNightsModSubpage /> : null}
       {section === "forums" ? <ForumsModSubpage /> : null}
@@ -89,6 +99,7 @@ type AdminTile = {
 
 const ADMIN_TILES: AdminTile[] = [
   { id: "server-config", title: "Server Configuration", blurb: "Guild ID, admin role, display name. Switch servers without touching .env.", icon: "⚙️", accent: "#6366f1" },
+  { id: "ai-settings", title: "AI Settings", blurb: "Provider, model, API key, enable/disable. Swap between Anthropic and OpenAI without touching code.", icon: "🤖", accent: "#8b5cf6" },
   { id: "news", title: "News Curation", blurb: "Filters, auto-approve rules, approval queue.", icon: "📰", accent: "#0ea5e9" },
   { id: "recommendations", title: "Recommendation Tester", blurb: "Member chips, weights, ranked results.", icon: "🎯", accent: "#22d3ee" },
   { id: "data-sync", title: "Data Sync", blurb: "Connector health + live log.", icon: "🔄", accent: "#86efac" },
@@ -558,7 +569,24 @@ function RecRow({ rec, firstRow }: { rec: Recommendation; firstRow: boolean }) {
   );
 }
 
-function DataSyncSubpage() {
+function DataSyncSubpage({ onTriggerCuration }: { onTriggerCuration: () => Promise<{ ok: boolean; curated?: number; error?: string }> }) {
+  const [curationState, setCurationState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [curationMsg, setCurationMsg] = useState("");
+
+  const handleCurate = async () => {
+    setCurationState("running");
+    setCurationMsg("");
+    const result = await onTriggerCuration();
+    if (result.ok) {
+      setCurationState("done");
+      setCurationMsg(`Curated ${result.curated ?? 0} article${result.curated === 1 ? "" : "s"}`);
+    } else {
+      setCurationState("error");
+      setCurationMsg(result.error ?? "Curation failed");
+    }
+    setTimeout(() => setCurationState("idle"), 5000);
+  };
+
   const connectors = [
     { name: "Discord OAuth", status: "ok", last: "live" },
     { name: "Discord Members", status: "ok", last: "60s" },
@@ -574,6 +602,33 @@ function DataSyncSubpage() {
         {connectors.map((c, i) => (
           <ConnectorRow key={c.name} entry={c} firstRow={i === 0} />
         ))}
+      </IslandCard>
+
+      <IslandCard style={{ padding: 16, display: "grid", gap: 12 }}>
+        <SubsectionTitle>AI News Curation</SubsectionTitle>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Re-score and summarize un-curated game news items using the active AI provider.
+          Runs automatically on the next news fetch — use this to force an immediate pass.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <IslandButton
+            variant="secondary"
+            onClick={handleCurate}
+            disabled={curationState === "running"}
+          >
+            {curationState === "running" ? "Curating…" : "Re-curate News"}
+          </IslandButton>
+          {curationMsg ? (
+            <span
+              style={{
+                fontSize: 12,
+                color: curationState === "error" ? islandTheme.color.danger : islandTheme.color.success
+              }}
+            >
+              {curationMsg}
+            </span>
+          ) : null}
+        </div>
       </IslandCard>
 
       <IslandCard style={{ padding: 16 }}>
@@ -1369,4 +1424,406 @@ function smallBtn(bg: string, fg: string, ghost = false, border?: string): CSSPr
     cursor: "pointer",
     font: "inherit"
   };
+}
+
+// ── AI Settings subpage ───────────────────────────────────────────────────────
+
+const PROVIDER_DEFAULTS: Record<string, string> = {
+  anthropic: "claude-haiku-4-5",
+  openai: "gpt-4o-mini"
+};
+
+type ModelOption = { value: string; label: string; note?: string };
+
+const PROVIDER_MODELS: Record<string, ModelOption[]> = {
+  anthropic: [
+    { value: "claude-haiku-4-5",   label: "Claude Haiku 4.5",   note: "Fastest · cheapest · great for bulk tasks" },
+    { value: "claude-sonnet-4-6",  label: "Claude Sonnet 4.6",  note: "Best balance of speed and intelligence" },
+    { value: "claude-opus-4-6",    label: "Claude Opus 4.6",    note: "Extended thinking · higher cost" },
+    { value: "claude-opus-4-7",    label: "Claude Opus 4.7",    note: "Most capable · best for complex reasoning" },
+    { value: "__custom__",         label: "Custom model…",      note: "Enter a model ID manually" }
+  ],
+  openai: [
+    { value: "gpt-4o-mini",        label: "GPT-4o Mini",        note: "Fast · affordable · solid quality" },
+    { value: "gpt-4o",             label: "GPT-4o",             note: "Flagship multimodal model" },
+    { value: "gpt-4.1-mini",       label: "GPT-4.1 Mini",       note: "Efficient · low latency" },
+    { value: "gpt-4.1",            label: "GPT-4.1",            note: "Latest GPT-4 generation" },
+    { value: "o4-mini",            label: "o4-mini",            note: "Fast reasoning model" },
+    { value: "__custom__",         label: "Custom model…",      note: "Enter a model ID manually" }
+  ]
+};
+
+function AISettingsSubpage({
+  settings,
+  onUpdate,
+  onTest
+}: {
+  settings: ServerSetting[] | null;
+  onUpdate: (key: string, value: string) => void;
+  onTest: (opts: { provider: string; model?: string; apiKey?: string }) => Promise<{ ok: boolean; provider?: string; model?: string; error?: string }>;
+}) {
+  const getSetting = (key: string) => settings?.find((s) => s.key === key)?.value ?? "";
+
+  const [provider, setProvider] = useState(() => getSetting("ai_provider"));
+  const [model, setModel] = useState(() => getSetting("ai_model"));
+  const [customModel, setCustomModel] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [enabled, setEnabled] = useState(() => getSetting("ai_enabled") === "true");
+  const [testState, setTestState] = useState<"idle" | "running" | "ok" | "error">("idle");
+  const [testMsg, setTestMsg] = useState("");
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const apiKeyIsSet = getSetting("ai_api_key") === "••••••••";
+  const initializedRef = useRef(false);
+
+  // Derive whether the currently saved model is a known preset or custom
+  const knownModels = provider ? (PROVIDER_MODELS[provider] ?? []).map((m) => m.value) : [];
+  const isCustomSelected = model === "__custom__" || (model !== "" && !knownModels.includes(model) && model !== "__custom__");
+  const selectValue = isCustomSelected ? "__custom__" : model;
+
+  useEffect(() => {
+    if (settings && !initializedRef.current) {
+      const savedProvider = getSetting("ai_provider");
+      const savedModel = getSetting("ai_model");
+      setProvider(savedProvider);
+      const knownForProvider = (PROVIDER_MODELS[savedProvider] ?? []).map((m) => m.value);
+      if (savedModel && !knownForProvider.includes(savedModel)) {
+        setModel("__custom__");
+        setCustomModel(savedModel);
+      } else {
+        setModel(savedModel);
+      }
+      setEnabled(getSetting("ai_enabled") === "true");
+      initializedRef.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
+  const save = (key: string, value: string) => {
+    onUpdate(key, value);
+    setSaved((prev) => ({ ...prev, [key]: true }));
+    setTimeout(() => setSaved((prev) => ({ ...prev, [key]: false })), 2200);
+  };
+
+  const saveModel = () => {
+    const actualModel = model === "__custom__" ? customModel.trim() : model;
+    save("ai_model", actualModel);
+  };
+
+  const handleProviderChange = (p: string) => {
+    setProvider(p);
+    setModel(PROVIDER_DEFAULTS[p] ?? "");
+    setCustomModel("");
+  };
+
+  const handleModelSelect = (value: string) => {
+    setModel(value);
+    if (value !== "__custom__") setCustomModel("");
+  };
+
+  const handleTest = async () => {
+    if (!provider) return;
+    setTestState("running");
+    setTestMsg("");
+    const result = await onTest({ provider, model: model || undefined, apiKey: apiKey || undefined });
+    if (result.ok) {
+      setTestState("ok");
+      setTestMsg(`Connected · ${result.provider} / ${result.model}`);
+    } else {
+      setTestState("error");
+      setTestMsg(result.error ?? "Connection failed");
+    }
+    setTimeout(() => setTestState("idle"), 6000);
+  };
+
+  if (settings === null) {
+    return (
+      <IslandCard style={{ padding: 20 }}>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textMuted }}>Loading settings…</p>
+      </IslandCard>
+    );
+  }
+
+  const accent = "#8b5cf6";
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      {/* Status banner */}
+      <IslandCard
+        style={{
+          padding: "14px 18px",
+          background: `linear-gradient(135deg, ${accent}22 0%, ${islandTheme.color.panelBg} 100%)`,
+          border: `1px solid ${accent}44`
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 28 }}>🤖</span>
+          <div style={{ flex: 1 }}>
+            <div className="island-mono" style={{ fontSize: 10, color: accent, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              AI Engine
+            </div>
+            <div className="island-display" style={{ fontWeight: 800, fontSize: 18 }}>
+              {provider ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} · ${model || PROVIDER_DEFAULTS[provider] || "default model"}` : "Not configured"}
+            </div>
+            <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+              {enabled ? "AI features enabled" : "AI features disabled"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !enabled;
+              setEnabled(next);
+              save("ai_enabled", next ? "true" : "false");
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: islandTheme.color.textSubtle,
+              fontSize: 13,
+              font: "inherit"
+            }}
+          >
+            <Toggle on={enabled} />
+            <span>{enabled ? "On" : "Off"}</span>
+          </button>
+        </div>
+      </IslandCard>
+
+      {/* Provider */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Provider</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Choose your LLM provider. You can swap at any time — no code changes needed.
+        </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {["anthropic", "openai"].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => handleProviderChange(p)}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 10,
+                border: `1.5px solid ${provider === p ? accent : islandTheme.color.cardBorder}`,
+                background: provider === p ? `${accent}22` : islandTheme.color.panelMutedBg,
+                color: provider === p ? accent : islandTheme.color.textSecondary,
+                fontWeight: provider === p ? 700 : 400,
+                fontSize: 14,
+                cursor: "pointer",
+                font: "inherit",
+                transition: "all 140ms"
+              }}
+            >
+              {p === "anthropic" ? "Anthropic (Claude)" : "OpenAI (GPT)"}
+            </button>
+          ))}
+        </div>
+        {provider ? (
+          <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+            <IslandButton
+              variant="secondary"
+              onClick={() => save("ai_provider", provider)}
+              disabled={saved["ai_provider"]}
+            >
+              {saved["ai_provider"] ? "Saved" : "Save Provider"}
+            </IslandButton>
+          </div>
+        ) : null}
+      </IslandCard>
+
+      {/* Model */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Model</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          {provider
+            ? `Choose a ${provider === "anthropic" ? "Claude" : "GPT"} model. Haiku / Mini tiers are fastest and cheapest — great for news curation. Use Sonnet / GPT-4o for richer reasoning.`
+            : "Select a provider above to see available models."}
+        </p>
+
+        {provider ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {/* Model option tiles */}
+            <div style={{ display: "grid", gap: 6 }}>
+              {(PROVIDER_MODELS[provider] ?? []).map((opt) => {
+                const isSelected = selectValue === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleModelSelect(opt.value)}
+                    style={{
+                      textAlign: "left",
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: `1.5px solid ${isSelected ? accent : islandTheme.color.cardBorder}`,
+                      background: isSelected ? `${accent}18` : islandTheme.color.panelMutedBg,
+                      color: islandTheme.color.textPrimary,
+                      cursor: "pointer",
+                      font: "inherit",
+                      transition: "all 140ms",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: "50%",
+                        border: `2px solid ${isSelected ? accent : islandTheme.color.cardBorder}`,
+                        background: isSelected ? accent : "transparent",
+                        flexShrink: 0,
+                        transition: "all 140ms"
+                      }}
+                    />
+                    <span style={{ flex: 1 }}>
+                      <span style={{ fontWeight: isSelected ? 700 : 400, fontSize: 13 }}>
+                        {opt.label}
+                      </span>
+                      {opt.note && opt.value !== "__custom__" ? (
+                        <span
+                          style={{
+                            marginLeft: 8,
+                            fontSize: 11,
+                            color: islandTheme.color.textMuted
+                          }}
+                        >
+                          — {opt.note}
+                        </span>
+                      ) : null}
+                    </span>
+                    {opt.value === PROVIDER_DEFAULTS[provider] ? (
+                      <span
+                        className="island-mono"
+                        style={{
+                          fontSize: 9,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.1em",
+                          background: `${accent}28`,
+                          color: accent,
+                          padding: "2px 7px",
+                          borderRadius: 999
+                        }}
+                      >
+                        Default
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom model input — only visible when Custom is selected */}
+            {selectValue === "__custom__" ? (
+              <input
+                style={{ ...islandInputStyle }}
+                type="text"
+                placeholder={`Enter model ID (e.g. ${provider === "anthropic" ? "claude-opus-4-5" : "gpt-4-turbo"})`}
+                value={customModel}
+                onChange={(e) => setCustomModel(e.target.value)}
+                autoFocus
+              />
+            ) : null}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <IslandButton
+                variant="secondary"
+                onClick={saveModel}
+                disabled={saved["ai_model"] || (selectValue === "__custom__" && !customModel.trim())}
+              >
+                {saved["ai_model"] ? "Saved" : "Save Model"}
+              </IslandButton>
+              {saved["ai_model"] ? null : (
+                <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
+                  Currently:{" "}
+                  <span className="island-mono" style={{ color: islandTheme.color.textSubtle }}>
+                    {getSetting("ai_model") || `${PROVIDER_DEFAULTS[provider] ?? "default"} (default)`}
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 10,
+              background: islandTheme.color.panelMutedBg,
+              border: `1px solid ${islandTheme.color.cardBorder}`,
+              fontSize: 13,
+              color: islandTheme.color.textMuted
+            }}
+          >
+            No provider selected — pick one above to see model options.
+          </div>
+        )}
+      </IslandCard>
+
+      {/* API Key */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>API Key</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          {apiKeyIsSet
+            ? "A key is already saved. Enter a new value to replace it, or leave blank to keep the existing key."
+            : "Your key is stored server-side and never returned to the browser after saving. You can also set ANTHROPIC_API_KEY / OPENAI_API_KEY in your .env as a fallback."}
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <input
+            style={{ ...islandInputStyle, flex: 1, fontFamily: islandTheme.font.mono, letterSpacing: "0.05em" }}
+            type="password"
+            value={apiKey}
+            placeholder={apiKeyIsSet ? "••••••••  (key saved — enter new to replace)" : "sk-ant-... or sk-..."}
+            onChange={(e) => setApiKey(e.target.value)}
+            autoComplete="off"
+          />
+          <IslandButton
+            variant="secondary"
+            onClick={() => {
+              if (apiKey) {
+                save("ai_api_key", apiKey);
+                setApiKey("");
+              }
+            }}
+            disabled={!apiKey || saved["ai_api_key"]}
+          >
+            {saved["ai_api_key"] ? "Saved" : "Save Key"}
+          </IslandButton>
+        </div>
+      </IslandCard>
+
+      {/* Test connection */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Test Connection</SubsectionTitle>
+        <p style={{ margin: "0 0 14px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Sends a short ping to the provider using the current settings (including any unsaved key entered above).
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <IslandButton
+            variant="primary"
+            onClick={handleTest}
+            disabled={!provider || testState === "running"}
+          >
+            {testState === "running" ? "Testing…" : "Test Connection"}
+          </IslandButton>
+          {testMsg ? (
+            <span
+              className="island-mono"
+              style={{
+                fontSize: 12,
+                color: testState === "ok" ? islandTheme.color.success : islandTheme.color.danger,
+                lineHeight: 1.4
+              }}
+            >
+              {testState === "ok" ? "✓ " : "✗ "}{testMsg}
+            </span>
+          ) : null}
+        </div>
+      </IslandCard>
+    </div>
+  );
 }

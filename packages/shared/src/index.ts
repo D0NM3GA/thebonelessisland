@@ -23,6 +23,7 @@ export type RecommendedGame = {
   nearMatchMissingMembers: number;
   score: number;
   reason: string;
+  blurb?: string;
 };
 
 export type CrewOwner = {
@@ -89,6 +90,8 @@ export type GameNewsItem = {
   tags: string[];
   publishedAt: string;
   scopes: GameNewsScope[];
+  aiRelevanceScore?: number | null;
+  aiSummary?: string | null;
 };
 
 export type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";

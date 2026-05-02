@@ -1,9 +1,9 @@
 import express from "express";
-import { env } from "../config.js";
 import { db } from "../db/client.js";
-import { requireSession } from "../lib/auth.js";
+import { requireParentRole, requireSession } from "../lib/auth.js";
 import { ingestNewsForApps } from "../lib/gameNewsIngestion.js";
 import { getGuildId } from "../lib/serverSettings.js";
+import { curateUncuratedNews, forceCurateNews } from "../lib/newsCurator.js";
 
 export const gameNewsRouter = express.Router();
 gameNewsRouter.use(requireSession);
@@ -128,6 +128,10 @@ type NewsRow = {
   author: string | null;
   tags: string[];
   published_at: string;
+  ai_relevance_score: number | null;
+  ai_summary: string | null;
+  ai_label: string | null;
+  ai_spoiler_warning: boolean;
 };
 
 gameNewsRouter.get("/news", async (_req, res) => {
@@ -141,6 +145,11 @@ gameNewsRouter.get("/news", async (_req, res) => {
   }
 
   await ingestNewsForApps(scope.topAppIds, { maxApps: 8 });
+
+  // Fire-and-forget: curate any un-curated items in the background
+  curateUncuratedNews(scope.topAppIds).catch((err) => {
+    console.error("[gameNews] background curation error:", err);
+  });
 
   const result = await db.query<NewsRow>(
     `
@@ -158,11 +167,15 @@ gameNewsRouter.get("/news", async (_req, res) => {
         n.is_external_url,
         n.author,
         n.tags,
-        n.published_at
+        n.published_at,
+        n.ai_relevance_score,
+        n.ai_summary,
+        n.ai_label,
+        n.ai_spoiler_warning
       FROM game_news n
       INNER JOIN games g ON g.app_id = n.app_id
       WHERE n.app_id = ANY($1::int[])
-      ORDER BY n.published_at DESC
+      ORDER BY n.ai_relevance_score DESC NULLS LAST, n.published_at DESC
       LIMIT 60
     `,
     [allAppIds]
@@ -190,8 +203,39 @@ gameNewsRouter.get("/news", async (_req, res) => {
         author: row.author,
         tags: row.tags,
         publishedAt: row.published_at,
-        scopes: tagSet
+        scopes: tagSet,
+        aiRelevanceScore: row.ai_relevance_score,
+        aiSummary: row.ai_summary,
+        aiLabel: row.ai_label as "personal" | "community" | "top_news" | null,
+        aiSpoilerWarning: row.ai_spoiler_warning
       };
     })
   });
+});
+
+gameNewsRouter.post("/news/curate", requireParentRole, async (_req, res) => {
+  const guildId = getGuildId();
+  if (!guildId) {
+    res.status(503).json({ error: "Guild not configured" });
+    return;
+  }
+
+  // Resolve the top app IDs across the whole crew (same logic as news GET, but all crew)
+  const ranked = await db.query<{ app_id: number }>(
+    `
+      SELECT g.app_id
+      FROM games g
+      INNER JOIN user_games ug ON ug.app_id = g.app_id
+      INNER JOIN users u ON u.id = ug.user_id
+      INNER JOIN guild_members gm ON gm.discord_user_id = u.discord_user_id AND gm.guild_id = $1 AND gm.in_guild = TRUE
+      GROUP BY g.app_id
+      ORDER BY COUNT(DISTINCT u.id) DESC
+      LIMIT 24
+    `,
+    [guildId]
+  );
+
+  const appIds = ranked.rows.map((r) => r.app_id);
+  const curated = await forceCurateNews(appIds);
+  res.json({ ok: true, curated });
 });

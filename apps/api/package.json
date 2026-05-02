@@ -10,11 +10,13 @@
     "db:migrate": "tsx src/db/runMigrations.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@island/shared": "0.1.0",
     "cookie-session": "^2.1.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "openai": "^6.35.0",
     "pg": "^8.16.3",
     "zod": "^4.1.12"
   },

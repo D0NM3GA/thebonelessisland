@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type {
@@ -39,7 +39,10 @@ type GamesPageProps = {
   onAddSelectedMembersToNight: () => void;
   onRemoveSelectedMembersFromNight: () => void;
   onNavigate: (page: PageId) => void;
+  onSendChatMessage: (message: string, history: ChatMessage[]) => Promise<{ reply: string; error?: string }>;
 };
+
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
 type ComposerPick = {
   source: "selection" | "featured";
@@ -47,6 +50,7 @@ type ComposerPick = {
   name: string;
   matchPct: number;
   reason: string;
+  blurb?: string;
   ownersInScope: number;
   scopeSize: number;
   headerImageUrl: string | null;
@@ -60,6 +64,7 @@ export function GamesPage(props: GamesPageProps) {
     <div style={{ display: "grid", gap: 24, position: "relative" }}>
       <GamesHero />
       <SessionAndPatchesRow {...props} />
+      <CrewChat onSend={props.onSendChatMessage} />
       <ScheduledNights {...props} />
       <GroupWishlist crewWishlist={props.crewWishlist} />
       <LibrarySnapshot onNavigate={props.onNavigate} />
@@ -127,6 +132,7 @@ function buildComposerPick(props: GamesPageProps): ComposerPick | null {
       name: top.name,
       matchPct: Math.max(0, Math.min(100, Math.round(top.score))),
       reason: top.reason,
+      blurb: top.blurb,
       ownersInScope: top.owners,
       scopeSize: selectedMemberIds.length,
       headerImageUrl: meta?.headerImageUrl ?? null,
@@ -286,7 +292,7 @@ function SessionComposer(props: GamesPageProps) {
             {pick?.name ?? SESSION_COMPOSER_FALLBACK.title}
           </h2>
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: islandTheme.color.textSubtle }}>
-            {pick?.reason ?? SESSION_COMPOSER_FALLBACK.reason}
+            {pick?.blurb ?? pick?.reason ?? SESSION_COMPOSER_FALLBACK.reason}
           </p>
           <ModeBar value={mode} onChange={setMode} />
           {pick ? <StatStrip stats={pickStats(pick)} /> : null}
@@ -817,8 +823,37 @@ function PatchesRolodex({ gameNews }: { gameNews: GameNewsItem[] }) {
   );
 }
 
+const AI_LABEL_CONFIG = {
+  personal:  { text: "For You",         bg: "rgba(16, 185, 129, 0.18)", border: "rgba(16, 185, 129, 0.4)", color: "#34d399" },
+  community: { text: "Crew Trending",   bg: "rgba(96, 165, 250, 0.18)", border: "rgba(96, 165, 250, 0.4)", color: "#60a5fa" },
+  top_news:  { text: "Top Gaming News", bg: "rgba(251, 146, 60, 0.18)", border: "rgba(251, 146, 60, 0.4)", color: "#fb923c" }
+} as const;
+
+function AiLabelChip({ label }: { label: "personal" | "community" | "top_news" }) {
+  const cfg = AI_LABEL_CONFIG[label];
+  return (
+    <span
+      className="island-mono"
+      style={{
+        fontSize: 9,
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        background: cfg.bg,
+        border: `1px solid ${cfg.border}`,
+        color: cfg.color,
+        padding: "1px 6px",
+        borderRadius: 999,
+        flexShrink: 0
+      }}
+    >
+      {cfg.text}
+    </span>
+  );
+}
+
 function PatchFeatured({ item, kind, ago }: { item: GameNewsItem; kind: PatchKind; ago: string }) {
   const rationale = buildScopeRationale(item, kind);
+  const isAIPick = (item.aiRelevanceScore ?? 0) >= 0.75;
   return (
     <a
       href={item.url}
@@ -852,19 +887,63 @@ function PatchFeatured({ item, kind, ago }: { item: GameNewsItem; kind: PatchKin
       </div>
       <div>
         <div
-          className="island-mono"
           style={{
-            fontSize: 10,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: islandTheme.color.primaryGlow
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap",
+            marginBottom: 2
           }}
         >
-          ★ Featured · {item.gameName}
+          <span
+            className="island-mono"
+            style={{
+              fontSize: 10,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: islandTheme.color.primaryGlow
+            }}
+          >
+            ★ Featured · {item.gameName}
+          </span>
+          {item.aiLabel ? <AiLabelChip label={item.aiLabel} /> : isAIPick ? (
+            <span
+              className="island-mono"
+              style={{
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                background: "rgba(139, 92, 246, 0.2)",
+                border: "1px solid rgba(139, 92, 246, 0.4)",
+                color: "#a78bfa",
+                padding: "1px 6px",
+                borderRadius: 999
+              }}
+            >
+              AI Pick
+            </span>
+          ) : null}
+          {item.aiSpoilerWarning ? (
+            <span
+              className="island-mono"
+              style={{
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                color: "#f87171",
+                padding: "1px 6px",
+                borderRadius: 999
+              }}
+            >
+              ⚠ Spoilers
+            </span>
+          ) : null}
         </div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{item.title}</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{item.title}</div>
         <div style={{ marginTop: 4, fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.4 }}>
-          {rationale}
+          {item.aiSummary || rationale}
         </div>
         <div
           className="island-mono"
@@ -931,26 +1010,74 @@ function PatchRow({
         {item.headerImageUrl ? null : PATCH_KIND_ICON[kind]}
       </div>
       <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis"
-          }}
-        >
-          {item.gameName} — {item.title}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              flex: 1,
+              minWidth: 0
+            }}
+          >
+            {item.gameName} — {item.title}
+          </div>
+          {item.aiLabel ? (
+            <AiLabelChip label={item.aiLabel} />
+          ) : (item.aiRelevanceScore ?? 0) >= 0.75 ? (
+            <span
+              className="island-mono"
+              style={{
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                background: "rgba(139, 92, 246, 0.15)",
+                border: "1px solid rgba(139, 92, 246, 0.35)",
+                color: "#a78bfa",
+                padding: "1px 5px",
+                borderRadius: 999,
+                flexShrink: 0
+              }}
+            >
+              AI
+            </span>
+          ) : null}
+          {item.aiSpoilerWarning ? (
+            <span
+              className="island-mono"
+              style={{
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                color: "#f87171",
+                padding: "1px 5px",
+                borderRadius: 999,
+                flexShrink: 0
+              }}
+            >
+              ⚠ Spoilers
+            </span>
+          ) : null}
         </div>
         <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
           {kind} · {item.feedLabel ?? "Steam"} · {ago}
         </div>
+        {item.aiSummary ? (
+          <div style={{ fontSize: 11, color: islandTheme.color.textSubtle, marginTop: 3, lineHeight: 1.4 }}>
+            {item.aiSummary}
+          </div>
+        ) : null}
       </div>
       <span
         style={{
           color: islandTheme.color.textMuted,
           fontSize: 14,
-          padding: 4
+          padding: 4,
+          flexShrink: 0
         }}
         aria-hidden="true"
       >
@@ -1595,5 +1722,183 @@ function SectionHead({ title, meta }: { title: string; meta: string }) {
         {meta}
       </div>
     </div>
+  );
+}
+
+// ── Crew Chat ─────────────────────────────────────────────────────────────────
+
+function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]) => Promise<{ reply: string; error?: string }> }) {
+  const [history, setHistory] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleSend = async () => {
+    const msg = input.trim();
+    if (!msg || sending) return;
+    setInput("");
+    setError(null);
+    const next: ChatMessage[] = [...history, { role: "user", content: msg }];
+    setHistory(next);
+    setSending(true);
+
+    const result = await onSend(msg, history);
+    setSending(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    setHistory([...next, { role: "assistant", content: result.reply }]);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }, 50);
+  };
+
+  return (
+    <IslandCard style={{ padding: 0, overflow: "hidden" }}>
+      <div
+        style={{
+          padding: "12px 16px",
+          borderBottom: `1px solid ${islandTheme.color.cardBorder}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 8
+        }}
+      >
+        <span style={{ fontSize: 18 }}>🤖</span>
+        <h3 className="island-display" style={{ margin: 0, fontSize: 15 }}>
+          Island AI
+        </h3>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
+          Ask what to play, get crew recs, check news
+        </span>
+      </div>
+
+      {history.length > 0 ? (
+        <div
+          ref={scrollRef}
+          style={{
+            maxHeight: 320,
+            overflowY: "auto",
+            padding: "12px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10
+          }}
+        >
+          {history.map((msg, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                justifyContent: msg.role === "user" ? "flex-end" : "flex-start"
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: "82%",
+                  padding: "8px 12px",
+                  borderRadius: msg.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                  background: msg.role === "user"
+                    ? "rgba(139, 92, 246, 0.25)"
+                    : islandTheme.color.panelMutedBg,
+                  border: `1px solid ${msg.role === "user" ? "rgba(139, 92, 246, 0.35)" : islandTheme.color.cardBorder}`,
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: islandTheme.color.textPrimary,
+                  whiteSpace: "pre-wrap"
+                }}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {sending ? (
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
+              <div
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "14px 14px 14px 4px",
+                  background: islandTheme.color.panelMutedBg,
+                  border: `1px solid ${islandTheme.color.cardBorder}`,
+                  fontSize: 13,
+                  color: islandTheme.color.textMuted
+                }}
+              >
+                Thinking…
+              </div>
+            </div>
+          ) : null}
+          {error ? (
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: 10,
+                background: "rgba(239, 68, 68, 0.12)",
+                border: `1px solid rgba(239, 68, 68, 0.3)`,
+                fontSize: 12,
+                color: islandTheme.color.danger
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div
+        style={{
+          padding: "10px 14px",
+          borderTop: history.length > 0 ? `1px solid ${islandTheme.color.cardBorder}` : "none",
+          display: "flex",
+          gap: 8
+        }}
+      >
+        <input
+          style={{
+            flex: 1,
+            padding: "9px 14px",
+            borderRadius: 10,
+            border: `1px solid ${islandTheme.color.cardBorder}`,
+            background: islandTheme.color.panelMutedBg,
+            color: islandTheme.color.textPrimary,
+            fontSize: 13,
+            outline: "none",
+            font: "inherit"
+          }}
+          type="text"
+          placeholder='Ask the Island AI — "What should we play tonight?" or "Any big patches this week?"'
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          disabled={sending}
+        />
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={!input.trim() || sending}
+          style={{
+            padding: "9px 18px",
+            borderRadius: 10,
+            border: "none",
+            background: input.trim() && !sending ? "rgba(139, 92, 246, 0.8)" : islandTheme.color.panelMutedBg,
+            color: input.trim() && !sending ? "#fff" : islandTheme.color.textMuted,
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: input.trim() && !sending ? "pointer" : "default",
+            transition: "background 150ms",
+            font: "inherit"
+          }}
+        >
+          Send
+        </button>
+      </div>
+    </IslandCard>
   );
 }

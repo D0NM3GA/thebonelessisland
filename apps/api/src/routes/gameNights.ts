@@ -7,6 +7,7 @@ import { requireSession } from "../lib/auth.js";
 import { recordEvent } from "../lib/activityEvents.js";
 import { enrichGameMetadataFromSteam, enrichMissingGameImages } from "../lib/gameCatalogEnrichment.js";
 import { whatCanWePlay } from "../lib/recommend.js";
+import { generateRecommendationBlurb } from "../lib/recommendBlurb.js";
 
 const createGameNightSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -723,9 +724,20 @@ gameNightRouter.post("/:id/recommendations", async (req, res) => {
     maxGroupSize: memberIds.length
   });
 
+  // Attach an AI blurb to the top pick
+  let topBlurb: string | null = null;
+  if (recommendations[0]) {
+    topBlurb = await generateRecommendationBlurb(recommendations[0], memberIds.length).catch(() => null);
+  }
+
+  const enriched = recommendations.map((r, i) => ({
+    ...r,
+    blurb: i === 0 ? (topBlurb ?? r.reason) : r.reason
+  }));
+
   res.json({
     source: body.memberIds?.length ? "request-member-ids" : "night-attendees-or-voters",
     memberIds,
-    recommendations
+    recommendations: enriched
   });
 });

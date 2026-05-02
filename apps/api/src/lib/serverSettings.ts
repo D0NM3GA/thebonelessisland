@@ -6,6 +6,7 @@ type SettingRow = {
   value: string;
   label: string;
   description: string | null;
+  is_secret: boolean;
   updated_at: string;
 };
 
@@ -15,7 +16,7 @@ let loadedOnce = false;
 
 export async function loadSettings(): Promise<void> {
   const result = await db.query<SettingRow>(
-    "SELECT key, value, label, description, updated_at FROM server_settings ORDER BY key"
+    "SELECT key, value, label, description, is_secret, updated_at FROM server_settings ORDER BY key"
   );
   cachedRows = result.rows;
   loadedOnce = true;
@@ -41,6 +42,12 @@ export function getParentRoleName(): string {
   return cached("parent_role_name") || env.PARENT_ROLE_NAME;
 }
 
+/** Returns the raw (unmasked) value for a setting key, or null if not found. */
+export function getAISetting(key: string): string | null {
+  const row = cachedRows.find((r) => r.key === key);
+  return row ? row.value : null;
+}
+
 // ── Public shape sent to the admin UI ────────────────────────────────────────
 
 export type PublicSetting = {
@@ -48,6 +55,7 @@ export type PublicSetting = {
   value: string;
   label: string;
   description: string | null;
+  isSecret: boolean;
   /** The env-var fallback so the UI can show what will be used when DB value is blank */
   envDefault: string;
   updatedAt: string;
@@ -56,15 +64,20 @@ export type PublicSetting = {
 const ENV_DEFAULTS: Record<string, string> = {
   discord_guild_id: env.DISCORD_GUILD_ID || "(not set in environment)",
   guild_display_name: "",
-  parent_role_name: env.PARENT_ROLE_NAME || "(not set in environment)"
+  parent_role_name: env.PARENT_ROLE_NAME || "(not set in environment)",
+  ai_provider: "",
+  ai_model: "",
+  ai_enabled: "",
+  ai_api_key: ""
 };
 
 export function getPublicSettings(): PublicSetting[] {
   return cachedRows.map((row) => ({
     key: row.key,
-    value: row.value,
+    value: row.is_secret && row.value ? "••••••••" : row.value,
     label: row.label,
     description: row.description,
+    isSecret: row.is_secret,
     envDefault: ENV_DEFAULTS[row.key] ?? "",
     updatedAt: row.updated_at
   }));
@@ -83,11 +96,25 @@ export async function upsertSetting(
   );
   const userId = userResult.rows[0]?.id ?? null;
 
+  const trimmed = value.trim();
+
+  // Never overwrite a secret field with the masked placeholder
+  const row = cachedRows.find((r) => r.key === key);
+  if (row?.is_secret && trimmed === "••••••••") {
+    return;
+  }
+
+  // For secret fields, skip the update entirely when the caller sends an empty string
+  // (empty = "keep existing value")
+  if (row?.is_secret && trimmed === "") {
+    return;
+  }
+
   await db.query(
     `UPDATE server_settings
      SET value = $1, updated_at = NOW(), updated_by_user_id = $3
      WHERE key = $2`,
-    [value.trim(), key, userId]
+    [trimmed, key, userId]
   );
 
   // Refresh the in-memory cache immediately so the next request sees the new value

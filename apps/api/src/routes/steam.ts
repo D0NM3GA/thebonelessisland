@@ -323,7 +323,7 @@ steamRouter.post("/sync-owned-games", async (_req, res) => {
     }
 
     const steamJson = (await steamResponse.json()) as {
-      response?: { games?: Array<{ appid: number; name: string; playtime_forever?: number }> };
+      response?: { games?: Array<{ appid: number; name: string; playtime_forever?: number; playtime_2weeks?: number }> };
     };
 
     if (!steamJson.response) {
@@ -343,12 +343,15 @@ steamRouter.post("/sync-owned-games", async (_req, res) => {
       );
       await db.query(
         `
-          INSERT INTO user_games (user_id, app_id, playtime_minutes)
-          VALUES ($1, $2, $3)
+          INSERT INTO user_games (user_id, app_id, playtime_minutes, playtime_2weeks)
+          VALUES ($1, $2, $3, $4)
           ON CONFLICT (user_id, app_id)
-          DO UPDATE SET playtime_minutes = EXCLUDED.playtime_minutes, last_played_at = NOW()
+          DO UPDATE SET
+            playtime_minutes = EXCLUDED.playtime_minutes,
+            playtime_2weeks  = EXCLUDED.playtime_2weeks,
+            last_played_at   = CASE WHEN EXCLUDED.playtime_2weeks > 0 THEN NOW() ELSE user_games.last_played_at END
         `,
-        [link.rows[0].user_id, game.appid, game.playtime_forever ?? 0]
+        [link.rows[0].user_id, game.appid, game.playtime_forever ?? 0, game.playtime_2weeks ?? 0]
       );
     }
 
@@ -413,6 +416,95 @@ steamRouter.post("/sync-wishlist", async (_req, res) => {
   } catch (error) {
     console.error("Wishlist sync failed", error);
     res.status(502).json({ error: "Unable to sync Steam wishlist right now" });
+  }
+});
+
+steamRouter.post("/sync-recent-games", async (_req, res) => {
+  const discordUserId = String(res.locals.userId);
+  const link = await db.query<{ user_id: string; steam_id64: string }>(
+    `
+      SELECT sl.user_id, sl.steam_id64
+      FROM steam_links sl
+      INNER JOIN users u ON u.id = sl.user_id
+      WHERE u.discord_user_id = $1
+    `,
+    [discordUserId]
+  );
+  if (!link.rows[0]) {
+    res.status(400).json({ error: "No Steam account linked" });
+    return;
+  }
+  if (!env.STEAM_WEB_API_KEY) {
+    res.status(400).json({ error: "Missing STEAM_WEB_API_KEY in environment" });
+    return;
+  }
+
+  try {
+    const url =
+      `https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1/` +
+      `?key=${env.STEAM_WEB_API_KEY}&steamid=${link.rows[0].steam_id64}&count=20`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      res.status(502).json({ error: `Steam API returned ${response.status}` });
+      return;
+    }
+
+    const json = (await response.json()) as {
+      response?: {
+        total_count?: number;
+        games?: Array<{ appid: number; name: string; playtime_2weeks: number; playtime_forever: number }>;
+      };
+    };
+
+    const games = json.response?.games ?? [];
+
+    for (const game of games) {
+      // Ensure the game row exists
+      await db.query(
+        `INSERT INTO games (app_id, name) VALUES ($1, $2) ON CONFLICT (app_id) DO UPDATE SET name = EXCLUDED.name`,
+        [game.appid, game.name]
+      );
+      // Upsert into user_games — ensure playtime_2weeks and last_played_at are current
+      await db.query(
+        `
+          INSERT INTO user_games (user_id, app_id, playtime_minutes, playtime_2weeks, last_played_at)
+          VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (user_id, app_id)
+          DO UPDATE SET
+            playtime_minutes = GREATEST(user_games.playtime_minutes, EXCLUDED.playtime_minutes),
+            playtime_2weeks  = EXCLUDED.playtime_2weeks,
+            last_played_at   = NOW()
+        `,
+        [link.rows[0].user_id, game.appid, game.playtime_forever, game.playtime_2weeks]
+      );
+    }
+
+    // Reset playtime_2weeks to 0 for games not in the recent list (they weren't played this week)
+    if (games.length > 0) {
+      const recentAppIds = games.map((g) => g.appid);
+      await db.query(
+        `
+          UPDATE user_games
+          SET playtime_2weeks = 0
+          WHERE user_id = $1
+            AND app_id <> ALL($2::int[])
+            AND playtime_2weeks > 0
+        `,
+        [link.rows[0].user_id, recentAppIds]
+      );
+    } else {
+      // Nothing played recently — zero out all 2-week playtime for this user
+      await db.query(
+        `UPDATE user_games SET playtime_2weeks = 0 WHERE user_id = $1 AND playtime_2weeks > 0`,
+        [link.rows[0].user_id]
+      );
+    }
+
+    res.json({ syncedGames: games.length, recentGames: games.map((g) => ({ appId: g.appid, name: g.name, playtime2Weeks: g.playtime_2weeks })) });
+  } catch (error) {
+    console.error("Recent games sync failed", error);
+    res.status(502).json({ error: "Unable to sync recent games right now" });
   }
 });
 

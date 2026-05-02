@@ -5,6 +5,7 @@ import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { enrichGameMetadataFromSteam, enrichMissingGameImages } from "../lib/gameCatalogEnrichment.js";
 import { whatCanWePlay } from "../lib/recommend.js";
+import { generateRecommendationBlurb } from "../lib/recommendBlurb.js";
 
 const requestSchema = z.object({
   memberIds: z.array(z.string()).min(1),
@@ -31,7 +32,19 @@ recommendationRouter.post("/what-can-we-play", async (req, res) => {
 
   const input = requestSchema.parse(req.body);
   const recommendations = await whatCanWePlay(input);
-  res.json({ recommendations });
+
+  // Attach an AI blurb to the top pick (fire-and-forget style — await but swallow errors)
+  let topBlurb: string | null = null;
+  if (recommendations[0]) {
+    topBlurb = await generateRecommendationBlurb(recommendations[0], input.memberIds.length).catch(() => null);
+  }
+
+  const enriched = recommendations.map((r, i) => ({
+    ...r,
+    blurb: i === 0 ? (topBlurb ?? r.reason) : r.reason
+  }));
+
+  res.json({ recommendations: enriched });
 });
 
 type FeaturedScope = "voice" | "crew";
@@ -112,6 +125,8 @@ recommendationRouter.get("/featured", async (req, res) => {
   );
   const metaRow = meta.rows[0];
 
+  const blurb = await generateRecommendationBlurb(top, memberIds.length).catch(() => null);
+
   res.json({
     featured: {
       appId: top.appId,
@@ -119,7 +134,7 @@ recommendationRouter.get("/featured", async (req, res) => {
       owners: top.owners,
       scopeMemberCount: memberIds.length,
       score: top.score,
-      reason: top.reason,
+      reason: blurb ?? top.reason,
       headerImageUrl: metaRow?.header_image_url ?? null,
       tags: metaRow?.tags ?? [],
       maxPlayers: metaRow?.max_players ?? null,

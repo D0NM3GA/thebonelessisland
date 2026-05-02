@@ -14,6 +14,7 @@ export type Recommendation = {
   nearMatchMissingMembers: number;
   score: number;
   reason: string;
+  blurb?: string;
 };
 
 export type GameNight = {
@@ -134,6 +135,10 @@ export type GameNewsItem = {
   tags: string[];
   publishedAt: string;
   scopes: GameNewsScope[];
+  aiRelevanceScore?: number | null;
+  aiSummary?: string | null;
+  aiLabel?: "personal" | "community" | "top_news" | null;
+  aiSpoilerWarning?: boolean;
 };
 
 export type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";
@@ -173,6 +178,7 @@ export type ServerSetting = {
   value: string;
   label: string;
   description: string | null;
+  isSecret: boolean;
   envDefault: string;
   updatedAt: string;
 };

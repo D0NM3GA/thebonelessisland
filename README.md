@@ -1,11 +1,11 @@
 # The Boneless Island
 
-Discord-first community web platform with optional Steam linking. Tropical island theme, day/night themes, parallax palms, AI-driven session planning.
+Discord-first community web platform with optional Steam linking. Tropical island theme, day/night themes, parallax palms, live AI-driven session planning and news curation.
 
 ## What is included
 
 - `apps/web`: React + Vite + TypeScript. Fixed topbar (Home / Games / Community / Achievements / Admin), Discord-style user menu, full-bleed scene shell (sky + sun/moon + ocean + beach + parallax palms), day/night theme switch.
-- `apps/api`: Express API with Discord OAuth, profile routes, Steam link/sync, rule-based recommendations, game-night CRUD + RSVP.
+- `apps/api`: Express API with Discord OAuth, profile routes, Steam link/sync, rule-based + AI recommendations, game-night CRUD + RSVP, AI chat, AI news curation.
 - `apps/bot`: Thin Discord bot exposing `/whatcanweplay` and delegating recommendation logic to the API.
 - `packages/shared`: shared cross-app TypeScript types.
 - `infra/docker-compose.yml`: local Postgres container.
@@ -32,11 +32,12 @@ Discord-first community web platform with optional Steam linking. Tropical islan
 
 1. Copy `.env.example` to `.env` and fill required Discord/Bot/Steam values.
    - Set `BOT_API_SHARED_SECRET` to the same value for both API and bot runtime.
+   - **AI (optional)**: set `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` as env-var fallbacks. You can also configure these at runtime in Admin → AI Settings — the DB value takes priority over the env var.
 2. Start Postgres:
    - `docker compose -f infra/docker-compose.yml up -d`
 3. Install dependencies:
    - `npm install`
-4. Run DB migration:
+4. Run DB migrations (includes AI settings, news curation columns, playtime columns):
    - `npm run db:migrate -w @island/api`
 5. Start all services:
    - `npm run dev`
@@ -101,6 +102,49 @@ Vote-related API endpoints (`/game-nights/:id/votes`, `/finalize`) remain alive 
 - Fonts: Bricolage Grotesque (display), Inter (body), JetBrains Mono (mono).
 - Honors `prefers-reduced-motion`.
 
+## AI features
+
+All AI features are provider-agnostic. The active provider, model, and API key are configured at runtime via **Admin → AI Settings** — no code changes or redeploys needed to switch providers.
+
+### Supported providers
+- **Anthropic** — Claude Haiku 4.5 (default), Sonnet 4.5, Opus 4
+- **OpenAI** — GPT-4o Mini (default), GPT-4o
+
+### Features
+
+**AI-curated gaming news** (`apps/api/src/lib/newsCurator.ts`)
+- Scores every Steam news article for community relevance (0–1) using live crew context: games played this week, owned titles, genre tags.
+- Deduplicates stories covering the same event across multiple sources.
+- Assigns a feed label — `personal` (crew is playing the game), `community` (crew trending), `top_news` (high-impact industry news).
+- Flags spoilers for story-driven games with a warning badge.
+- Articles are ordered by AI relevance score in the Patches & Updates rolodex.
+- Admin can trigger a full re-curate from Admin → Data Sync.
+
+**AI recommendation blurbs** (`apps/api/src/lib/recommendBlurb.ts`)
+- Generates a one-sentence island-flavored blurb for the top game recommendation.
+- Includes ownership count, session length, and which crew members played the game this week.
+- Results are cached in memory for 30 minutes per (game, owner count) pair to avoid redundant calls.
+
+**Crew chat** (`POST /ai/chat`)
+- Conversational assistant with live crew context: who's in voice, best current pick, top owned games, this week's playtime.
+- Chat history is trimmed server-side to an 800-char budget to keep input tokens predictable.
+- Returns specific error codes (503 = AI not configured, 502 = provider error) for graceful UI handling.
+
+### Token efficiency
+- **Anthropic prompt caching**: system prompts are sent with `cache_control: { type: "ephemeral" }` — repeated calls within 5 minutes pay ~10% of normal input token cost for the cached portion.
+- **Usage logging**: every AI call logs `in=Xtok out=Ytok cache_hit=Ztok` to stdout.
+- **Compact crew context**: crew data is formatted in compact key-value style ("Game A(12) Game B(8)") rather than verbose prose.
+- **In-flight guard**: a module-level lock prevents duplicate concurrent news curation batches.
+- **Blurb cache**: 30-minute in-memory TTL per recommendation eliminates repeated blurb calls.
+
+### Admin → AI Settings
+Configure AI without redeploying:
+- Enable / disable AI features globally
+- Switch provider (Anthropic / OpenAI)
+- Select or enter a custom model
+- Store API key (masked in UI, never overwritten by placeholder values)
+- Test the connection live
+
 ## Phase 1 feature coverage (backend / API)
 
 - Discord OAuth login + session cookie auth.
@@ -110,7 +154,10 @@ Vote-related API endpoints (`/game-nights/:id/votes`, `/finalize`) remain alive 
   - `GET /steam/openid/start` redirects to `https://steamcommunity.com/openid/login`.
   - `GET /steam/openid/return` performs the `check_authentication` round trip, extracts SteamID64 from `openid.claimed_id`, upserts `steam_links`, fires a `steam.linked` activity event, and bounces back to the web app with `?steam=linked`.
   - Falls back to `?steam=error&steamReason=...` for cancelled / verification-failed / not-authenticated cases.
-- Steam owned-games + wishlist sync (`POST /steam/sync-owned-games`, `POST /steam/sync-wishlist`).
+- Steam owned-games + wishlist sync:
+  - `POST /steam/sync-owned-games` — full library sync; captures all-time playtime (`playtime_minutes`) and 2-week playtime (`playtime_2weeks`) from `IPlayerService/GetOwnedGames`.
+  - `POST /steam/sync-recent-games` — lightweight sync via `IPlayerService/GetRecentlyPlayedGames`; updates `playtime_2weeks` and `last_played_at` for recently active games, zeros out stale entries. Runs every 5 minutes in the background.
+  - `POST /steam/sync-wishlist` — standalone wishlist sync.
 - Rule-based recommendation endpoint:
   - exact overlaps
   - near matches (one missing owner)
@@ -120,14 +167,11 @@ Vote-related API endpoints (`/game-nights/:id/votes`, `/finalize`) remain alive 
   - powers the Home Featured Game card
   - resolves scope to `voice` (members in voice) → falls back to `crew` (full guild)
   - enriches the top pick with header image / tags / player count / session length
+  - attaches an AI-generated blurb when AI is enabled
 - Crew library endpoint (`GET /steam/crew-games`):
   - powers the Library page and the AI session composer cover art
   - aggregates owners across the guild with display name + avatar URL
   - on-demand metadata + image enrichment for sparse rows
-- Steam wishlist sync (`POST /steam/sync-wishlist`):
-  - reads `IWishlistService/GetWishlist` for the linked Steam account
-  - upserts `user_wishlists`, prunes removed entries, enriches missing names + covers
-  - chained automatically after `POST /steam/sync-owned-games` (best-effort; private wishlists skip silently)
 - Crew wishlist endpoint (`GET /steam/crew-wishlist`):
   - powers the Group Wishlist card on the Games page
   - aggregates pooled wishlists with hype count + earliest add date + crew avatars
@@ -135,6 +179,7 @@ Vote-related API endpoints (`/game-nights/:id/votes`, `/finalize`) remain alive 
   - powers the Games page Patches & Updates rolodex
   - lazily ingests Steam News for the most relevant crew-owned apps (6h staleness window)
   - tags each item with `library` / `wishlist` / `crew` scopes for client-side filtering
+  - triggers background AI curation after ingestion; orders results by AI relevance score
 - Activity ledger (`activity_events` + `GET /activity`):
   - emitted by game-night creates / RSVPs / picks and Steam link / unlink / sync
   - powers Home page Activity Feed and Community activity timeline
@@ -157,6 +202,6 @@ The full Boneless Island design (handoff bundle from Claude Design) has been por
 7. **Admin** — hub + 9 sub-pages.
 8. **Polish + parity** — voting state cleanup; App.tsx down 62%.
 
-**Wired to real data**: Topbar profile + **Steam status badge** (logo + sync indicator next to the avatar), **Steam onboarding modal** (post-login prompt with Steam-branded "Sign in through Steam" button + tiny "no thanks, skip for now" link, dismissal persisted per-user in `localStorage`), **User-menu Steam panel** (Steam logo, "Synced 5m ago" / "Not linked" status, ID, Sync now / Sign in through Steam buttons), Home Friends Online widget, **Home Featured Game card** (top crew-overlap pick from `/recommendations/featured`), **Home Activity Feed** (live `activity_events` ledger from game-night + Steam emitters), **Home Drift Log** (Parent-curated news cards via `/news-cards`), **Games AI session composer** (real recommendation for the selected crew, falls back to the featured pick), **Games Patches & Updates rolodex** (live Steam News for crew-owned + wishlisted apps via `/games/news`), **Games Group Wishlist** (pooled crew wishlists from `/steam/crew-wishlist` with real cover art + hype bar), **Library page** (full crew library from `/steam/crew-games` with real owner avatars + per-game `★ MINE` badge), **Community activity timeline** (same `/activity` ledger), **Admin → News Curation** (full CRUD for drift-log cards), Games scheduled-nights cards + RSVP, Profile (Steam link visibility + owned-games exclusions).
+**Wired to real data**: Topbar profile + **Steam status badge** (logo + sync indicator next to the avatar), **Steam onboarding modal** (post-login prompt with Steam-branded "Sign in through Steam" button + tiny "no thanks, skip for now" link, dismissal persisted per-user in `localStorage`), **User-menu Steam panel** (Steam logo, "Synced 5m ago" / "Not linked" status, ID, Sync now / Sign in through Steam buttons), Home Friends Online widget, **Home Featured Game card** (top crew-overlap pick from `/recommendations/featured`, with AI blurb when enabled), **Home Activity Feed** (live `activity_events` ledger from game-night + Steam emitters), **Home Drift Log** (Parent-curated news cards via `/news-cards`), **Games AI session composer** (real recommendation for the selected crew with AI-generated blurb, falls back to the featured pick), **Games Patches & Updates rolodex** (live Steam News with AI relevance ranking, label chips — For You / Crew Trending / Top Gaming News — and ⚠ Spoilers badge), **Games Crew Chat** (conversational AI with live crew context — voice status, recent playtime, top recommendation), **Games Group Wishlist** (pooled crew wishlists from `/steam/crew-wishlist` with real cover art + hype bar), **Library page** (full crew library from `/steam/crew-games` with real owner avatars + per-game `★ MINE` badge), **Community activity timeline** (same `/activity` ledger), **Admin → News Curation** (full CRUD for drift-log cards), **Admin → AI Settings** (provider / model / API key / enable-disable / live connection test), **Admin → Data Sync** (manual re-curate news button), Games scheduled-nights cards + RSVP, Profile (Steam link visibility + owned-games exclusions).
 
 **Still mock for now**: live streams drawer, Community crew carousel + clips + forums + clubs + events + leaderboards, most Admin sub-pages outside News Curation. These need new ingestion pipelines (Twitch API, clips storage, forum schema) and will land incrementally.

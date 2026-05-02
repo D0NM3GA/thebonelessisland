@@ -359,14 +359,35 @@ export function App() {
       }
     };
 
+    // Lighter recent-games sync — runs more frequently, only hits GetRecentlyPlayedGames
+    let recentSyncing = false;
+    const runRecentGamesSync = async () => {
+      if (recentSyncing || document.hidden) return;
+      recentSyncing = true;
+      try {
+        await apiFetch("/steam/sync-recent-games", { method: "POST", credentials: "include" });
+      } catch {
+        // Best-effort, ignore failures
+      } finally {
+        recentSyncing = false;
+      }
+    };
+
     void runSteamSync();
+    void runRecentGamesSync();
+
     const intervalId = window.setInterval(() => {
       void runSteamSync();
     }, 10 * 60 * 1000);
 
+    const recentIntervalId = window.setInterval(() => {
+      void runRecentGamesSync();
+    }, 5 * 60 * 1000);
+
     const onVisibilityChange = () => {
       if (!document.hidden) {
         void runSteamSync();
+        void runRecentGamesSync();
       }
     };
 
@@ -374,6 +395,7 @@ export function App() {
 
     return () => {
       window.clearInterval(intervalId);
+      window.clearInterval(recentIntervalId);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [isAuthenticated, profileData?.steamId64]);
@@ -685,6 +707,59 @@ export function App() {
       setStatus("Setting saved");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Save failed");
+    }
+  }
+
+  async function testAIConnection(opts: { provider: string; model?: string; apiKey?: string }) {
+    try {
+      const response = await apiFetch("/settings/ai/test", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(opts)
+      });
+      const data = (await response.json().catch(() => null)) as {
+        ok: boolean;
+        provider?: string;
+        model?: string;
+        error?: string;
+      } | null;
+      return data ?? { ok: false, error: "No response" };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
+    }
+  }
+
+  async function sendChatMessage(message: string, history: Array<{ role: "user" | "assistant"; content: string }>) {
+    try {
+      const response = await apiFetch("/ai/chat", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message, history })
+      });
+      const data = (await response.json().catch(() => null)) as { reply?: string; error?: string } | null;
+      if (!response.ok) return { reply: "", error: data?.error ?? "AI unavailable" };
+      return { reply: data?.reply ?? "" };
+    } catch (error) {
+      return { reply: "", error: error instanceof Error ? error.message : "Request failed" };
+    }
+  }
+
+  async function triggerNewsCuration() {
+    try {
+      const response = await apiFetch("/games/news/curate", {
+        method: "POST",
+        credentials: "include"
+      });
+      const data = (await response.json().catch(() => null)) as {
+        ok: boolean;
+        curated?: number;
+        error?: string;
+      } | null;
+      return data ?? { ok: false, error: "No response" };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
     }
   }
 
@@ -1155,6 +1230,7 @@ export function App() {
           onAddSelectedMembersToNight={addSelectedMembersToNight}
           onRemoveSelectedMembersFromNight={removeSelectedMembersFromNight}
           onNavigate={setPage}
+          onSendChatMessage={sendChatMessage}
         />
       ) : null}
 
@@ -1210,6 +1286,8 @@ export function App() {
           serverSettings={serverSettings}
           onLoadServerSettings={loadServerSettings}
           onUpdateServerSetting={updateServerSetting}
+          onTestAIConnection={testAIConnection}
+          onTriggerNewsCuration={triggerNewsCuration}
         />
       ) : null}
 

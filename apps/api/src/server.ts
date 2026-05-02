@@ -4,6 +4,7 @@ import express from "express";
 import { ZodError } from "zod";
 import { env } from "./config.js";
 import { activityRouter } from "./routes/activity.js";
+import { aiChatRouter } from "./routes/aiChat.js";
 import { authRouter } from "./routes/auth.js";
 import { gameNewsRouter } from "./routes/gameNews.js";
 import { gameNightRouter } from "./routes/gameNights.js";
@@ -38,6 +39,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/auth", authRouter);
+app.use("/ai", aiChatRouter);
 app.use("/profile", profileRouter);
 app.use("/steam", steamRouter);
 app.use("/recommendations", recommendationRouter);
