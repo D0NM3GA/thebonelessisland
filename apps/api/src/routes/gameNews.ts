@@ -2,7 +2,7 @@ import express from "express";
 import { db } from "../db/client.js";
 import { requireParentRole, requireSession } from "../lib/auth.js";
 import { ingestNewsForApps } from "../lib/gameNewsIngestion.js";
-import { getGuildId } from "../lib/serverSettings.js";
+import { getAISetting, getGuildId } from "../lib/serverSettings.js";
 import { curateUncuratedNews, forceCurateNews } from "../lib/newsCurator.js";
 
 export const gameNewsRouter = express.Router();
@@ -89,11 +89,14 @@ async function resolveScopeAppIds(discordUserId: string): Promise<{
     });
   }
 
+  // Rank by owner count but cap each developer at 2 games to prevent
+  // dominant studios (e.g. Valve) from filling all ingestion slots.
+  const devCapSetting = getAISetting("news_dev_cap");
+  const devCap = Math.max(1, parseInt(devCapSetting ?? "2", 10) || 2);
+
   const ranked = await db.query<{ app_id: number }>(
     `
-      SELECT g.app_id
-      FROM games g
-      LEFT JOIN (
+      WITH owner_counts AS (
         SELECT ug.app_id, COUNT(DISTINCT u.id)::int AS owners
         FROM user_games ug
         INNER JOIN users u ON u.id = ug.user_id
@@ -102,12 +105,25 @@ async function resolveScopeAppIds(discordUserId: string): Promise<{
          AND gm.guild_id = $2
          AND gm.in_guild = TRUE
         GROUP BY ug.app_id
-      ) AS counts ON counts.app_id = g.app_id
-      WHERE g.app_id = ANY($1::int[])
-      ORDER BY COALESCE(counts.owners, 0) DESC, g.app_id ASC
+      ),
+      ranked AS (
+        SELECT
+          g.app_id,
+          COALESCE(oc.owners, 0) AS owners,
+          ROW_NUMBER() OVER (
+            PARTITION BY COALESCE(g.developers[1], 'unknown')
+            ORDER BY COALESCE(oc.owners, 0) DESC, g.app_id ASC
+          ) AS dev_rank
+        FROM games g
+        LEFT JOIN owner_counts oc ON oc.app_id = g.app_id
+        WHERE g.app_id = ANY($1::int[])
+      )
+      SELECT app_id FROM ranked
+      WHERE dev_rank <= $3
+      ORDER BY owners DESC, app_id ASC
       LIMIT 24
     `,
-    [Array.from(byAppId.keys()), getGuildId()]
+    [Array.from(byAppId.keys()), getGuildId(), devCap]
   );
 
   return { byAppId, topAppIds: ranked.rows.map((row) => row.app_id) };
@@ -136,6 +152,7 @@ type NewsRow = {
 
 gameNewsRouter.get("/news", async (_req, res) => {
   const discordUserId = String(res.locals.userId);
+
   const scope = await resolveScopeAppIds(discordUserId);
   const allAppIds = Array.from(scope.byAppId.keys());
 
@@ -175,6 +192,7 @@ gameNewsRouter.get("/news", async (_req, res) => {
       FROM game_news n
       INNER JOIN games g ON g.app_id = n.app_id
       WHERE n.app_id = ANY($1::int[])
+        AND COALESCE(n.ai_relevance_score, 1) > 0
       ORDER BY n.ai_relevance_score DESC NULLS LAST, n.published_at DESC
       LIMIT 60
     `,

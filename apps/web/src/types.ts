@@ -141,6 +141,24 @@ export type GameNewsItem = {
   aiSpoilerWarning?: boolean;
 };
 
+export type GeneralNewsItem = {
+  id: number;
+  sourceType: "rss" | "newsapi";
+  sourceName: string;
+  externalId: string;
+  title: string;
+  url: string;
+  contents: string | null;
+  author: string | null;
+  imageUrl: string | null;
+  publishedAt: string;
+  matchedTags: string[];
+  aiRelevanceScore: number | null;
+  aiSummary: string | null;
+  aiLabel: "top_news" | "community" | "personal" | null;
+  aiSpoilerWarning: boolean;
+};
+
 export type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";
 
 export type ActivityActor = {

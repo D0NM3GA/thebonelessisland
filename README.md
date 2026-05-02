@@ -5,7 +5,7 @@ Discord-first community web platform with optional Steam linking. Tropical islan
 ## What is included
 
 - `apps/web`: React + Vite + TypeScript. Fixed topbar (Home / Games / Community / Achievements / Admin), Discord-style user menu, full-bleed scene shell (sky + sun/moon + ocean + beach + parallax palms), day/night theme switch.
-- `apps/api`: Express API with Discord OAuth, profile routes, Steam link/sync, rule-based + AI recommendations, game-night CRUD + RSVP, AI chat, AI news curation.
+- `apps/api`: Express API with Discord OAuth, profile routes, Steam link/sync, rule-based + AI recommendations, game-night CRUD + RSVP, AI chat, AI news curation (Steam game news + external RSS/GNews pipeline).
 - `apps/bot`: Thin Discord bot exposing `/whatcanweplay` and delegating recommendation logic to the API.
 - `packages/shared`: shared cross-app TypeScript types.
 - `infra/docker-compose.yml`: local Postgres container.
@@ -37,7 +37,7 @@ Discord-first community web platform with optional Steam linking. Tropical islan
    - `docker compose -f infra/docker-compose.yml up -d`
 3. Install dependencies:
    - `npm install`
-4. Run DB migrations (includes AI settings, news curation columns, playtime columns):
+4. Run DB migrations (includes AI settings, news curation columns, playtime columns, general_news table + news settings):
    - `npm run db:migrate -w @island/api`
 5. Start all services:
    - `npm run dev`
@@ -50,11 +50,11 @@ API health: `http://localhost:3000/health`
 ## Information architecture
 
 Top nav (fixed topbar with backdrop blur — `position: fixed` so it stays anchored during overscroll/rubber-band):
-- **Home** — hero with online count + display headline + CTAs, Featured Game card, Friends Online widget (live Discord presence), Discord-style Activity Feed (5-tab filter, capped at 5 events with "View full feed" link to Community), Drift Log news cards, Bot CTA + Crew Ritual cards
+- **Home** — hero with online count + display headline + CTAs, Gaming News feed (external RSS/GNews, AI-curated, tab-filtered by label, article detail modal), Friends Online widget (live Discord presence), Discord-style Activity Feed (5-tab filter, capped at 5 events with "View full feed" link to Community), Drift Log news cards, Bot CTA + Crew Ritual cards
 - **Games** — AI session composer (combined AI pick + crew roster + invite), Patches & Updates rolodex (sticky right column), scheduled game nights with RSVP, group wishlist with hype bars, library snapshot, live streams drawer (right-edge tab)
 - **Community** — crew carousel (admin button gated to Parent), recent clips, activity timeline, forums table, clubs, upcoming events, weekly leaderboards
 - **Achievements** — placeholder
-- **Admin** — hub of 9 tinted tiles + 9 sub-pages (News Curation, Recommendation Tester, Data Sync, Members & Roles, Game Night Moderation, Forum Moderation, Tournaments, Game Library, Audit Log). Gated to Parent role.
+- **Admin** — hub of 11 tinted tiles + subpages (Server Configuration, AI Settings, News Sources, News Curation, Recommendation Tester, Data Sync, Members & Roles, Game Night Moderation, Forum Moderation, Tournaments, Game Library, Audit Log). Gated to Parent role.
 
 User menu (avatar dropdown): Discord profile + custom status + rich presence + status picker + theme toggle (Day / Night) + Profile + Sign out.
 
@@ -112,13 +112,26 @@ All AI features are provider-agnostic. The active provider, model, and API key a
 
 ### Features
 
-**AI-curated gaming news** (`apps/api/src/lib/newsCurator.ts`)
+**AI-curated Steam game news** (`apps/api/src/lib/newsCurator.ts`)
 - Scores every Steam news article for community relevance (0–1) using live crew context: games played this week, owned titles, genre tags.
 - Deduplicates stories covering the same event across multiple sources.
 - Assigns a feed label — `personal` (crew is playing the game), `community` (crew trending), `top_news` (high-impact industry news).
 - Flags spoilers for story-driven games with a warning badge.
 - Articles are ordered by AI relevance score in the Patches & Updates rolodex.
+- Developer diversity cap (`news_dev_cap` setting) limits how many games per studio enter the ingestion scope, preventing one prolific publisher from dominating the feed.
 - Admin can trigger a full re-curate from Admin → Data Sync.
+
+**External gaming news feed** (`apps/api/src/lib/generalNewsIngestion.ts`, `GET /news/general`)
+- Pulls from up to 5 RSS outlets (PC Gamer, Rock Paper Shotgun, Eurogamer, Kotaku, IGN) and optionally GNews API.
+- Articles are matched against crew game tags (genre/category from owned library) to build per-article `matchedTags`.
+- New articles are AI-curated with the same scoring pipeline (relevance score, summary, label, spoiler gate).
+- Results are served on the Home page Gaming News feed — separate from Steam game updates on the Games page.
+- Ingestion runs automatically in the background on feed load; admin can trigger immediately from Admin → News Sources.
+
+**Article detail modal** (Home page)
+- Clicking any news card opens an in-app bottom sheet — no external navigation until the user explicitly chooses "Read full article".
+- Sheet shows: hero image, source/author/timestamp, AI summary panel, "Why it's relevant to your crew" section (matched tags), full article text, and source link.
+- Spoiler-gated articles blur the summary and require a tap to reveal before the modal will show the content.
 
 **AI recommendation blurbs** (`apps/api/src/lib/recommendBlurb.ts`)
 - Generates a one-sentence island-flavored blurb for the top game recommendation.
@@ -144,6 +157,14 @@ Configure AI without redeploying:
 - Select or enter a custom model
 - Store API key (masked in UI, never overwritten by placeholder values)
 - Test the connection live
+
+### Admin → News Sources
+Configure the external gaming news pipeline without redeploying:
+- Toggle individual RSS outlets on/off (PC Gamer, RPS, Eurogamer, Kotaku, IGN)
+- Store GNews API key (optional; masked in UI)
+- Set developer diversity cap (max games per studio in Steam ingestion scope)
+- Enable/disable the external news feed globally
+- Manual "Fetch & Curate" and "Curate Existing Articles" trigger buttons with live result feedback
 
 ## Phase 1 feature coverage (backend / API)
 
@@ -175,11 +196,16 @@ Configure AI without redeploying:
 - Crew wishlist endpoint (`GET /steam/crew-wishlist`):
   - powers the Group Wishlist card on the Games page
   - aggregates pooled wishlists with hype count + earliest add date + crew avatars
-- Game news endpoint (`GET /games/news`):
+- Steam game news endpoint (`GET /games/news`):
   - powers the Games page Patches & Updates rolodex
   - lazily ingests Steam News for the most relevant crew-owned apps (6h staleness window)
-  - tags each item with `library` / `wishlist` / `crew` scopes for client-side filtering
-  - triggers background AI curation after ingestion; orders results by AI relevance score
+  - developer diversity cap limits each studio to `news_dev_cap` games (default 2) in the ingestion scope
+  - filters out zero-score duplicates; orders results by AI relevance score
+- External news endpoint (`GET /news/general`):
+  - powers the Home page Gaming News feed
+  - serves curated articles from `general_news` table (RSS + GNews)
+  - background ingestion triggers automatically on each load
+  - admin endpoints: `POST /news/general/ingest` (fetch + curate), `POST /news/general/curate` (curate only)
 - Activity ledger (`activity_events` + `GET /activity`):
   - emitted by game-night creates / RSVPs / picks and Steam link / unlink / sync
   - powers Home page Activity Feed and Community activity timeline
@@ -199,9 +225,10 @@ The full Boneless Island design (handoff bundle from Claude Design) has been por
 4. **Games rebuild** — AI session composer, patches rolodex, scheduled nights, group wishlist, library snapshot, live streams drawer. Voting UI removed.
 5. **Library** — full Steam library page with filters, sort, co-ownership stacks.
 6. **Community** — crew carousel, clips, activity, forums, clubs, events, leaderboards.
-7. **Admin** — hub + 9 sub-pages.
+7. **Admin** — hub + 11 sub-pages (including new News Sources).
 8. **Polish + parity** — voting state cleanup; App.tsx down 62%.
+9. **External news pipeline** — RSS + GNews ingestion, GeneralNewsItem type, article detail modal, developer diversity cap.
 
-**Wired to real data**: Topbar profile + **Steam status badge** (logo + sync indicator next to the avatar), **Steam onboarding modal** (post-login prompt with Steam-branded "Sign in through Steam" button + tiny "no thanks, skip for now" link, dismissal persisted per-user in `localStorage`), **User-menu Steam panel** (Steam logo, "Synced 5m ago" / "Not linked" status, ID, Sync now / Sign in through Steam buttons), Home Friends Online widget, **Home Featured Game card** (top crew-overlap pick from `/recommendations/featured`, with AI blurb when enabled), **Home Activity Feed** (live `activity_events` ledger from game-night + Steam emitters), **Home Drift Log** (Parent-curated news cards via `/news-cards`), **Games AI session composer** (real recommendation for the selected crew with AI-generated blurb, falls back to the featured pick), **Games Patches & Updates rolodex** (live Steam News with AI relevance ranking, label chips — For You / Crew Trending / Top Gaming News — and ⚠ Spoilers badge), **Games Crew Chat** (conversational AI with live crew context — voice status, recent playtime, top recommendation), **Games Group Wishlist** (pooled crew wishlists from `/steam/crew-wishlist` with real cover art + hype bar), **Library page** (full crew library from `/steam/crew-games` with real owner avatars + per-game `★ MINE` badge), **Community activity timeline** (same `/activity` ledger), **Admin → News Curation** (full CRUD for drift-log cards), **Admin → AI Settings** (provider / model / API key / enable-disable / live connection test), **Admin → Data Sync** (manual re-curate news button), Games scheduled-nights cards + RSVP, Profile (Steam link visibility + owned-games exclusions).
+**Wired to real data**: Topbar profile + **Steam status badge** (logo + sync indicator next to the avatar), **Steam onboarding modal** (post-login prompt with Steam-branded "Sign in through Steam" button + tiny "no thanks, skip for now" link, dismissal persisted per-user in `localStorage`), **User-menu Steam panel** (Steam logo, "Synced 5m ago" / "Not linked" status, ID, Sync now / Sign in through Steam buttons), Home Friends Online widget, **Home Featured Game card** (top crew-overlap pick from `/recommendations/featured`, with AI blurb when enabled), **Home Activity Feed** (live `activity_events` ledger from game-night + Steam emitters), **Home Drift Log** (Parent-curated news cards via `/news-cards`), **Games AI session composer** (real recommendation for the selected crew with AI-generated blurb, falls back to the featured pick), **Games Patches & Updates rolodex** (live Steam News with AI relevance ranking, label chips — For You / Crew Trending / Top Gaming News — and ⚠ Spoilers badge), **Games Crew Chat** (conversational AI with live crew context — voice status, recent playtime, top recommendation), **Games Group Wishlist** (pooled crew wishlists from `/steam/crew-wishlist` with real cover art + hype bar), **Library page** (full crew library from `/steam/crew-games` with real owner avatars + per-game `★ MINE` badge), **Community activity timeline** (same `/activity` ledger), **Admin → News Curation** (full CRUD for drift-log cards), **Admin → AI Settings** (provider / model / API key / enable-disable / live connection test), **Admin → Data Sync** (manual re-curate news button), **Admin → News Sources** (RSS toggles, GNews API key, dev cap, ingest/curate triggers), Games scheduled-nights cards + RSVP, Profile (Steam link visibility + owned-games exclusions).
 
 **Still mock for now**: live streams drawer, Community crew carousel + clips + forums + clubs + events + leaderboards, most Admin sub-pages outside News Curation. These need new ingestion pipelines (Twitch API, clips storage, forum schema) and will land incrementally.

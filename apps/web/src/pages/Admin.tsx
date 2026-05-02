@@ -6,6 +6,8 @@ import type { NewsCard, Recommendation, ServerSetting } from "../types.js";
 type AdminSection =
   | "hub"
   | "server-config"
+  | "ai-settings"
+  | "news-sources"
   | "news"
   | "recommendations"
   | "data-sync"
@@ -14,8 +16,7 @@ type AdminSection =
   | "forums"
   | "tournaments"
   | "library"
-  | "audit"
-  | "ai-settings";
+  | "audit";
 
 type NewsCardInput = {
   title: string;
@@ -44,6 +45,8 @@ type AdminPageProps = {
   onUpdateServerSetting: (key: string, value: string) => void;
   onTestAIConnection: (opts: { provider: string; model?: string; apiKey?: string }) => Promise<{ ok: boolean; provider?: string; model?: string; error?: string }>;
   onTriggerNewsCuration: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+  onTriggerGeneralNewsIngest: () => Promise<{ ok: boolean; fetched?: number; curated?: number; error?: string }>;
+  onTriggerGeneralNewsCurate: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
 };
 
 export function AdminPage(props: AdminPageProps) {
@@ -51,7 +54,7 @@ export function AdminPage(props: AdminPageProps) {
 
   const handleSelectSection = (s: AdminSection) => {
     setSection(s);
-    if ((s === "server-config" || s === "ai-settings") && props.serverSettings === null) {
+    if ((s === "server-config" || s === "ai-settings" || s === "news-sources") && props.serverSettings === null) {
       props.onLoadServerSettings();
     }
   };
@@ -74,6 +77,14 @@ export function AdminPage(props: AdminPageProps) {
           settings={props.serverSettings}
           onUpdate={props.onUpdateServerSetting}
           onTest={props.onTestAIConnection}
+        />
+      ) : null}
+      {section === "news-sources" ? (
+        <NewsSourcesSubpage
+          settings={props.serverSettings}
+          onUpdate={props.onUpdateServerSetting}
+          onIngest={props.onTriggerGeneralNewsIngest}
+          onCurate={props.onTriggerGeneralNewsCurate}
         />
       ) : null}
       {section === "news" ? <NewsCurationSubpage {...props} /> : null}
@@ -100,7 +111,8 @@ type AdminTile = {
 const ADMIN_TILES: AdminTile[] = [
   { id: "server-config", title: "Server Configuration", blurb: "Guild ID, admin role, display name. Switch servers without touching .env.", icon: "⚙️", accent: "#6366f1" },
   { id: "ai-settings", title: "AI Settings", blurb: "Provider, model, API key, enable/disable. Swap between Anthropic and OpenAI without touching code.", icon: "🤖", accent: "#8b5cf6" },
-  { id: "news", title: "News Curation", blurb: "Filters, auto-approve rules, approval queue.", icon: "📰", accent: "#0ea5e9" },
+  { id: "news-sources", title: "News Sources", blurb: "External RSS feeds, GNews API key, developer diversity cap, manual ingestion triggers.", icon: "🌐", accent: "#0ea5e9" },
+  { id: "news", title: "News Curation", blurb: "Drift log cards: post, edit, and archive community updates for the home page.", icon: "📰", accent: "#22d3ee" },
   { id: "recommendations", title: "Recommendation Tester", blurb: "Member chips, weights, ranked results.", icon: "🎯", accent: "#22d3ee" },
   { id: "data-sync", title: "Data Sync", blurb: "Connector health + live log.", icon: "🔄", accent: "#86efac" },
   { id: "members", title: "Members & Roles", blurb: "Roster, role mapping, onboarding queue.", icon: "👥", accent: "#a78bfa" },
@@ -1023,6 +1035,326 @@ const SERVER_CONFIG_META: Record<string, { hint: string; sensitive?: boolean; re
     restart: false
   }
 };
+
+// ── News Sources Subpage ─────────────────────────────────────────────────────
+
+const RSS_SOURCE_OPTIONS = [
+  { key: "pcgamer", label: "PC Gamer" },
+  { key: "rockpapershotgun", label: "Rock Paper Shotgun" },
+  { key: "eurogamer", label: "Eurogamer" },
+  { key: "kotaku", label: "Kotaku" },
+  { key: "ign", label: "IGN" }
+];
+
+function NewsSourcesSubpage({
+  settings,
+  onUpdate,
+  onIngest,
+  onCurate
+}: {
+  settings: ServerSetting[] | null;
+  onUpdate: (key: string, value: string) => void;
+  onIngest: () => Promise<{ ok: boolean; fetched?: number; curated?: number; error?: string }>;
+  onCurate: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+}) {
+  const getSetting = (key: string) => settings?.find((s) => s.key === key)?.value ?? "";
+
+  const rawSources = getSetting("news_rss_sources") || "pcgamer,rockpapershotgun,eurogamer,kotaku";
+  const [enabledSources, setEnabledSources] = useState<Set<string>>(() =>
+    new Set(rawSources.split(",").map((s) => s.trim()).filter(Boolean))
+  );
+  const [devCap, setDevCap] = useState(() => getSetting("news_dev_cap") || "2");
+  const [generalEnabled, setGeneralEnabled] = useState(() => getSetting("news_general_enabled") !== "false");
+  const [newsApiKey, setNewsApiKey] = useState("");
+  const [newsApiKeyIsSet] = [getSetting("newsapi_key") === "••••••••"];
+
+  const [ingestState, setIngestState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [ingestMsg, setIngestMsg] = useState("");
+  const [curateState, setCurateState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [curateMsg, setCurateMsg] = useState("");
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (settings && !initializedRef.current) {
+      const raw = getSetting("news_rss_sources") || "pcgamer,rockpapershotgun,eurogamer,kotaku";
+      setEnabledSources(new Set(raw.split(",").map((s) => s.trim()).filter(Boolean)));
+      setDevCap(getSetting("news_dev_cap") || "2");
+      setGeneralEnabled(getSetting("news_general_enabled") !== "false");
+      initializedRef.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings]);
+
+  function flashSaved(key: string) {
+    setSaved((p) => ({ ...p, [key]: true }));
+    setTimeout(() => setSaved((p) => ({ ...p, [key]: false })), 2200);
+  }
+
+  function toggleSource(key: string) {
+    const next = new Set(enabledSources);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setEnabledSources(next);
+    const value = Array.from(next).join(",");
+    onUpdate("news_rss_sources", value);
+    flashSaved("rss");
+  }
+
+  const accent = "#0ea5e9";
+
+  if (settings === null) {
+    return (
+      <IslandCard style={{ padding: 20 }}>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textMuted }}>Loading settings…</p>
+      </IslandCard>
+    );
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      {/* Status banner */}
+      <IslandCard
+        style={{
+          padding: "14px 18px",
+          background: `linear-gradient(135deg, ${accent}22 0%, ${islandTheme.color.panelBg} 100%)`,
+          border: `1px solid ${accent}44`
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 28 }}>🌐</span>
+          <div style={{ flex: 1 }}>
+            <div className="island-mono" style={{ fontSize: 10, color: accent, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              External News Feed
+            </div>
+            <div className="island-display" style={{ fontWeight: 800, fontSize: 18 }}>
+              {Array.from(enabledSources).length} RSS source{Array.from(enabledSources).length !== 1 ? "s" : ""} enabled
+            </div>
+            <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+              {generalEnabled ? "General news feed active" : "General news feed disabled"}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !generalEnabled;
+              setGeneralEnabled(next);
+              onUpdate("news_general_enabled", next ? "true" : "false");
+              flashSaved("general_enabled");
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              color: islandTheme.color.textSubtle,
+              fontSize: 13,
+              font: "inherit"
+            }}
+          >
+            <Toggle on={generalEnabled} />
+            <span>{generalEnabled ? "On" : "Off"}</span>
+          </button>
+        </div>
+      </IslandCard>
+
+      {/* RSS Sources */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>RSS Feeds</SubsectionTitle>
+        <p style={{ margin: "0 0 14px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Toggle which outlets contribute to the home page gaming news feed. Changes take effect on the next ingestion run.
+        </p>
+        <div style={{ display: "grid", gap: 8 }}>
+          {RSS_SOURCE_OPTIONS.map((src) => {
+            const active = enabledSources.has(src.key);
+            return (
+              <button
+                key={src.key}
+                type="button"
+                onClick={() => toggleSource(src.key)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "10px 14px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${active ? accent : islandTheme.color.cardBorder}`,
+                  background: active ? `${accent}18` : islandTheme.color.panelMutedBg,
+                  color: islandTheme.color.textPrimary,
+                  cursor: "pointer",
+                  font: "inherit",
+                  textAlign: "left",
+                  transition: "all 140ms"
+                }}
+              >
+                <span
+                  style={{
+                    width: 14,
+                    height: 14,
+                    borderRadius: 3,
+                    border: `2px solid ${active ? accent : islandTheme.color.cardBorder}`,
+                    background: active ? accent : "transparent",
+                    flexShrink: 0,
+                    transition: "all 140ms",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 9,
+                    color: "#fff"
+                  }}
+                >
+                  {active ? "✓" : ""}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: active ? 700 : 400 }}>{src.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {saved["rss"] && (
+          <div style={{ marginTop: 8, fontSize: 12, color: islandTheme.color.success }}>Sources saved</div>
+        )}
+      </IslandCard>
+
+      {/* GNews API Key */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>GNews API Key</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Optional. Enables richer search queries based on crew game preferences.{" "}
+          <a href="https://gnews.io" target="_blank" rel="noopener noreferrer" style={{ color: accent }}>
+            Get a free key at gnews.io
+          </a>{" "}
+          (100 requests/day on the free tier). Leave blank to use RSS feeds only.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="password"
+            placeholder={newsApiKeyIsSet ? "••••••••  (key is set)" : "Paste key here"}
+            value={newsApiKey}
+            onChange={(e) => setNewsApiKey(e.target.value)}
+            style={{ ...islandInputStyle, flex: 1 }}
+          />
+          <IslandButton
+            variant="secondary"
+            onClick={() => {
+              if (!newsApiKey.trim()) return;
+              onUpdate("newsapi_key", newsApiKey.trim());
+              setNewsApiKey("");
+              flashSaved("newsapi_key");
+            }}
+            disabled={!newsApiKey.trim() || saved["newsapi_key"]}
+          >
+            {saved["newsapi_key"] ? "Saved" : "Save Key"}
+          </IslandButton>
+        </div>
+      </IslandCard>
+
+      {/* Developer Diversity Cap */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Developer Diversity Cap</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Maximum games per developer included in the Steam news ingestion. Prevents prolific studios (e.g. Valve) from dominating the feed. Default: 2.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={devCap}
+            onChange={(e) => setDevCap(e.target.value)}
+            style={{ ...islandInputStyle, width: 80 }}
+          />
+          <IslandButton
+            variant="secondary"
+            onClick={() => {
+              onUpdate("news_dev_cap", devCap);
+              flashSaved("news_dev_cap");
+            }}
+            disabled={saved["news_dev_cap"]}
+          >
+            {saved["news_dev_cap"] ? "Saved" : "Save"}
+          </IslandButton>
+          <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>games per developer</span>
+        </div>
+      </IslandCard>
+
+      {/* Manual Triggers */}
+      <IslandCard style={{ padding: "16px 18px", display: "grid", gap: 14 }}>
+        <SubsectionTitle>Manual Triggers</SubsectionTitle>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Ingestion and curation run automatically in the background when the news feed is loaded. Use these to kick off an immediate pass.
+        </p>
+
+        <div>
+          <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Fetch + Curate External News</div>
+          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
+            Pull from all enabled RSS feeds and GNews API, upsert new articles, then run AI curation.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <IslandButton
+              variant="secondary"
+              onClick={async () => {
+                setIngestState("running");
+                setIngestMsg("");
+                const result = await onIngest();
+                if (result.ok) {
+                  setIngestState("done");
+                  setIngestMsg(`Fetched ${result.fetched ?? 0} new · curated ${result.curated ?? 0}`);
+                } else {
+                  setIngestState("error");
+                  setIngestMsg(result.error ?? "Failed");
+                }
+                setTimeout(() => setIngestState("idle"), 6000);
+              }}
+              disabled={ingestState === "running"}
+            >
+              {ingestState === "running" ? "Fetching…" : "Fetch & Curate"}
+            </IslandButton>
+            {ingestMsg && (
+              <span style={{ fontSize: 12, color: ingestState === "error" ? islandTheme.color.danger : islandTheme.color.success }}>
+                {ingestMsg}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div style={{ borderTop: `1px solid ${islandTheme.color.cardBorder}`, paddingTop: 12 }}>
+          <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Curate Existing Articles</div>
+          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
+            Re-run AI scoring and summaries on articles that haven't been curated yet.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <IslandButton
+              variant="secondary"
+              onClick={async () => {
+                setCurateState("running");
+                setCurateMsg("");
+                const result = await onCurate();
+                if (result.ok) {
+                  setCurateState("done");
+                  setCurateMsg(`Curated ${result.curated ?? 0} article${result.curated === 1 ? "" : "s"}`);
+                } else {
+                  setCurateState("error");
+                  setCurateMsg(result.error ?? "Failed");
+                }
+                setTimeout(() => setCurateState("idle"), 6000);
+              }}
+              disabled={curateState === "running"}
+            >
+              {curateState === "running" ? "Curating…" : "Curate Articles"}
+            </IslandButton>
+            {curateMsg && (
+              <span style={{ fontSize: 12, color: curateState === "error" ? islandTheme.color.danger : islandTheme.color.success }}>
+                {curateMsg}
+              </span>
+            )}
+          </div>
+        </div>
+      </IslandCard>
+    </div>
+  );
+}
 
 function ServerConfigSubpage({
   settings,

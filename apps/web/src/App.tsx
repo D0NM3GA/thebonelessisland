@@ -24,6 +24,7 @@ import type {
   FeaturedRecommendation,
   FeaturedRecommendationResponse,
   GameNewsItem,
+  GeneralNewsItem,
   GameNight,
   GameNightAttendee,
   GuildMember,
@@ -66,6 +67,7 @@ export function App() {
   const [featuredRecommendation, setFeaturedRecommendation] = useState<FeaturedRecommendation | null>(null);
   const [composerRecommendations, setComposerRecommendations] = useState<Recommendation[]>([]);
   const [gameNews, setGameNews] = useState<GameNewsItem[]>([]);
+  const [generalNews, setGeneralNews] = useState<GeneralNewsItem[]>([]);
   const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
   const [newsCards, setNewsCards] = useState<NewsCard[]>([]);
   const [serverSettings, setServerSettings] = useState<ServerSetting[] | null>(null);
@@ -212,7 +214,7 @@ export function App() {
           loadCrewGames(true),
           loadCrewWishlist(true),
           loadFeaturedRecommendation(true),
-          loadGameNews(true),
+          loadAllNews(true),
           loadActivity(true),
           loadNewsCards(true),
         ]);
@@ -235,7 +237,7 @@ export function App() {
       await Promise.all([
         loadFeaturedRecommendation(true),
         loadActivity(true),
-        loadGameNews(true),
+        loadAllNews(true),
       ]);
     };
 
@@ -550,7 +552,7 @@ export function App() {
         loadCrewGames(true),
         loadCrewWishlist(true),
         loadFeaturedRecommendation(true),
-        loadGameNews(true),
+        loadAllNews(true),
         loadActivity(true),
       ]);
       if (!silent) {
@@ -627,21 +629,35 @@ export function App() {
     }
   }
 
+  async function loadAllNews(silent = true) {
+    await Promise.all([loadGameNews(silent), loadGeneralNews(silent)]);
+  }
+
   async function loadGameNews(silent = true) {
     try {
       const response = await apiFetch("/games/news", { credentials: "include" });
       const data = (await response.json().catch(() => null)) as { news?: GameNewsItem[]; error?: string } | null;
       if (!response.ok) {
-        if (!silent) {
-          setStatus(data?.error ?? `Game news load failed (${response.status})`);
-        }
+        if (!silent) setStatus(data?.error ?? `Game news load failed (${response.status})`);
         return;
       }
       setGameNews(data?.news ?? []);
     } catch (error) {
-      if (!silent) {
-        setStatus(error instanceof Error ? error.message : "Game news load failed");
+      if (!silent) setStatus(error instanceof Error ? error.message : "Game news load failed");
+    }
+  }
+
+  async function loadGeneralNews(silent = true) {
+    try {
+      const response = await apiFetch("/news/general", { credentials: "include" });
+      const data = (await response.json().catch(() => null)) as { news?: GeneralNewsItem[]; error?: string } | null;
+      if (!response.ok) {
+        if (!silent) setStatus(data?.error ?? `General news load failed (${response.status})`);
+        return;
       }
+      setGeneralNews(data?.news ?? []);
+    } catch (error) {
+      if (!silent) setStatus(error instanceof Error ? error.message : "General news load failed");
     }
   }
 
@@ -756,6 +772,30 @@ export function App() {
         ok: boolean;
         curated?: number;
         error?: string;
+      } | null;
+      return data ?? { ok: false, error: "No response" };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
+    }
+  }
+
+  async function triggerGeneralNewsIngest() {
+    try {
+      const response = await apiFetch("/news/general/ingest", { method: "POST", credentials: "include" });
+      const data = (await response.json().catch(() => null)) as {
+        ok: boolean; fetched?: number; curated?: number; error?: string;
+      } | null;
+      return data ?? { ok: false, error: "No response" };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
+    }
+  }
+
+  async function triggerGeneralNewsCurate() {
+    try {
+      const response = await apiFetch("/news/general/curate", { method: "POST", credentials: "include" });
+      const data = (await response.json().catch(() => null)) as {
+        ok: boolean; curated?: number; error?: string;
       } | null;
       return data ?? { ok: false, error: "No response" };
     } catch (error) {
@@ -1197,7 +1237,7 @@ export function App() {
           profile={profileData}
           activeMembers={activeMembers}
           totalMemberCount={guildMembers.length}
-          featured={featuredRecommendation}
+          generalNews={generalNews}
           activityEvents={activityEvents}
           newsCards={newsCards}
           onNavigate={setPage}
@@ -1288,6 +1328,8 @@ export function App() {
           onUpdateServerSetting={updateServerSetting}
           onTestAIConnection={testAIConnection}
           onTriggerNewsCuration={triggerNewsCuration}
+          onTriggerGeneralNewsIngest={triggerGeneralNewsIngest}
+          onTriggerGeneralNewsCurate={triggerGeneralNewsCurate}
         />
       ) : null}
 
