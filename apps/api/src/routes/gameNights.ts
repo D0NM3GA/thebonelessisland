@@ -2,7 +2,9 @@ import express from "express";
 import { z } from "zod";
 import { env } from "../config.js";
 import { db } from "../db/client.js";
+import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
+import { recordEvent } from "../lib/activityEvents.js";
 import { enrichGameMetadataFromSteam, enrichMissingGameImages } from "../lib/gameCatalogEnrichment.js";
 import { whatCanWePlay } from "../lib/recommend.js";
 
@@ -84,7 +86,7 @@ async function ensureUsersForDiscordIds(discordIds: string[]): Promise<void> {
         username = EXCLUDED.username,
         avatar_url = COALESCE(EXCLUDED.avatar_url, discord_profiles.avatar_url)
     `,
-    [discordIds, env.DISCORD_GUILD_ID]
+    [discordIds, getGuildId()]
   );
 }
 
@@ -208,6 +210,12 @@ gameNightRouter.post("/", requireSession, async (req, res) => {
   if (gameNightId) {
     const attendeeIds = Array.from(new Set([...(body.attendeeIds ?? []), discordUserId]));
     await addAttendeesByDiscordIds(gameNightId, attendeeIds);
+    void recordEvent({
+      eventType: "game_night.created",
+      actorDiscordUserId: discordUserId,
+      targetGameNightId: gameNightId,
+      payload: { title: body.title, scheduledFor: body.scheduledFor }
+    });
   }
 
   res.status(201).json({ id: gameNightId });
@@ -281,6 +289,12 @@ gameNightRouter.post("/:id/attendees/me", requireSession, async (req, res) => {
     [id, user.id]
   );
 
+  void recordEvent({
+    eventType: "game_night.rsvp_joined",
+    actorDiscordUserId: discordUserId,
+    targetGameNightId: id
+  });
+
   res.json({ ok: true });
 });
 
@@ -304,6 +318,13 @@ gameNightRouter.delete("/:id/attendees/me", requireSession, async (req, res) => 
   }
 
   await db.query(`DELETE FROM game_night_attendees WHERE game_night_id = $1 AND user_id = $2`, [id, user.id]);
+
+  void recordEvent({
+    eventType: "game_night.rsvp_left",
+    actorDiscordUserId: discordUserId,
+    targetGameNightId: id
+  });
+
   res.json({ ok: true });
 });
 
@@ -611,6 +632,13 @@ gameNightRouter.post("/:id/finalize", requireSession, async (req, res) => {
     `,
     [id, selectedAppId]
   );
+
+  void recordEvent({
+    eventType: "game_night.game_picked",
+    actorDiscordUserId: String(res.locals.userId),
+    targetGameNightId: id,
+    targetAppId: selectedAppId
+  });
 
   res.json({ ok: true, selectedAppId });
 });

@@ -42,6 +42,7 @@ IDENTITY PHILOSOPHY:
 
 INFORMATION ARCHITECTURE (current):
 Top nav: Home · Games · Community · Achievements · Admin (gated to "Parent" role)
+Topbar uses `position: fixed` (not sticky) so it stays locked to the viewport during overscroll/rubber-band. A 62px spacer div in App.tsx compensates for the removed document-flow space.
 User menu (avatar dropdown): Discord profile + custom status + rich presence + status picker + theme toggle (Day/Night) + Profile + Sign out
 Sub-pages: Games → Library; Admin hub → 9 sub-pages (News Curation, Recommendation Tester, Data Sync, Members & Roles, Game Night Moderation, Forum Moderation, Tournaments, Game Library, Audit Log)
 
@@ -147,10 +148,21 @@ IMPLEMENTATION GUIDANCE:
 CURRENT STATE:
 - React + Vite + TypeScript monorepo (`apps/web`, `apps/api`, `apps/bot`, `packages/shared`)
 - Discord OAuth + guild gate working
-- Steam linking + owned-games sync working
+- Steam linking via official Steam OpenID 2.0 (`GET /steam/openid/start` → `GET /steam/openid/return` with check_authentication round trip). Surfaced in the UI through:
+  - **Onboarding modal** shown post-login if the user hasn't linked Steam and hasn't dismissed it (Steam-branded panel, big "Sign in through Steam" CTA, tiny "no thanks, skip for now" link; dismissal stored per-user in `localStorage`).
+  - **Topbar Steam status badge** (Steam logo + green/grey sync dot) sitting beside the avatar trigger so the brand is always visible.
+  - **User-menu Steam panel** with the Steam logo, last sync ("Synced 12m ago"), SteamID64, and a Sync now / Sign in through Steam button.
+- Steam owned-games + wishlist sync working (`POST /steam/sync-owned-games`, `POST /steam/sync-wishlist`)
 - Rule-based recommendation endpoint live
+- Featured recommendation endpoint live (`GET /recommendations/featured`, voice→crew scope fallback) — powers Home Featured Game card
+- Crew library endpoint live (`GET /steam/crew-games` returns games with owner display name + avatar) — powers Library page + composer cover art
+- Steam wishlist sync live (`POST /steam/sync-wishlist`, chained after `/steam/sync-owned-games`); pooled via `GET /steam/crew-wishlist` — powers the Group Wishlist card
+- Steam News ingestion live (`game_news` + lazy `ISteamNews/GetNewsForApp/v2` fetch, 6h staleness window) → `GET /games/news` returns scope-tagged feed for crew-owned + wishlisted apps. Powers the Patches & Updates rolodex on Games.
+- Activity event ledger live (`activity_events`) with emitters in game-night create / RSVP / finalize and Steam link / unlink / sync. `GET /activity` powers Home Activity Feed + Community activity timeline with server-side category mapping.
+- Curated news cards live (`news_cards`). `GET /news-cards` is session-only; `POST/PATCH/DELETE` gated by `requireParentRole` (env `PARENT_ROLE_NAME`, default `Parent`). Powers Home Drift Log + Admin → News Curation CRUD UI.
 - Game night create/RSVP/finalize endpoints live (UI no longer surfaces voting)
 - Design implementation: 8 phases shipped (foundation, topbar, home, games, library, community, admin, cleanup)
+- Real-data wired pages: Home (Featured + Friends Online + Activity Feed + Drift Log), Games (AI session composer reads composer recs / falls back to featured, Patches rolodex from Steam News, Group Wishlist from real crew wishlists), Library (full crew list with avatars + MINE badge), Community (activity timeline), Admin (News Curation CRUD), Profile, Topbar, scheduled-nights cards. Live streams drawer + remaining Community cards (crew carousel, clips, forums, clubs, events, leaderboards) + most other Admin sub-pages remain mock until ingestion pipelines land.
 
 ASSISTANT EXPECTATIONS:
 - Assume this is a long-lived project

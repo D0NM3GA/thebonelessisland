@@ -1,7 +1,18 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { GameNight, GameNightAttendee, GuildMember, PageId } from "../types.js";
+import type {
+  CrewOwnedGame,
+  CrewWishlistGame,
+  FeaturedRecommendation,
+  GameNewsItem,
+  GameNewsScope,
+  GameNight,
+  GameNightAttendee,
+  GuildMember,
+  PageId,
+  Recommendation
+} from "../types.js";
 
 type GamesPageProps = {
   gameNights: GameNight[];
@@ -13,6 +24,11 @@ type GamesPageProps = {
   newNightTitle: string;
   newNightScheduledFor: string;
   currentUserAttendingSelectedNight: boolean;
+  composerRecommendations: Recommendation[];
+  featuredRecommendation: FeaturedRecommendation | null;
+  crewGames: CrewOwnedGame[];
+  crewWishlist: CrewWishlistGame[];
+  gameNews: GameNewsItem[];
   onSelectNight: (id: number, title: string) => void;
   onNewNightTitleChange: (value: string) => void;
   onNewNightScheduledForChange: (value: string) => void;
@@ -25,13 +41,27 @@ type GamesPageProps = {
   onNavigate: (page: PageId) => void;
 };
 
+type ComposerPick = {
+  source: "selection" | "featured";
+  appId: number;
+  name: string;
+  matchPct: number;
+  reason: string;
+  ownersInScope: number;
+  scopeSize: number;
+  headerImageUrl: string | null;
+  tags: string[];
+  maxPlayers: number | null;
+  medianSessionMinutes: number | null;
+};
+
 export function GamesPage(props: GamesPageProps) {
   return (
     <div style={{ display: "grid", gap: 24, position: "relative" }}>
       <GamesHero />
       <SessionAndPatchesRow {...props} />
       <ScheduledNights {...props} />
-      <GroupWishlist />
+      <GroupWishlist crewWishlist={props.crewWishlist} />
       <LibrarySnapshot onNavigate={props.onNavigate} />
       <StreamDrawer />
     </div>
@@ -70,7 +100,7 @@ function SessionAndPatchesRow(props: GamesPageProps) {
       }}
     >
       <SessionComposer {...props} />
-      <PatchesRolodex />
+      <PatchesRolodex gameNews={props.gameNews} />
     </section>
   );
 }
@@ -78,23 +108,82 @@ function SessionAndPatchesRow(props: GamesPageProps) {
 const AI_MODES = ["Tonight", "Weekend", "Quick", "Cozy", "Spicy"] as const;
 type AIMode = (typeof AI_MODES)[number];
 
-const AI_PICK = {
-  title: "Deep Rock Galactic",
-  matchPct: 92,
+const SESSION_COMPOSER_FALLBACK = {
+  title: "Pick a crew to see the AI pick",
   reason:
-    "Six of you own it, four are in voice now, and the last three sessions averaged 78 minutes — perfect for tonight's window.",
-  cover: "linear-gradient(135deg,#1e1b4b 0%,#7c2d12 100%)",
-  stats: [
-    { k: "crew own", v: "6 / 8" },
-    { k: "in voice", v: "4" },
-    { k: "avg session", v: "78m" },
-    { k: "ping", v: "42ms" },
-    { k: "last played", v: "9d ago" }
-  ]
+    "Tap members in the roster below to populate a session — we'll surface the strongest crew-overlap and why it fits.",
+  cover: "linear-gradient(135deg,#0f172a 0%,#1e293b 100%)"
 };
+
+function buildComposerPick(props: GamesPageProps): ComposerPick | null {
+  const { composerRecommendations, featuredRecommendation, crewGames, selectedMemberIds } = props;
+
+  if (selectedMemberIds.length > 0 && composerRecommendations.length > 0) {
+    const top = composerRecommendations[0];
+    const meta = crewGames.find((game) => game.appId === top.appId) ?? null;
+    return {
+      source: "selection",
+      appId: top.appId,
+      name: top.name,
+      matchPct: Math.max(0, Math.min(100, Math.round(top.score))),
+      reason: top.reason,
+      ownersInScope: top.owners,
+      scopeSize: selectedMemberIds.length,
+      headerImageUrl: meta?.headerImageUrl ?? null,
+      tags: meta?.tags ?? [],
+      maxPlayers: meta?.maxPlayers ?? null,
+      medianSessionMinutes: meta?.medianSessionMinutes ?? null
+    };
+  }
+
+  if (featuredRecommendation) {
+    return {
+      source: "featured",
+      appId: featuredRecommendation.appId,
+      name: featuredRecommendation.name,
+      matchPct: Math.max(0, Math.min(100, Math.round(featuredRecommendation.score))),
+      reason: featuredRecommendation.reason,
+      ownersInScope: featuredRecommendation.owners,
+      scopeSize: featuredRecommendation.scopeMemberCount,
+      headerImageUrl: featuredRecommendation.headerImageUrl,
+      tags: featuredRecommendation.tags,
+      maxPlayers: featuredRecommendation.maxPlayers,
+      medianSessionMinutes: featuredRecommendation.medianSessionMinutes
+    };
+  }
+
+  return null;
+}
+
+function pickStats(pick: ComposerPick): Array<{ k: string; v: string }> {
+  const stats: Array<{ k: string; v: string }> = [
+    { k: "crew own", v: `${pick.ownersInScope} / ${pick.scopeSize}` }
+  ];
+  if (typeof pick.maxPlayers === "number") {
+    stats.push({ k: "max players", v: `${pick.maxPlayers}` });
+  }
+  if (typeof pick.medianSessionMinutes === "number" && pick.medianSessionMinutes > 0) {
+    stats.push({ k: "avg session", v: `${pick.medianSessionMinutes}m` });
+  }
+  if (pick.tags.length > 0) {
+    stats.push({ k: "tag", v: pick.tags[0].toLowerCase() });
+  }
+  stats.push({ k: "scope", v: pick.source === "selection" ? "selected crew" : "island crew" });
+  return stats.slice(0, 5);
+}
+
+function pickCoverInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 function SessionComposer(props: GamesPageProps) {
   const [mode, setMode] = useState<AIMode>("Tonight");
+  const pick = useMemo(() => buildComposerPick(props), [props]);
 
   return (
     <IslandCard style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
@@ -121,9 +210,32 @@ function SessionComposer(props: GamesPageProps) {
         >
           ★ AI pick
         </span>
-        <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
-          Match strength <strong style={{ color: islandTheme.color.textPrimary }}>{AI_PICK.matchPct}%</strong>
-        </span>
+        {pick ? (
+          <>
+            <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
+              Match strength{" "}
+              <strong style={{ color: islandTheme.color.textPrimary }}>{pick.matchPct}%</strong>
+            </span>
+            <span
+              className="island-mono"
+              style={{
+                fontSize: 10,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: `1px solid ${islandTheme.color.cardBorder}`,
+                color: islandTheme.color.textMuted
+              }}
+            >
+              {pick.source === "selection" ? "your crew" : "island default"}
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
+            Empty shore — sync some crew Steam libraries to populate.
+          </span>
+        )}
         <button
           type="button"
           style={{
@@ -137,6 +249,7 @@ function SessionComposer(props: GamesPageProps) {
             cursor: "pointer",
             font: "inherit"
           }}
+          disabled={!pick}
         >
           Tune weights
         </button>
@@ -148,7 +261,6 @@ function SessionComposer(props: GamesPageProps) {
             width: 96,
             height: 128,
             borderRadius: 10,
-            background: AI_PICK.cover,
             border: `1px solid ${islandTheme.color.cardBorder}`,
             display: "flex",
             alignItems: "flex-end",
@@ -156,26 +268,34 @@ function SessionComposer(props: GamesPageProps) {
             color: "#fff",
             fontSize: 10,
             textShadow: "0 1px 2px rgba(0,0,0,0.6)",
-            fontWeight: 700
+            fontWeight: 700,
+            overflow: "hidden",
+            backgroundImage: pick?.headerImageUrl
+              ? `linear-gradient(180deg, rgba(15,23,42,0.05) 40%, rgba(15,23,42,0.85) 100%), url("${pick.headerImageUrl}")`
+              : undefined,
+            backgroundColor: pick?.headerImageUrl ? undefined : "transparent",
+            background: pick?.headerImageUrl ? undefined : SESSION_COMPOSER_FALLBACK.cover,
+            backgroundSize: "cover",
+            backgroundPosition: "center"
           }}
         >
-          DRG
+          {pick?.headerImageUrl ? null : pick ? pickCoverInitials(pick.name) : "—"}
         </div>
         <div style={{ minWidth: 0 }}>
           <h2 className="island-display" style={{ margin: "2px 0 4px", fontSize: 22, fontWeight: 800 }}>
-            {AI_PICK.title}
+            {pick?.name ?? SESSION_COMPOSER_FALLBACK.title}
           </h2>
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: islandTheme.color.textSubtle }}>
-            {AI_PICK.reason}
+            {pick?.reason ?? SESSION_COMPOSER_FALLBACK.reason}
           </p>
           <ModeBar value={mode} onChange={setMode} />
-          <StatStrip stats={AI_PICK.stats} />
+          {pick ? <StatStrip stats={pickStats(pick)} /> : null}
         </div>
       </div>
 
       <RosterPicker {...props} />
       <WhenWhereStrip />
-      <SessionFooter />
+      <SessionFooter pick={pick} />
     </IslandCard>
   );
 }
@@ -460,7 +580,8 @@ function QuickChip({
   );
 }
 
-function SessionFooter() {
+function SessionFooter({ pick }: { pick: ComposerPick | null }) {
+  const disabled = !pick;
   return (
     <div
       style={{
@@ -507,16 +628,19 @@ function SessionFooter() {
       </label>
       <button
         type="button"
+        disabled={disabled}
+        title={disabled ? "Pick a crew to enable invites" : `Send invite for ${pick.name}`}
         style={{
           marginLeft: "auto",
-          background: islandTheme.color.primary,
-          border: `1px solid ${islandTheme.color.primary}`,
-          color: islandTheme.color.primaryText,
+          background: disabled ? "transparent" : islandTheme.color.primary,
+          border: `1px solid ${disabled ? islandTheme.color.cardBorder : islandTheme.color.primary}`,
+          color: disabled ? islandTheme.color.textMuted : islandTheme.color.primaryText,
           padding: "8px 18px",
           borderRadius: 999,
           fontSize: 13,
           fontWeight: 700,
-          cursor: "pointer",
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.7 : 1,
           font: "inherit"
         }}
       >
@@ -526,47 +650,102 @@ function SessionFooter() {
   );
 }
 
-type Patch = {
-  id: string;
-  game: string;
-  title: string;
-  size: string;
-  ago: string;
-  kind: "patch" | "dlc" | "blog" | "roadmap" | "sale";
-  scope: "library" | "wishlist" | "crew";
-  rationale: string;
-  icon: string;
+type PatchScope = "all" | GameNewsScope;
+
+type PatchKind = "patch" | "dlc" | "blog" | "roadmap" | "sale" | "news";
+
+const PATCH_KIND_ICON: Record<PatchKind, string> = {
+  patch: "🛠",
+  dlc: "🎁",
+  blog: "📝",
+  roadmap: "🗺",
+  sale: "💸",
+  news: "📰"
 };
 
-const PATCH_FEATURED: Patch = {
-  id: "feat",
-  game: "Helldivers II",
-  title: "Major Order: the Squid Front opens up",
-  size: "2.1 GB",
-  ago: "5h ago",
-  kind: "patch",
-  scope: "crew",
-  rationale: "5 of your crew own it; new modifiers reset weekly.",
-  icon: "🦑"
-};
+function classifyNewsKind(item: GameNewsItem): PatchKind {
+  const haystack = [
+    ...(item.tags ?? []),
+    item.feedLabel ?? "",
+    item.feedName ?? "",
+    item.title ?? ""
+  ]
+    .join(" ")
+    .toLowerCase();
+  if (haystack.includes("patchnote") || haystack.includes("patch ") || haystack.includes("hotfix") || haystack.includes("update")) {
+    return "patch";
+  }
+  if (haystack.includes("dlc") || haystack.includes("expansion")) return "dlc";
+  if (haystack.includes("roadmap")) return "roadmap";
+  if (haystack.includes("sale") || haystack.includes("% off") || haystack.includes("discount")) {
+    return "sale";
+  }
+  if (haystack.includes("blog") || haystack.includes("dev diary") || haystack.includes("dev_diary")) {
+    return "blog";
+  }
+  return "news";
+}
 
-const PATCH_LIST: Patch[] = [
-  { id: "p1", game: "Deep Rock Galactic", title: "Season 6 teaser — Molly upgrade", size: "—", ago: "1d ago", kind: "blog", scope: "library", rationale: "Active crew title — patch lands next month.", icon: "⛏️" },
-  { id: "p2", game: "Stardew Valley", title: "1.6.9 patch — bug fixes + cozy", size: "180 MB", ago: "2d ago", kind: "patch", scope: "library", rationale: "Won't break saves. 3 of you have hours logged this week.", icon: "🌾" },
-  { id: "p3", game: "Lethal Company", title: "V60 — new moon, new ways to die", size: "640 MB", ago: "3d ago", kind: "patch", scope: "crew", rationale: "Multiplayer-affecting; sync with crew before play.", icon: "👻" },
-  { id: "p4", game: "Risk of Rain Returns", title: "DLC roadmap leak", size: "—", ago: "5d ago", kind: "roadmap", scope: "wishlist", rationale: "Two of you wishlisted last month.", icon: "🧨" },
-  { id: "p5", game: "Cyberpunk 2077", title: "Spring sale — 60% off", size: "—", ago: "today", kind: "sale", scope: "wishlist", rationale: "On 4 wishlists; first sale since holidays.", icon: "💸" },
-  { id: "p6", game: "Rust", title: "Steam Deck shoreline build", size: "1.4 GB", ago: "4d ago", kind: "patch", scope: "library", rationale: "Performance pass for low-power play.", icon: "🌊" }
-];
+function relativeAgoLabel(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const now = Date.now();
+  const deltaMs = Math.max(0, now - then);
+  const minutes = Math.round(deltaMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 8) return `${weeks}w ago`;
+  const months = Math.round(days / 30);
+  return `${months}mo ago`;
+}
 
-type PatchScope = "all" | "library" | "wishlist" | "crew";
+function buildScopeRationale(item: GameNewsItem, kind: PatchKind): string {
+  const parts: string[] = [];
+  if (item.scopes.includes("library")) parts.push("In your library");
+  if (item.scopes.includes("wishlist")) parts.push("On your wishlist");
+  if (item.scopes.includes("crew") && !item.scopes.includes("library") && !item.scopes.includes("wishlist")) {
+    parts.push("Crew-owned");
+  } else if (item.scopes.includes("crew")) {
+    parts.push("crew owns it");
+  }
+  const kindLabel =
+    kind === "patch" ? "patch notes"
+    : kind === "dlc" ? "DLC reveal"
+    : kind === "roadmap" ? "roadmap drop"
+    : kind === "sale" ? "sale alert"
+    : kind === "blog" ? "dev blog"
+    : "fresh news";
+  return parts.length ? `${parts.join(" · ")}. Latest ${kindLabel}.` : `Latest ${kindLabel} from the dev team.`;
+}
 
-function PatchesRolodex() {
+function PatchesRolodex({ gameNews }: { gameNews: GameNewsItem[] }) {
   const [scope, setScope] = useState<PatchScope>("all");
-  const visible = useMemo(
-    () => (scope === "all" ? PATCH_LIST : PATCH_LIST.filter((p) => p.scope === scope)),
-    [scope]
+
+  const decorated = useMemo(
+    () =>
+      gameNews.map((item) => ({
+        item,
+        kind: classifyNewsKind(item),
+        ago: relativeAgoLabel(item.publishedAt)
+      })),
+    [gameNews]
   );
+
+  const visible = useMemo(
+    () =>
+      scope === "all"
+        ? decorated
+        : decorated.filter((row) => row.item.scopes.includes(scope as GameNewsScope)),
+    [decorated, scope]
+  );
+
+  const featured = visible[0] ?? null;
+  const rest = visible.slice(1);
 
   return (
     <IslandCard
@@ -593,16 +772,22 @@ function PatchesRolodex() {
           Patches & Updates
         </h3>
         <span style={{ fontSize: 11, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
-          curated for your library
+          live from Steam
         </span>
       </div>
 
-      <PatchFeatured patch={PATCH_FEATURED} />
+      {featured ? (
+        <PatchFeatured
+          item={featured.item}
+          kind={featured.kind}
+          ago={featured.ago}
+        />
+      ) : null}
 
       <div
         style={{
           padding: "8px 12px",
-          borderTop: `1px solid ${islandTheme.color.cardBorder}`,
+          borderTop: featured ? `1px solid ${islandTheme.color.cardBorder}` : "none",
           borderBottom: `1px solid ${islandTheme.color.cardBorder}`,
           display: "flex",
           gap: 4,
@@ -617,12 +802,14 @@ function PatchesRolodex() {
       </div>
 
       <div style={{ overflowY: "auto", flex: 1 }}>
-        {visible.map((p, i) => (
-          <PatchRow key={p.id} patch={p} firstRow={i === 0} />
+        {rest.map((row, i) => (
+          <PatchRow key={`${row.item.appId}-${row.item.gid}`} item={row.item} kind={row.kind} ago={row.ago} firstRow={i === 0} />
         ))}
         {visible.length === 0 ? (
           <div style={{ padding: 14, fontSize: 13, color: islandTheme.color.textMuted }}>
-            No matching patches.
+            {gameNews.length === 0
+              ? "Sync your Steam library to start pulling fresh patch notes from games the crew owns."
+              : "No matching news in this scope yet."}
           </div>
         ) : null}
       </div>
@@ -630,16 +817,21 @@ function PatchesRolodex() {
   );
 }
 
-function PatchFeatured({ patch }: { patch: Patch }) {
+function PatchFeatured({ item, kind, ago }: { item: GameNewsItem; kind: PatchKind; ago: string }) {
+  const rationale = buildScopeRationale(item, kind);
   return (
-    <div
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
       style={{
         padding: "12px 14px",
         display: "grid",
         gridTemplateColumns: "44px 1fr",
         gap: 10,
-        background:
-          "linear-gradient(135deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0))"
+        background: "linear-gradient(135deg, rgba(96, 165, 250, 0.18), rgba(96, 165, 250, 0))",
+        textDecoration: "none",
+        color: "inherit"
       }}
     >
       <div
@@ -647,14 +839,16 @@ function PatchFeatured({ patch }: { patch: Patch }) {
           width: 44,
           height: 44,
           borderRadius: 10,
-          background: islandTheme.color.panelMutedBg,
+          background: item.headerImageUrl
+            ? `center / cover no-repeat url(${JSON.stringify(item.headerImageUrl)})`
+            : islandTheme.color.panelMutedBg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontSize: 22
         }}
       >
-        {patch.icon}
+        {item.headerImageUrl ? null : PATCH_KIND_ICON[kind]}
       </div>
       <div>
         <div
@@ -666,11 +860,11 @@ function PatchFeatured({ patch }: { patch: Patch }) {
             color: islandTheme.color.primaryGlow
           }}
         >
-          ★ Featured · {patch.game}
+          ★ Featured · {item.gameName}
         </div>
-        <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{patch.title}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{item.title}</div>
         <div style={{ marginTop: 4, fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.4 }}>
-          {patch.rationale}
+          {rationale}
         </div>
         <div
           className="island-mono"
@@ -682,27 +876,42 @@ function PatchFeatured({ patch }: { patch: Patch }) {
             color: islandTheme.color.textMuted
           }}
         >
-          <span>{patch.kind}</span>
+          <span>{kind}</span>
           <span>·</span>
-          <span>{patch.size}</span>
+          <span>{item.feedLabel ?? "Steam"}</span>
           <span>·</span>
-          <span>{patch.ago}</span>
+          <span>{ago}</span>
         </div>
       </div>
-    </div>
+    </a>
   );
 }
 
-function PatchRow({ patch, firstRow }: { patch: Patch; firstRow: boolean }) {
+function PatchRow({
+  item,
+  kind,
+  ago,
+  firstRow
+}: {
+  item: GameNewsItem;
+  kind: PatchKind;
+  ago: string;
+  firstRow: boolean;
+}) {
   return (
-    <div
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noopener noreferrer"
       style={{
         padding: "10px 14px",
         display: "grid",
         gridTemplateColumns: "32px 1fr auto",
         gap: 10,
         alignItems: "center",
-        borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`
+        borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
+        textDecoration: "none",
+        color: "inherit"
       }}
     >
       <div
@@ -710,14 +919,16 @@ function PatchRow({ patch, firstRow }: { patch: Patch; firstRow: boolean }) {
           width: 32,
           height: 32,
           borderRadius: 8,
-          background: islandTheme.color.panelMutedBg,
+          background: item.headerImageUrl
+            ? `center / cover no-repeat url(${JSON.stringify(item.headerImageUrl)})`
+            : islandTheme.color.panelMutedBg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontSize: 16
         }}
       >
-        {patch.icon}
+        {item.headerImageUrl ? null : PATCH_KIND_ICON[kind]}
       </div>
       <div style={{ minWidth: 0 }}>
         <div
@@ -729,27 +940,23 @@ function PatchRow({ patch, firstRow }: { patch: Patch; firstRow: boolean }) {
             textOverflow: "ellipsis"
           }}
         >
-          {patch.game} — {patch.title}
+          {item.gameName} — {item.title}
         </div>
         <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
-          {patch.kind} · {patch.size} · {patch.ago}
+          {kind} · {item.feedLabel ?? "Steam"} · {ago}
         </div>
       </div>
-      <button
-        type="button"
+      <span
         style={{
-          background: "transparent",
-          border: "none",
           color: islandTheme.color.textMuted,
-          cursor: "pointer",
           fontSize: 14,
           padding: 4
         }}
-        aria-label="Mute patch"
+        aria-hidden="true"
       >
-        🔕
-      </button>
-    </div>
+        ↗
+      </span>
+    </a>
   );
 }
 
@@ -1046,71 +1253,126 @@ function formatNightDate(value: string): string {
   });
 }
 
-const WISHLIST_MOCK = [
-  { game: "Hollow Knight: Silksong", crew: 6, art: "🐛" },
-  { game: "Star Citizen 4.0", crew: 4, art: "🚀" },
-  { game: "Borderlands 4", crew: 5, art: "🔫" },
-  { game: "Pioneers of Pagonia", crew: 3, art: "🏰" },
-  { game: "Tiny Glade", crew: 7, art: "🌿" }
-];
+function pickWishlistArt(game: CrewWishlistGame): string {
+  const haystack = [...game.tags, ...game.developers].map((value) => value.toLowerCase());
+  const has = (token: string) => haystack.some((tag) => tag.includes(token));
+  if (has("survival")) return "🪵";
+  if (has("horror")) return "👻";
+  if (has("racing")) return "🏎️";
+  if (has("strategy") || has("rts")) return "🏰";
+  if (has("rpg")) return "🗡️";
+  if (has("puzzle")) return "🧩";
+  if (has("co-op") || has("coop") || has("multiplayer")) return "🎯";
+  if (has("simulation") || has("life sim")) return "🌿";
+  if (has("space")) return "🚀";
+  if (has("platform")) return "🦋";
+  return "🎮";
+}
 
-function GroupWishlist() {
+function GroupWishlist({ crewWishlist }: { crewWishlist: CrewWishlistGame[] }) {
+  const visible = crewWishlist.slice(0, 12);
+  const maxHype = visible.reduce((max, game) => Math.max(max, game.hypeCount), 0);
+  const totalCrewWithHype = useMemo(() => {
+    const ids = new Set<string>();
+    for (const game of crewWishlist) {
+      for (const owner of game.wishlistedBy) {
+        ids.add(owner.discordUserId);
+      }
+    }
+    return ids.size;
+  }, [crewWishlist]);
+  const hypeScale = Math.max(maxHype, totalCrewWithHype, 1);
+
   return (
     <section style={{ display: "grid", gap: 12 }}>
       <SectionHead
         title="Group wishlist"
         meta="Pooled Steam wishlists, sorted by crew hype. Most wanted at the top."
       />
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 10
-        }}
-      >
-        {WISHLIST_MOCK.map((w) => (
-          <article
-            key={w.game}
-            style={{
-              padding: 12,
-              borderRadius: 12,
-              background: islandTheme.color.panelBg,
-              backdropFilter: islandTheme.glass.blur,
-              WebkitBackdropFilter: islandTheme.glass.blur,
-              border: `1px solid ${islandTheme.color.cardBorder}`,
-              display: "grid",
-              gridTemplateColumns: "44px 1fr",
-              gap: 10,
-              alignItems: "center"
-            }}
-          >
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                background: islandTheme.color.panelMutedBg,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 22
-              }}
-            >
-              {w.art}
-            </div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{w.game}</div>
-              <HypeBar count={w.crew} max={8} />
-            </div>
-          </article>
-        ))}
-      </div>
+      {visible.length === 0 ? (
+        <IslandCard style={{ padding: 16 }}>
+          <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle }}>
+            No crew wishlists synced yet. Sign in with Steam from Profile and make sure your wishlist is set to public —
+            we'll start pooling the hype the moment your next sync runs.
+          </p>
+        </IslandCard>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+            gap: 10
+          }}
+        >
+          {visible.map((game) => (
+            <WishlistCard key={game.appId} game={game} hypeScale={hypeScale} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
-function HypeBar({ count, max }: { count: number; max: number }) {
-  const pct = Math.round((count / max) * 100);
+function WishlistCard({ game, hypeScale }: { game: CrewWishlistGame; hypeScale: number }) {
+  const artFallback = pickWishlistArt(game);
+  return (
+    <article
+      style={{
+        padding: 12,
+        borderRadius: 12,
+        background: islandTheme.color.panelBg,
+        backdropFilter: islandTheme.glass.blur,
+        WebkitBackdropFilter: islandTheme.glass.blur,
+        border: `1px solid ${islandTheme.color.cardBorder}`,
+        display: "grid",
+        gridTemplateColumns: "60px 1fr",
+        gap: 10,
+        alignItems: "center"
+      }}
+    >
+      <div
+        style={{
+          width: 60,
+          height: 60,
+          borderRadius: 10,
+          background: islandTheme.color.panelMutedBg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+          color: "#fff",
+          backgroundImage: game.headerImageUrl ? `url("${game.headerImageUrl}")` : undefined,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          textShadow: game.headerImageUrl ? "0 1px 4px rgba(0,0,0,0.6)" : undefined
+        }}
+      >
+        {game.headerImageUrl ? "" : artFallback}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            color: game.name.startsWith("app-") ? islandTheme.color.textMuted : undefined,
+            fontStyle: game.name.startsWith("app-") ? "italic" : undefined
+          }}
+          title={game.name.startsWith("app-") ? `App ${game.appId} — name loading` : game.name}
+        >
+          {game.name.startsWith("app-") ? `App ${game.appId}` : game.name}
+        </div>
+        <HypeBar count={game.hypeCount} scale={hypeScale} />
+      </div>
+    </article>
+  );
+}
+
+function HypeBar({ count, scale }: { count: number; scale: number }) {
+  const safeScale = Math.max(scale, 1);
+  const pct = Math.round(Math.min(100, (count / safeScale) * 100));
   return (
     <div style={{ marginTop: 6 }}>
       <div
@@ -1130,7 +1392,7 @@ function HypeBar({ count, max }: { count: number; max: number }) {
         />
       </div>
       <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 3 }}>
-        {count} / {max} crew
+        {count} crew {count === 1 ? "wants" : "want"} this
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import express from "express";
 import { z } from "zod";
-import { env } from "../config.js";
 import { db } from "../db/client.js";
+import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
 
 const patchSchema = z.object({
@@ -21,6 +21,7 @@ profileRouter.get("/me", async (req, res) => {
     username: string;
     avatar_url: string | null;
     steam_id64: string | null;
+    steam_last_synced_at: string | null;
     display_name: string | null;
     role_names: string[] | null;
     in_voice: boolean | null;
@@ -34,6 +35,7 @@ profileRouter.get("/me", async (req, res) => {
         dp.username,
         dp.avatar_url,
         sl.steam_id64,
+        sl.last_synced_at AS steam_last_synced_at,
         gm.display_name,
         gm.role_names,
         gm.in_voice,
@@ -47,7 +49,7 @@ profileRouter.get("/me", async (req, res) => {
        AND gm.in_guild = TRUE
       WHERE u.discord_user_id = $1
     `,
-    [discordUserId, env.DISCORD_GUILD_ID]
+    [discordUserId, getGuildId()]
   );
   const row = result.rows[0];
   if (!row) {
@@ -64,6 +66,7 @@ profileRouter.get("/me", async (req, res) => {
       displayName: row.display_name ?? row.username,
       avatarUrl: row.avatar_url,
       steamId64: row.steam_id64,
+      steamLastSyncedAt: row.steam_last_synced_at,
       roleNames: row.role_names ?? [],
       inVoice: Boolean(row.in_voice),
       richPresenceText: row.rich_presence_text ?? "Presence unavailable"

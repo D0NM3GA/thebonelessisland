@@ -1,27 +1,77 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { GuildMember, MeProfile, PageId } from "../types.js";
+import type {
+  ActivityCategory,
+  ActivityEvent,
+  FeaturedRecommendation,
+  GuildMember,
+  MeProfile,
+  NewsCard as NewsCardData,
+  PageId
+} from "../types.js";
 
 type HomePageProps = {
   profile: MeProfile | null;
   activeMembers: GuildMember[];
   totalMemberCount: number;
+  featured: FeaturedRecommendation | null;
+  activityEvents: ActivityEvent[];
+  newsCards: NewsCardData[];
   onNavigate: (page: PageId) => void;
 };
 
-export function HomePage({ profile, activeMembers, totalMemberCount, onNavigate }: HomePageProps) {
+type HeroPhase = "visible" | "fading" | "collapsing" | "gone";
+
+export function HomePage({
+  profile,
+  activeMembers,
+  totalMemberCount,
+  featured,
+  activityEvents,
+  newsCards,
+  onNavigate
+}: HomePageProps) {
+  const [heroPhase, setHeroPhase] = useState<HeroPhase>("visible");
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setHeroPhase("fading"), 1100);
+    const t2 = setTimeout(() => setHeroPhase("collapsing"), 1500);
+    const t3 = setTimeout(() => setHeroPhase("gone"), 2050);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
   return (
-    <div style={{ display: "grid", gap: 28 }}>
-      <Hero profile={profile} onlineCount={activeMembers.length} onNavigate={onNavigate} />
-      <FeaturedAndFriendsRow
-        activeMembers={activeMembers}
-        totalMemberCount={totalMemberCount}
-        onNavigate={onNavigate}
-      />
-      <ActivityFeed />
-      <DriftLog />
-      <BotAndRitualRow />
+    <div>
+      {heroPhase !== "gone" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateRows: heroPhase === "collapsing" ? "0fr" : "1fr",
+            opacity: heroPhase === "visible" ? 1 : 0,
+            marginBottom: heroPhase === "collapsing" ? 0 : 28,
+            transition:
+              heroPhase === "collapsing"
+                ? "grid-template-rows 500ms cubic-bezier(0.4,0,0.2,1), margin-bottom 500ms cubic-bezier(0.4,0,0.2,1)"
+                : "opacity 360ms ease"
+          }}
+        >
+          <div style={{ overflow: "hidden", minHeight: 0 }}>
+            <Hero profile={profile} onlineCount={activeMembers.length} onNavigate={onNavigate} />
+          </div>
+        </div>
+      )}
+      <div style={{ display: "grid", gap: 28 }}>
+        <FeaturedAndFriendsRow
+          activeMembers={activeMembers}
+          totalMemberCount={totalMemberCount}
+          featured={featured}
+          onNavigate={onNavigate}
+        />
+        <ActivityFeed events={activityEvents} />
+        <DriftLog cards={newsCards} />
+        <BotAndRitualRow />
+      </div>
     </div>
   );
 }
@@ -106,37 +156,13 @@ function Hero({
         Game nights, low-stakes co-op, and a lounge that lives on Discord. Here's what's happening on the island today.
       </p>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-        <HeroButton variant="primary" onClick={() => scrollTo("activity")}>
-          See what's happening →
-        </HeroButton>
-        <HeroButton variant="ghost" onClick={() => onNavigate("games")}>
-          Browse games
-        </HeroButton>
-      </div>
-
-      <div
-        className="island-mono"
-        style={{
-          marginTop: 8,
-          fontSize: 11,
-          color: islandTheme.color.textMuted,
-          textTransform: "uppercase",
-          letterSpacing: "0.12em"
-        }}
-      >
-        scroll past the palms ↓
-      </div>
+      <HeroButton variant="ghost" onClick={() => onNavigate("games")}>
+        Browse games
+      </HeroButton>
     </section>
   );
 }
 
-function scrollTo(id: string) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-}
 
 type HeroButtonProps = {
   variant: "primary" | "ghost";
@@ -179,10 +205,12 @@ function HeroButton({ variant, onClick, children }: HeroButtonProps) {
 function FeaturedAndFriendsRow({
   activeMembers,
   totalMemberCount,
+  featured,
   onNavigate
 }: {
   activeMembers: GuildMember[];
   totalMemberCount: number;
+  featured: FeaturedRecommendation | null;
   onNavigate: (page: PageId) => void;
 }) {
   return (
@@ -194,7 +222,7 @@ function FeaturedAndFriendsRow({
         alignItems: "stretch"
       }}
     >
-      <FeaturedGame onNavigate={onNavigate} />
+      <FeaturedGame featured={featured} onNavigate={onNavigate} />
       <FriendsOnline
         activeMembers={activeMembers}
         totalMemberCount={totalMemberCount}
@@ -204,27 +232,80 @@ function FeaturedAndFriendsRow({
   );
 }
 
-function FeaturedGame({ onNavigate }: { onNavigate: (page: PageId) => void }) {
+function FeaturedGame({
+  featured,
+  onNavigate
+}: {
+  featured: FeaturedRecommendation | null;
+  onNavigate: (page: PageId) => void;
+}) {
+  const baseStyle: CSSProperties = {
+    position: "relative",
+    cursor: "pointer",
+    backdropFilter: islandTheme.glass.blur,
+    WebkitBackdropFilter: islandTheme.glass.blur,
+    border: `1px solid ${islandTheme.color.cardBorder}`,
+    borderRadius: 18,
+    padding: "28px 28px 24px",
+    overflow: "hidden",
+    minHeight: 240,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    transition: "transform 200ms ease, box-shadow 200ms ease"
+  };
+
+  const tintedBackground = `linear-gradient(135deg, rgba(37, 99, 235, 0.32) 0%, ${islandTheme.color.panelBg} 70%)`;
+
+  const backgroundStyle: CSSProperties = featured?.headerImageUrl
+    ? {
+        backgroundImage: `linear-gradient(115deg, rgba(8, 16, 34, 0.86) 35%, rgba(8, 16, 34, 0.55) 65%, rgba(8, 16, 34, 0.2) 100%), url("${featured.headerImageUrl}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center"
+      }
+    : { background: tintedBackground };
+
+  if (!featured) {
+    return (
+      <article
+        onClick={() => onNavigate("games")}
+        style={{ ...baseStyle, ...backgroundStyle }}
+      >
+        <div style={{ position: "relative", zIndex: 1, maxWidth: "62%" }}>
+          <Eyebrow>★ Featured pick · pending</Eyebrow>
+          <FeaturedTitle>Sync the crew's libraries to surface a pick</FeaturedTitle>
+          <FeaturedBody>
+            We score every game by crew overlap, group fit, and session length. Link a Steam account from Profile or
+            ask a crewmate to run a sync — the strongest pick will land here.
+          </FeaturedBody>
+          <div style={{ display: "flex", gap: 10 }}>
+            <HeroButton variant="primary" onClick={() => onNavigate("profile")}>
+              Link Steam
+            </HeroButton>
+            <HeroButton variant="ghost" onClick={() => onNavigate("games")}>
+              Plan a session
+            </HeroButton>
+          </div>
+        </div>
+        <SubmarineArt />
+      </article>
+    );
+  }
+
+  const matchPct = Math.max(0, Math.min(100, Math.round(featured.score)));
+  const sessionLabel =
+    typeof featured.medianSessionMinutes === "number" && featured.medianSessionMinutes > 0
+      ? `~${featured.medianSessionMinutes}m sessions`
+      : null;
+  const playerLabel =
+    typeof featured.maxPlayers === "number" && featured.maxPlayers > 1 ? `up to ${featured.maxPlayers}p` : null;
+  const tagLabel = featured.tags[0]?.toLowerCase() ?? null;
+
   return (
     <article
       onClick={() => onNavigate("games")}
-      style={{
-        position: "relative",
-        cursor: "pointer",
-        background: `linear-gradient(135deg, rgba(37, 99, 235, 0.32) 0%, ${islandTheme.color.panelBg} 70%)`,
-        backdropFilter: islandTheme.glass.blur,
-        WebkitBackdropFilter: islandTheme.glass.blur,
-        border: `1px solid ${islandTheme.color.cardBorder}`,
-        borderRadius: 18,
-        padding: "28px 28px 24px",
-        overflow: "hidden",
-        minHeight: 240,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 16,
-        transition: "transform 200ms ease, box-shadow 200ms ease"
-      }}
+      style={{ ...baseStyle, ...backgroundStyle }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-2px)";
         e.currentTarget.style.boxShadow = "0 24px 50px rgba(0,0,0,0.4)";
@@ -234,51 +315,97 @@ function FeaturedGame({ onNavigate }: { onNavigate: (page: PageId) => void }) {
         e.currentTarget.style.boxShadow = "none";
       }}
     >
-      <div style={{ position: "relative", zIndex: 1, maxWidth: "62%" }}>
-        <div
-          className="island-mono"
-          style={{
-            fontSize: 11,
-            color: islandTheme.palette.sandWarmAccent,
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            marginBottom: 10
-          }}
-        >
-          ★ Game of the Month
-        </div>
-        <h2
-          className="island-display"
-          style={{
-            margin: "0 0 10px",
-            fontSize: "clamp(22px, 3vw, 30px)",
-            lineHeight: 1.1
-          }}
-        >
-          Deep Sea Dunkers: The Kraken's Hoard
-        </h2>
-        <p
-          style={{
-            margin: "0 0 16px",
-            fontSize: 14,
-            lineHeight: 1.45,
-            opacity: 0.92,
-            color: islandTheme.color.textSubtle
-          }}
-        >
-          Co-op submarine looting in haunted reefs. 4 friends own it, voting opens Friday.
-        </p>
-        <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ position: "relative", zIndex: 1, maxWidth: "64%" }}>
+        <Eyebrow>★ Featured pick · {matchPct}% match</Eyebrow>
+        <FeaturedTitle>{featured.name}</FeaturedTitle>
+        <FeaturedBody>
+          {featured.owners} of {featured.scopeMemberCount} on the island own it. {featured.reason}.
+        </FeaturedBody>
+        <FeaturedMetaRow items={[playerLabel, sessionLabel, tagLabel].filter((value): value is string => Boolean(value))} />
+        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           <HeroButton variant="primary" onClick={() => onNavigate("games")}>
-            Play Now
+            Plan tonight
           </HeroButton>
-          <HeroButton variant="ghost" onClick={() => onNavigate("games")}>
-            Details
+          <HeroButton variant="ghost" onClick={() => onNavigate("library")}>
+            Open library
           </HeroButton>
         </div>
       </div>
-      <SubmarineArt />
+      {featured.headerImageUrl ? null : <SubmarineArt />}
     </article>
+  );
+}
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="island-mono"
+      style={{
+        fontSize: 11,
+        color: islandTheme.palette.sandWarmAccent,
+        textTransform: "uppercase",
+        letterSpacing: "0.1em",
+        marginBottom: 10
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function FeaturedTitle({ children }: { children: ReactNode }) {
+  return (
+    <h2
+      className="island-display"
+      style={{
+        margin: "0 0 10px",
+        fontSize: "clamp(22px, 3vw, 30px)",
+        lineHeight: 1.1
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+function FeaturedBody({ children }: { children: ReactNode }) {
+  return (
+    <p
+      style={{
+        margin: "0 0 12px",
+        fontSize: 14,
+        lineHeight: 1.45,
+        opacity: 0.92,
+        color: islandTheme.color.textSubtle
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function FeaturedMetaRow({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div
+      className="island-mono"
+      style={{
+        display: "flex",
+        gap: 10,
+        flexWrap: "wrap",
+        fontSize: 11,
+        color: islandTheme.color.textMuted,
+        textTransform: "uppercase",
+        letterSpacing: "0.06em"
+      }}
+    >
+      {items.map((item, index) => (
+        <span key={`${item}-${index}`}>
+          {index > 0 ? <span style={{ marginRight: 10, opacity: 0.6 }}>·</span> : null}
+          {item}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -476,140 +603,6 @@ function pickColorFor(seed: string): string {
   return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
 }
 
-type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";
-
-type ActivityItem = {
-  id: string;
-  category: Exclude<ActivityCategory, "all">;
-  initials: string;
-  color: string;
-  icon: string;
-  metaText: string;
-  body: ReactNode;
-  attachment?: { icon: string; title: string; meta: string };
-};
-
-const ACTIVITY_MOCK: ActivityItem[] = [
-  {
-    id: "ach-1",
-    category: "achievements",
-    initials: "AL",
-    color: "#a855f7",
-    icon: "🏆",
-    metaText: "4m ago · 5/120 friends have this",
-    body: (
-      <>
-        <strong>aloha-pirate</strong> unlocked <Achievement>Secret Cove</Achievement> in <Target>Deep Sea Dunkers</Target>.
-      </>
-    )
-  },
-  {
-    id: "mil-1",
-    category: "milestones",
-    initials: "JK",
-    color: "#22d3ee",
-    icon: "⚡",
-    metaText: "22m ago",
-    body: (
-      <>
-        <strong>jkraken</strong> set a new lap record in <Target>Cosmic Cruiser</Target>.
-      </>
-    ),
-    attachment: { icon: "🚀", title: "Helix-IV · 1:42.08", meta: "−3.4s vs prev best · ranked #4 island board" }
-  },
-  {
-    id: "frd-1",
-    category: "friends",
-    initials: "DM",
-    color: "#f4a261",
-    icon: "🌴",
-    metaText: "1h ago · 6 of 24 going",
-    body: (
-      <>
-        <strong>donmega</strong> RSVP'd to <Target>Friday Island Session</Target>.
-      </>
-    )
-  },
-  {
-    id: "frd-2",
-    category: "friends",
-    initials: "PW",
-    color: "#fbbf77",
-    icon: "💬",
-    metaText: "2h ago · 4 replies",
-    body: (
-      <>
-        <strong>palmwave</strong> posted in <Target>#cozy-corner</Target>: "Year 4 Spring is wild, the greenhouse went feral 🌿"
-      </>
-    )
-  },
-  {
-    id: "ach-2",
-    category: "achievements",
-    initials: "SN",
-    color: "#4ade80",
-    icon: "🏆",
-    metaText: "4h ago · in Deep Rock Galactic",
-    body: (
-      <>
-        <strong>sandnugget</strong> earned <Achievement>100 Hours Co-op</Achievement>.
-      </>
-    )
-  },
-  {
-    id: "patch-1",
-    category: "patches",
-    initials: "🦑",
-    color: "#0ea5e9",
-    icon: "🦑",
-    metaText: "5h ago · 5 friends own this",
-    body: (
-      <>
-        <strong>Helldivers II</strong> dropped a new Major Order — the Squid Front opened up.
-      </>
-    )
-  },
-  {
-    id: "mil-2",
-    category: "milestones",
-    initials: "RT",
-    color: "#ef8354",
-    icon: "📈",
-    metaText: "9h ago",
-    body: (
-      <>
-        <strong>reeftroll</strong> hit <Achievement>Tier 30</Achievement> in <Target>Risk of Rain 2</Target>.
-      </>
-    )
-  },
-  {
-    id: "frd-3",
-    category: "friends",
-    initials: "EM",
-    color: "#86efac",
-    icon: "🪸",
-    metaText: "yesterday",
-    body: (
-      <>
-        <strong>emberfish</strong> joined the <Target>Cozy Players</Target> guild.
-      </>
-    )
-  }
-];
-
-function Achievement({ children }: { children: ReactNode }) {
-  return (
-    <span
-      style={{
-        color: islandTheme.palette.sandWarmAccent,
-        fontWeight: 600
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
 function Target({ children }: { children: ReactNode }) {
   return (
     <span style={{ color: islandTheme.color.primaryGlow, fontWeight: 600 }}>{children}</span>
@@ -624,17 +617,150 @@ const ACTIVITY_TABS: Array<{ id: ActivityCategory; label: string }> = [
   { id: "patches", label: "Patch notes" }
 ];
 
-function ActivityFeed() {
+const ACTOR_COLORS = ["#22d3ee", "#a855f7", "#f4a261", "#86efac", "#fbbf77", "#ef8354", "#4ade80", "#60a5fa"];
+
+function colorForActor(id: string | null | undefined): string {
+  if (!id) return ACTOR_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return ACTOR_COLORS[hash % ACTOR_COLORS.length];
+}
+
+function initialsFor(name: string | null | undefined): string {
+  if (!name) return "??";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "??";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function relativeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const delta = Math.max(0, Date.now() - then);
+  const minutes = Math.round(delta / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 8) return `${weeks}w ago`;
+  return `${Math.round(days / 30)}mo ago`;
+}
+
+type ActivityRendered = {
+  body: ReactNode;
+  icon: string;
+  metaText: string;
+};
+
+function describeEvent(event: ActivityEvent): ActivityRendered | null {
+  const actorName = event.actor?.displayName ?? "A crew member";
+  const game = event.game;
+  const ago = relativeAgo(event.createdAt);
+  const payload = event.payload as Record<string, unknown>;
+
+  switch (event.eventType) {
+    case "game_night.created": {
+      const title = typeof payload.title === "string" ? payload.title : "a new session";
+      return {
+        icon: "🌴",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> scheduled <Target>{title}</Target>.
+          </>
+        )
+      };
+    }
+    case "game_night.rsvp_joined":
+      return {
+        icon: "🪵",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> RSVP'd to the next <Target>game night</Target>.
+          </>
+        )
+      };
+    case "game_night.rsvp_left":
+      return {
+        icon: "🌫",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> stepped off the dock for the next session.
+          </>
+        )
+      };
+    case "game_night.game_picked":
+      return {
+        icon: "🎯",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> locked in <Target>{game?.name ?? "a game"}</Target> for the next session.
+          </>
+        )
+      };
+    case "steam.linked":
+      return {
+        icon: "🔗",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> wired up their <Target>Steam library</Target>.
+          </>
+        )
+      };
+    case "steam.unlinked":
+      return {
+        icon: "🪢",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> unhooked their Steam library.
+          </>
+        )
+      };
+    case "steam.synced": {
+      const synced = typeof payload.syncedGames === "number" ? payload.syncedGames : 0;
+      return {
+        icon: "🔄",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> resynced their library — <Target>{synced} game{synced === 1 ? "" : "s"}</Target>.
+          </>
+        )
+      };
+    }
+    default:
+      return {
+        icon: "✨",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{actorName}</strong> · {event.eventType}
+          </>
+        )
+      };
+  }
+}
+
+function ActivityFeed({ events }: { events: ActivityEvent[] }) {
   const [tab, setTab] = useState<ActivityCategory>("all");
   const visible = useMemo(
-    () => (tab === "all" ? ACTIVITY_MOCK : ACTIVITY_MOCK.filter((a) => a.category === tab)),
-    [tab]
+    () => (tab === "all" ? events : events.filter((e) => e.category === tab)),
+    [events, tab]
   );
   return (
     <section id="activity" style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Activity feed"
-        meta="Latest from your friends, the games you follow, and the patch firehose."
+        meta="Latest from your crew — RSVPs, game picks, and library syncs."
         action="Open community →"
       />
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
@@ -670,17 +796,26 @@ function ActivityFeed() {
             );
           })}
         </div>
-        <div style={{ padding: 6 }}>
-          {visible.map((item, i) => (
-            <ActivityRow key={item.id} item={item} firstRow={i === 0} />
-          ))}
+        <div style={{ padding: 6, maxHeight: 480, overflowY: "auto" }}>
+          {visible.length === 0 ? (
+            <div style={{ padding: "24px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
+              {events.length === 0
+                ? "No island activity yet — schedule a game night or sync your library to get the dock buzzing."
+                : "Nothing in this category right now."}
+            </div>
+          ) : (
+            visible.map((event, i) => <ActivityRow key={event.id} event={event} firstRow={i === 0} />)
+          )}
         </div>
       </IslandCard>
     </section>
   );
 }
 
-function ActivityRow({ item, firstRow }: { item: ActivityItem; firstRow: boolean }) {
+function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: boolean }) {
+  const rendered = describeEvent(event);
+  if (!rendered) return null;
+  const actorAvatar = event.actor?.avatarUrl ?? null;
   return (
     <div
       style={{
@@ -697,7 +832,9 @@ function ActivityRow({ item, firstRow }: { item: ActivityItem; firstRow: boolean
           width: 40,
           height: 40,
           borderRadius: 999,
-          background: item.color,
+          background: actorAvatar
+            ? `center / cover no-repeat url(${JSON.stringify(actorAvatar)})`
+            : colorForActor(event.actor?.discordUserId ?? null),
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -706,13 +843,13 @@ function ActivityRow({ item, firstRow }: { item: ActivityItem; firstRow: boolean
           color: "#0f172a"
         }}
       >
-        {item.initials}
+        {actorAvatar ? null : initialsFor(event.actor?.displayName ?? null)}
       </div>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 14, lineHeight: 1.45, color: islandTheme.color.textSubtle }}>
-          {item.body}
+          {rendered.body}
         </div>
-        {item.attachment ? (
+        {event.game?.headerImageUrl ? (
           <div
             style={{
               marginTop: 8,
@@ -731,19 +868,13 @@ function ActivityRow({ item, firstRow }: { item: ActivityItem; firstRow: boolean
                 width: 44,
                 height: 44,
                 borderRadius: 8,
-                background: "rgba(96, 165, 250, 0.18)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 22
+                background: `center / cover no-repeat url(${JSON.stringify(event.game.headerImageUrl)})`
               }}
-            >
-              {item.attachment.icon}
-            </div>
+            />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{item.attachment.title}</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{event.game.name}</div>
               <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
-                {item.attachment.meta}
+                Featured game
               </div>
             </div>
           </div>
@@ -759,64 +890,66 @@ function ActivityRow({ item, firstRow }: { item: ActivityItem; firstRow: boolean
             gap: 6
           }}
         >
-          <span>{item.icon}</span>
-          {item.metaText}
+          <span>{rendered.icon}</span>
+          {rendered.metaText}
         </div>
       </div>
-      <button
-        type="button"
-        aria-label="More"
+      <span
+        aria-hidden="true"
         style={{
           width: 28,
           height: 28,
           borderRadius: 999,
           border: `1px solid ${islandTheme.color.cardBorder}`,
-          background: "transparent",
           color: islandTheme.color.textMuted,
-          cursor: "pointer",
-          fontSize: 14
+          fontSize: 14,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
         }}
       >
         ⋯
-      </button>
+      </span>
     </div>
   );
 }
 
-const NEWS_MOCK: Array<{ icon: string; title: string; meta: string }> = [
-  { icon: "🦑", title: "Helldivers II: New Major Order drops the Squid Front", meta: "curated · co-op · 4h ago" },
-  { icon: "⛏️", title: "Deep Rock Season 6 teaser — molly's getting an upgrade", meta: "curated · co-op · 1d ago" },
-  { icon: "🌾", title: "Stardew 1.6.9 patch: tiny tweaks, big morale boost", meta: "curated · cozy · 2d ago" },
-  { icon: "👻", title: "Lethal Company V60 — new moon, new ways to die", meta: "curated · horror · 3d ago" },
-  { icon: "🌊", title: "Rust + Steam Deck: a friendlier shoreline build", meta: "curated · survival · 4d ago" },
-  { icon: "🧨", title: "Risk of Rain Returns DLC roadmap leaked from a coconut", meta: "curated · roguelite · 5d ago" }
-];
-
-function DriftLog() {
+function DriftLog({ cards }: { cards: NewsCardData[] }) {
   return (
     <section style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Washed up on shore"
-        meta="Drift log: news, patch notes, and crew gossip from the curated feed."
+        meta="Drift log: news, patch notes, and crew gossip curated by the parents."
         action="Full feed →"
       />
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: 12
-        }}
-      >
-        {NEWS_MOCK.map((n) => (
-          <NewsCard key={n.title} icon={n.icon} title={n.title} meta={n.meta} />
-        ))}
-      </div>
+      {cards.length === 0 ? (
+        <IslandCard style={{ padding: "16px 18px" }}>
+          <div style={{ fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.55 }}>
+            The drift log is quiet right now. Parents can post news cards from the Admin → News Curation page.
+          </div>
+        </IslandCard>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 12
+          }}
+        >
+          {cards.map((card) => (
+            <NewsCardTile key={card.id} card={card} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
-function NewsCard({ icon, title, meta }: { icon: string; title: string; meta: string }) {
-  return (
+function NewsCardTile({ card }: { card: NewsCardData }) {
+  const ago = relativeAgo(card.publishedAt);
+  const tag = card.tag ? card.tag : "drift log";
+  const meta = `${tag} · ${ago}`;
+  const content = (
     <article
       style={{
         display: "grid",
@@ -828,7 +961,7 @@ function NewsCard({ icon, title, meta }: { icon: string; title: string; meta: st
         backdropFilter: islandTheme.glass.blur,
         WebkitBackdropFilter: islandTheme.glass.blur,
         border: `1px solid ${islandTheme.color.cardBorder}`,
-        cursor: "pointer",
+        cursor: card.sourceUrl ? "pointer" : "default",
         transition: "border-color 140ms ease, transform 140ms ease"
       }}
       onMouseEnter={(e) => {
@@ -852,16 +985,32 @@ function NewsCard({ icon, title, meta }: { icon: string; title: string; meta: st
           fontSize: 22
         }}
       >
-        {icon}
+        {card.icon}
       </div>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{title}</div>
-        <div className="island-mono" style={{ marginTop: 4, fontSize: 11, color: islandTheme.color.textMuted }}>
+        <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{card.title}</div>
+        <div style={{ marginTop: 4, fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          {card.body}
+        </div>
+        <div className="island-mono" style={{ marginTop: 6, fontSize: 11, color: islandTheme.color.textMuted }}>
           {meta}
         </div>
       </div>
     </article>
   );
+  if (card.sourceUrl) {
+    return (
+      <a
+        href={card.sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ textDecoration: "none", color: "inherit" }}
+      >
+        {content}
+      </a>
+    );
+  }
+  return content;
 }
 
 function BotAndRitualRow() {

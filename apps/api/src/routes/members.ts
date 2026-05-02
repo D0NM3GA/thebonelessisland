@@ -1,6 +1,7 @@
 import express from "express";
 import { env } from "../config.js";
 import { db } from "../db/client.js";
+import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
 
 type DiscordGuildMember = {
@@ -35,7 +36,7 @@ export const membersRouter = express.Router();
 membersRouter.use(requireSession);
 
 membersRouter.get("/", async (_req, res) => {
-  if (!env.DISCORD_GUILD_ID) {
+  if (!getGuildId()) {
     res.status(400).json({ error: "DISCORD_GUILD_ID is not configured" });
     return;
   }
@@ -56,7 +57,7 @@ membersRouter.get("/", async (_req, res) => {
       ORDER BY username ASC
       LIMIT 2000
     `,
-    [env.DISCORD_GUILD_ID]
+    [getGuildId()]
   );
 
   res.json({
@@ -73,12 +74,12 @@ membersRouter.get("/", async (_req, res) => {
 });
 
 membersRouter.post("/sync", async (_req, res) => {
-  if (!env.DISCORD_GUILD_ID || !env.DISCORD_BOT_TOKEN) {
+  if (!getGuildId() || !env.DISCORD_BOT_TOKEN) {
     res.status(400).json({ error: "DISCORD_GUILD_ID and DISCORD_BOT_TOKEN are required for member sync" });
     return;
   }
 
-  const guildCheck = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}`, {
+  const guildCheck = await fetch(`https://discord.com/api/v10/guilds/${getGuildId()}`, {
     headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }
   });
 
@@ -93,7 +94,7 @@ membersRouter.post("/sync", async (_req, res) => {
     return;
   }
 
-  const response = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members?limit=1000`, {
+  const response = await fetch(`https://discord.com/api/v10/guilds/${getGuildId()}/members?limit=1000`, {
     headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }
   });
 
@@ -110,7 +111,7 @@ membersRouter.post("/sync", async (_req, res) => {
     return;
   }
 
-  const rolesResponse = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/roles`, {
+  const rolesResponse = await fetch(`https://discord.com/api/v10/guilds/${getGuildId()}/roles`, {
     headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }
   });
   const rolesPayload = rolesResponse.ok ? ((await rolesResponse.json()) as DiscordRole[]) : [];
@@ -148,40 +149,41 @@ membersRouter.post("/sync", async (_req, res) => {
     count: 0
   };
   const voiceChannelByUserId = new Map<string, string>();
-  for (const member of normalized) {
-    const voiceStateResponse = await fetch(
-      `https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/voice-states/${member.id}`,
-      {
-        headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` }
-      }
-    ).catch(() => null);
 
-    if (!voiceStateResponse) {
+  // Fetch all voice states concurrently instead of one-at-a-time.
+  const voiceResults = await Promise.all(
+    normalized.map(async (member) => {
+      const voiceStateResponse = await fetch(
+        `https://discord.com/api/v10/guilds/${getGuildId()}/voice-states/${member.id}`,
+        { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } }
+      ).catch(() => null);
+      return { memberId: member.id, response: voiceStateResponse };
+    })
+  );
+
+  for (const { memberId, response } of voiceResults) {
+    if (!response) {
       voiceDiagnostics.ok = false;
       voiceDiagnostics.status = null;
       voiceDiagnostics.details = "Voice state request failed before Discord responded.";
       continue;
     }
-
-    if (voiceStateResponse.status === 404) {
-      // User is not currently connected to a voice channel.
+    if (response.status === 404) {
       continue;
     }
-
-    if (!voiceStateResponse.ok) {
-      const body = await voiceStateResponse.text().catch(() => "");
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
       voiceDiagnostics.ok = false;
-      voiceDiagnostics.status = voiceStateResponse.status;
+      voiceDiagnostics.status = response.status;
       if (!voiceDiagnostics.details) {
         voiceDiagnostics.details = body.slice(0, 300) || "Discord rejected voice state request.";
       }
       continue;
     }
-
-    const voiceState = (await voiceStateResponse.json()) as DiscordVoiceState;
+    const voiceState = (await response.json()) as DiscordVoiceState;
     const channelId = voiceState.channel_id?.trim();
     if (channelId) {
-      voiceChannelByUserId.set(member.id, channelId);
+      voiceChannelByUserId.set(memberId, channelId);
       voiceDiagnostics.count += 1;
     }
   }
@@ -189,7 +191,7 @@ membersRouter.post("/sync", async (_req, res) => {
   const client = await db.connect();
   try {
     await client.query("BEGIN");
-    await client.query(`UPDATE guild_members SET in_guild = FALSE WHERE guild_id = $1`, [env.DISCORD_GUILD_ID]);
+    await client.query(`UPDATE guild_members SET in_guild = FALSE WHERE guild_id = $1`, [getGuildId()]);
 
     for (const member of normalized) {
       const voiceChannelId = voiceChannelByUserId.get(member.id) ?? null;
@@ -226,7 +228,7 @@ membersRouter.post("/sync", async (_req, res) => {
             last_synced_at = NOW()
         `,
         [
-          env.DISCORD_GUILD_ID,
+          getGuildId(),
           member.id,
           member.username,
           member.displayName,

@@ -1,89 +1,156 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { PageId } from "../types.js";
+import type { CrewOwnedGame, CrewOwner, PageId } from "../types.js";
 
 type LibraryPageProps = {
+  crewGames: CrewOwnedGame[];
+  currentDiscordUserId: string | null;
   onNavigate: (page: PageId) => void;
 };
 
-type Owner = { initials: string; color: string; name: string };
+type LibCategory = "co-op" | "horror" | "puzzle" | "party" | "solo";
+type LibFilter = "all" | "mine" | LibCategory;
+type SortMode = "owned" | "title" | "session";
 
-type LibEntry = {
-  id: string;
-  title: string;
-  category: "co-op" | "solo" | "party" | "puzzle" | "horror";
-  art: string;
-  cover: string;
-  owners: Owner[];
-  players: string;
-  mine: boolean;
-  tag: string;
-};
-
-const OWN_PALETTE = {
-  jkraken: { initials: "JK", color: "#22d3ee", name: "jkraken" },
-  aloha: { initials: "AL", color: "#ef8354", name: "aloha-pirate" },
-  palm: { initials: "PA", color: "#86efac", name: "palmwave" },
-  chef: { initials: "CH", color: "#fbbf24", name: "ChefNugget" },
-  speedy: { initials: "SP", color: "#22d3ee", name: "SpeedyNugget" },
-  dawson: { initials: "DA", color: "#f4a261", name: "dawson" },
-  lore: { initials: "LO", color: "#a78bfa", name: "LoreNugget" },
-  reef: { initials: "RE", color: "#94a3b8", name: "ReefTroll" }
-} as const;
-
-const LIBRARY: LibEntry[] = [
-  { id: "drg", title: "Deep Rock Galactic", category: "co-op", art: "⛏️", cover: "linear-gradient(135deg,#064e3b,#0f172a)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.aloha, OWN_PALETTE.palm, OWN_PALETTE.chef, OWN_PALETTE.speedy], players: "4p", mine: true, tag: "co-op shooter" },
-  { id: "hd2", title: "Helldivers II", category: "co-op", art: "🪖", cover: "linear-gradient(135deg,#1e3a8a,#0c4a6e)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.aloha, OWN_PALETTE.speedy, OWN_PALETTE.dawson, OWN_PALETTE.lore], players: "4p", mine: true, tag: "co-op shooter" },
-  { id: "lc", title: "Lethal Company", category: "horror", art: "👻", cover: "linear-gradient(135deg,#052e16,#0f172a)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.aloha, OWN_PALETTE.palm, OWN_PALETTE.chef, OWN_PALETTE.speedy], players: "4p", mine: true, tag: "horror co-op" },
-  { id: "dsd", title: "Deep Sea Dunkers", category: "co-op", art: "🐙", cover: "linear-gradient(135deg,#1e3a8a,#0c4a6e)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.palm, OWN_PALETTE.speedy, OWN_PALETTE.dawson, OWN_PALETTE.chef], players: "4p", mine: true, tag: "co-op horror" },
-  { id: "cc", title: "Cosmic Cruiser", category: "co-op", art: "🚀", cover: "linear-gradient(135deg,#312e81,#0c4a6e)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.speedy, OWN_PALETTE.dawson, OWN_PALETTE.palm, OWN_PALETTE.aloha], players: "1-4", mine: true, tag: "arcade speedrun" },
-  { id: "sdv", title: "Stardew Valley", category: "co-op", art: "🌽", cover: "linear-gradient(135deg,#166534,#14532d)", owners: [OWN_PALETTE.palm, OWN_PALETTE.dawson, OWN_PALETTE.chef, OWN_PALETTE.lore], players: "4p", mine: true, tag: "cozy co-op" },
-  { id: "ckc", title: "Chef's Kitchen Chaos", category: "party", art: "🍳", cover: "linear-gradient(135deg,#7c2d12,#1c1917)", owners: [OWN_PALETTE.chef, OWN_PALETTE.dawson, OWN_PALETTE.palm, OWN_PALETTE.jkraken], players: "1-4", mine: true, tag: "co-op party" },
-  { id: "nk", title: "Nugget Knight", category: "solo", art: "🛡️", cover: "linear-gradient(135deg,#4c1d95,#1e3a8a)", owners: [OWN_PALETTE.lore, OWN_PALETTE.dawson], players: "1p", mine: true, tag: "platformer" },
-  { id: "drf", title: "Dorfromantik", category: "puzzle", art: "🌿", cover: "linear-gradient(135deg,#365314,#1a2e05)", owners: [OWN_PALETTE.palm, OWN_PALETTE.dawson, OWN_PALETTE.chef], players: "1p", mine: true, tag: "cozy puzzle" },
-  { id: "wwhf", title: "We Were Here Forever", category: "puzzle", art: "🗝️", cover: "linear-gradient(135deg,#1e1b4b,#0f172a)", owners: [OWN_PALETTE.palm, OWN_PALETTE.dawson, OWN_PALETTE.lore], players: "2p", mine: true, tag: "co-op puzzle" },
-  { id: "ror2", title: "Risk of Rain 2", category: "co-op", art: "⚡", cover: "linear-gradient(135deg,#831843,#0f172a)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.speedy, OWN_PALETTE.aloha, OWN_PALETTE.dawson], players: "4p", mine: true, tag: "roguelike co-op" },
-  { id: "phasmo", title: "Phasmophobia", category: "horror", art: "👻", cover: "linear-gradient(135deg,#0f172a,#020617)", owners: [OWN_PALETTE.aloha, OWN_PALETTE.reef, OWN_PALETTE.dawson, OWN_PALETTE.jkraken], players: "4p", mine: true, tag: "horror co-op" },
-  { id: "hades2", title: "Hades II", category: "solo", art: "🔥", cover: "linear-gradient(135deg,#7f1d1d,#0f172a)", owners: [OWN_PALETTE.dawson, OWN_PALETTE.lore, OWN_PALETTE.palm], players: "1p", mine: true, tag: "roguelike" },
-  { id: "sot", title: "Sea of Thieves", category: "co-op", art: "🏴‍☠️", cover: "linear-gradient(135deg,#0c4a6e,#082f49)", owners: [OWN_PALETTE.aloha, OWN_PALETTE.jkraken, OWN_PALETTE.dawson, OWN_PALETTE.reef], players: "4p", mine: true, tag: "pirate co-op" },
-  { id: "sts", title: "Slay the Spire", category: "solo", art: "🃏", cover: "linear-gradient(135deg,#312e81,#1e1b4b)", owners: [OWN_PALETTE.dawson, OWN_PALETTE.lore, OWN_PALETTE.speedy], players: "1p", mine: true, tag: "roguelike deck" },
-  { id: "vs", title: "Vampire Survivors", category: "solo", art: "🦇", cover: "linear-gradient(135deg,#3b0764,#0f172a)", owners: [OWN_PALETTE.dawson, OWN_PALETTE.speedy, OWN_PALETTE.jkraken, OWN_PALETTE.chef], players: "1p", mine: true, tag: "roguelike arcade" },
-  { id: "ow", title: "Outer Wilds", category: "solo", art: "🪐", cover: "linear-gradient(135deg,#1e1b4b,#0c4a6e)", owners: [OWN_PALETTE.dawson, OWN_PALETTE.palm], players: "1p", mine: true, tag: "exploration" },
-  { id: "hk", title: "Hollow Knight", category: "solo", art: "🦋", cover: "linear-gradient(135deg,#1e1b4b,#0f172a)", owners: [OWN_PALETTE.dawson, OWN_PALETTE.lore, OWN_PALETTE.palm, OWN_PALETTE.speedy], players: "1p", mine: true, tag: "metroidvania" },
-  { id: "amongus", title: "Among Us", category: "party", art: "👽", cover: "linear-gradient(135deg,#831843,#0f172a)", owners: [OWN_PALETTE.jkraken, OWN_PALETTE.aloha, OWN_PALETTE.palm, OWN_PALETTE.chef, OWN_PALETTE.speedy], players: "4-10", mine: true, tag: "social deduction" },
-  { id: "itt", title: "It Takes Two", category: "co-op", art: "💞", cover: "linear-gradient(135deg,#581c87,#0c4a6e)", owners: [OWN_PALETTE.palm, OWN_PALETTE.dawson, OWN_PALETTE.chef, OWN_PALETTE.lore], players: "2p", mine: true, tag: "co-op platformer" },
-  { id: "oc2", title: "Overcooked! 2", category: "party", art: "🍳", cover: "linear-gradient(135deg,#7c2d12,#431407)", owners: [OWN_PALETTE.chef, OWN_PALETTE.dawson, OWN_PALETTE.palm, OWN_PALETTE.jkraken, OWN_PALETTE.speedy], players: "1-4", mine: true, tag: "co-op party" }
+const CATEGORY_TAG_HINTS: Array<{ category: LibCategory; tokens: string[] }> = [
+  { category: "co-op", tokens: ["co-op", "coop", "co op", "online co-op", "multiplayer"] },
+  { category: "horror", tokens: ["horror"] },
+  { category: "puzzle", tokens: ["puzzle"] },
+  { category: "party", tokens: ["party"] }
 ];
 
-type LibFilter = "all" | "mine" | "co-op" | "horror" | "puzzle" | "party" | "solo";
-type SortMode = "owned" | "title" | "recent";
+function categoryFor(game: CrewOwnedGame): LibCategory {
+  const haystack = [...game.tags, ...game.developers].map((value) => value.toLowerCase());
+  for (const hint of CATEGORY_TAG_HINTS) {
+    if (haystack.some((tag) => hint.tokens.some((token) => tag.includes(token)))) {
+      return hint.category;
+    }
+  }
+  return "solo";
+}
 
-const FILTERS: Array<{ id: LibFilter; label: string; count?: (entries: LibEntry[]) => number }> = [
-  { id: "all", label: "ALL" },
-  { id: "mine", label: "MINE", count: (e) => e.filter((x) => x.mine).length },
-  { id: "co-op", label: "CO-OP" },
-  { id: "horror", label: "HORROR" },
-  { id: "puzzle", label: "PUZZLE" },
-  { id: "party", label: "PARTY" },
-  { id: "solo", label: "SOLO" }
-];
+function pickArtFor(category: LibCategory): string {
+  switch (category) {
+    case "co-op":
+      return "🎯";
+    case "horror":
+      return "👻";
+    case "puzzle":
+      return "🧩";
+    case "party":
+      return "🎉";
+    default:
+      return "🎮";
+  }
+}
 
-export function LibraryPage({ onNavigate }: LibraryPageProps) {
+function pickCoverFor(category: LibCategory): string {
+  switch (category) {
+    case "co-op":
+      return "linear-gradient(135deg,#1e3a8a,#0c4a6e)";
+    case "horror":
+      return "linear-gradient(135deg,#0f172a,#020617)";
+    case "puzzle":
+      return "linear-gradient(135deg,#365314,#1a2e05)";
+    case "party":
+      return "linear-gradient(135deg,#7c2d12,#1c1917)";
+    default:
+      return "linear-gradient(135deg,#312e81,#1e1b4b)";
+  }
+}
+
+function ownerColor(seed: string): string {
+  const palette = ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15", "#f472b6"];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  return palette[Math.abs(hash) % palette.length];
+}
+
+function ownerInitials(name: string): string {
+  return (name || "??").trim().slice(0, 2).toUpperCase();
+}
+
+function playerCountLabel(maxPlayers: number): string {
+  if (maxPlayers <= 1) return "1p";
+  if (maxPlayers >= 8) return "8p+";
+  return `1-${maxPlayers}p`;
+}
+
+function tagLabel(game: CrewOwnedGame, category: LibCategory): string {
+  const firstTag = game.tags.find((tag) => tag.trim().length > 0);
+  if (firstTag) return firstTag.toLowerCase();
+  switch (category) {
+    case "co-op":
+      return "co-op";
+    case "horror":
+      return "horror co-op";
+    case "puzzle":
+      return "puzzle";
+    case "party":
+      return "party";
+    default:
+      return "solo";
+  }
+}
+
+export function LibraryPage({ crewGames, currentDiscordUserId, onNavigate }: LibraryPageProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<LibFilter>("all");
   const [sort, setSort] = useState<SortMode>("owned");
 
+  const enriched = useMemo(
+    () =>
+      crewGames.map((game) => {
+        const category = categoryFor(game);
+        const mine = currentDiscordUserId
+          ? game.owners.some((owner) => owner.discordUserId === currentDiscordUserId)
+          : false;
+        return { game, category, mine };
+      }),
+    [crewGames, currentDiscordUserId]
+  );
+
+  const mineCount = useMemo(() => enriched.filter((entry) => entry.mine).length, [enriched]);
+
+  const filters: Array<{ id: LibFilter; label: string; count?: number }> = [
+    { id: "all", label: "ALL", count: enriched.length },
+    { id: "mine", label: "MINE", count: mineCount },
+    { id: "co-op", label: "CO-OP" },
+    { id: "horror", label: "HORROR" },
+    { id: "puzzle", label: "PUZZLE" },
+    { id: "party", label: "PARTY" },
+    { id: "solo", label: "SOLO" }
+  ];
+
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase();
-    let out = LIBRARY.slice();
-    if (filter === "mine") out = out.filter((e) => e.mine);
-    else if (filter !== "all") out = out.filter((e) => e.category === filter);
-    if (query) out = out.filter((e) => e.title.toLowerCase().includes(query) || e.tag.includes(query));
-    if (sort === "owned") out.sort((a, b) => b.owners.length - a.owners.length || a.title.localeCompare(b.title));
-    else if (sort === "title") out.sort((a, b) => a.title.localeCompare(b.title));
+    let out = enriched.slice();
+    if (filter === "mine") out = out.filter((entry) => entry.mine);
+    else if (filter !== "all") out = out.filter((entry) => entry.category === filter);
+    if (query) {
+      out = out.filter(
+        (entry) =>
+          entry.game.name.toLowerCase().includes(query) ||
+          entry.game.tags.some((tag) => tag.toLowerCase().includes(query))
+      );
+    }
+    if (sort === "owned") {
+      out.sort((a, b) => b.game.ownerCount - a.game.ownerCount || a.game.name.localeCompare(b.game.name));
+    } else if (sort === "title") {
+      out.sort((a, b) => a.game.name.localeCompare(b.game.name));
+    } else if (sort === "session") {
+      out.sort(
+        (a, b) =>
+          (a.game.medianSessionMinutes || 0) - (b.game.medianSessionMinutes || 0) ||
+          a.game.name.localeCompare(b.game.name)
+      );
+    }
     return out;
-  }, [search, filter, sort]);
+  }, [enriched, search, filter, sort]);
+
+  const totalGames = crewGames.length;
+  const empty = totalGames === 0;
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -103,8 +170,9 @@ export function LibraryPage({ onNavigate }: LibraryPageProps) {
           Steam library
         </h1>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
-          All {LIBRARY.length} games shared across the crew, synced from Steam every 12 hours. Filter, search, jump
-          straight into planning a session.
+          {empty
+            ? "No crew Steam libraries synced yet. Link your Steam account from Profile to populate the shore."
+            : `All ${totalGames} games shared across the crew. Filter, search, jump straight into planning a session.`}
         </p>
         <button
           type="button"
@@ -130,7 +198,7 @@ export function LibraryPage({ onNavigate }: LibraryPageProps) {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={`Search ${LIBRARY.length} games…`}
+          placeholder={`Search ${totalGames || 0} games…`}
           style={{
             flex: "1 1 280px",
             minWidth: 280,
@@ -144,9 +212,8 @@ export function LibraryPage({ onNavigate }: LibraryPageProps) {
             outline: "none"
           }}
         />
-        {FILTERS.map((f) => {
+        {filters.map((f) => {
           const active = filter === f.id;
-          const count = f.count ? f.count(LIBRARY) : null;
           return (
             <button
               key={f.id}
@@ -166,7 +233,7 @@ export function LibraryPage({ onNavigate }: LibraryPageProps) {
               }}
             >
               {f.label}
-              {count !== null ? ` · ${count}` : ""}
+              {typeof f.count === "number" ? ` · ${f.count}` : ""}
             </button>
           );
         })}
@@ -185,15 +252,25 @@ export function LibraryPage({ onNavigate }: LibraryPageProps) {
         >
           <option value="owned">Most owned</option>
           <option value="title">Alphabetical</option>
-          <option value="recent">Recently played</option>
+          <option value="session">Shortest session</option>
         </select>
       </IslandCard>
 
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
         <HeaderRow />
-        {visible.length ? (
+        {empty ? (
+          <div style={{ padding: 22, fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
+            Crew library is empty so far. Sync a Steam account from Profile, then this list lights up.
+          </div>
+        ) : visible.length ? (
           visible.map((entry) => (
-            <LibRow key={entry.id} entry={entry} onPlan={() => onNavigate("games")} />
+            <LibRow
+              key={entry.game.appId}
+              game={entry.game}
+              category={entry.category}
+              mine={entry.mine}
+              onPlan={() => onNavigate("games")}
+            />
           ))
         ) : (
           <div style={{ padding: 22, fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
@@ -238,7 +315,22 @@ function Cell({ children }: { children?: ReactNode }) {
   return <div>{children}</div>;
 }
 
-function LibRow({ entry, onPlan }: { entry: LibEntry; onPlan: () => void }) {
+function LibRow({
+  game,
+  category,
+  mine,
+  onPlan
+}: {
+  game: CrewOwnedGame;
+  category: LibCategory;
+  mine: boolean;
+  onPlan: () => void;
+}) {
+  const cover = game.headerImageUrl
+    ? { backgroundImage: `url("${game.headerImageUrl}")`, backgroundSize: "cover", backgroundPosition: "center" }
+    : { background: pickCoverFor(category) };
+  const art = game.headerImageUrl ? "" : pickArtFor(category);
+
   return (
     <div
       style={{
@@ -255,19 +347,20 @@ function LibRow({ entry, onPlan }: { entry: LibEntry; onPlan: () => void }) {
           width: 60,
           height: 48,
           borderRadius: 6,
-          background: entry.cover,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 22
+          fontSize: 22,
+          color: "#fff",
+          ...cover
         }}
       >
-        {entry.art}
+        {art}
       </div>
       <div>
         <div style={{ fontSize: 14, fontWeight: 700 }}>
-          {entry.title}
-          {entry.mine ? (
+          {game.name}
+          {mine ? (
             <span
               className="island-mono"
               style={{
@@ -284,14 +377,16 @@ function LibRow({ entry, onPlan }: { entry: LibEntry; onPlan: () => void }) {
             </span>
           ) : null}
         </div>
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>{entry.tag}</div>
+        <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+          {tagLabel(game, category)}
+        </div>
       </div>
-      <OwnerStack owners={entry.owners} />
+      <OwnerStack owners={game.owners} />
       <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-        {entry.owners.length} own
+        {game.ownerCount} own
       </span>
       <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-        {entry.players}
+        {playerCountLabel(game.maxPlayers)}
       </span>
       <div style={{ display: "flex", gap: 6 }}>
         <button
@@ -334,30 +429,11 @@ function LibRow({ entry, onPlan }: { entry: LibEntry; onPlan: () => void }) {
   );
 }
 
-function OwnerStack({ owners }: { owners: Owner[] }) {
+function OwnerStack({ owners }: { owners: CrewOwner[] }) {
   return (
     <div style={{ display: "inline-flex", paddingLeft: 6 }}>
-      {owners.slice(0, 5).map((o, i) => (
-        <span
-          key={o.name + i}
-          title={o.name}
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: 999,
-            background: o.color,
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 800,
-            color: "#0f172a",
-            fontSize: 9,
-            border: `2px solid ${islandTheme.color.panelMutedBg}`,
-            marginLeft: -6
-          }}
-        >
-          {o.initials}
-        </span>
+      {owners.slice(0, 5).map((owner) => (
+        <OwnerBadge key={owner.discordUserId} owner={owner} />
       ))}
       {owners.length > 5 ? (
         <span
@@ -373,5 +449,42 @@ function OwnerStack({ owners }: { owners: Owner[] }) {
         </span>
       ) : null}
     </div>
+  );
+}
+
+function OwnerBadge({ owner }: { owner: CrewOwner }) {
+  const ringStyle: React.CSSProperties = {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    border: `2px solid ${islandTheme.color.panelMutedBg}`,
+    marginLeft: -6
+  };
+  if (owner.avatarUrl) {
+    return (
+      <img
+        src={owner.avatarUrl}
+        alt={owner.displayName}
+        title={owner.displayName}
+        style={{ ...ringStyle, objectFit: "cover" }}
+      />
+    );
+  }
+  return (
+    <span
+      title={owner.displayName}
+      style={{
+        ...ringStyle,
+        background: ownerColor(owner.discordUserId || owner.displayName),
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 800,
+        color: "#0f172a",
+        fontSize: 9
+      }}
+    >
+      {ownerInitials(owner.displayName)}
+    </span>
   );
 }

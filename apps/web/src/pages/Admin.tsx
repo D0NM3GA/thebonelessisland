@@ -1,10 +1,11 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { IslandButton, IslandCard, islandInputStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { Recommendation } from "../types.js";
+import type { NewsCard, Recommendation, ServerSetting } from "../types.js";
 
 type AdminSection =
   | "hub"
+  | "server-config"
   | "news"
   | "recommendations"
   | "data-sync"
@@ -14,6 +15,14 @@ type AdminSection =
   | "tournaments"
   | "library"
   | "audit";
+
+type NewsCardInput = {
+  title: string;
+  body: string;
+  icon?: string;
+  tag?: string | null;
+  sourceUrl?: string | null;
+};
 
 type AdminPageProps = {
   selectedMemberCount: number;
@@ -25,18 +34,38 @@ type AdminPageProps = {
   onNewsSourcesChange: (value: string) => void;
   onSaveNewsControls: () => void;
   profileJson: string;
+  newsCards: NewsCard[];
+  onCreateNewsCard: (input: NewsCardInput) => void;
+  onUpdateNewsCard: (id: string, input: Partial<NewsCardInput>) => void;
+  onArchiveNewsCard: (id: string) => void;
+  serverSettings: ServerSetting[] | null;
+  onLoadServerSettings: () => void;
+  onUpdateServerSetting: (key: string, value: string) => void;
 };
 
 export function AdminPage(props: AdminPageProps) {
   const [section, setSection] = useState<AdminSection>("hub");
 
+  const handleSelectSection = (s: AdminSection) => {
+    setSection(s);
+    if (s === "server-config" && props.serverSettings === null) {
+      props.onLoadServerSettings();
+    }
+  };
+
   if (section === "hub") {
-    return <AdminHub onSelect={setSection} />;
+    return <AdminHub onSelect={handleSelectSection} />;
   }
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <SubpageHeader section={section} onBack={() => setSection("hub")} />
+      {section === "server-config" ? (
+        <ServerConfigSubpage
+          settings={props.serverSettings}
+          onUpdate={props.onUpdateServerSetting}
+        />
+      ) : null}
       {section === "news" ? <NewsCurationSubpage {...props} /> : null}
       {section === "recommendations" ? <RecommendationsSubpage {...props} /> : null}
       {section === "data-sync" ? <DataSyncSubpage /> : null}
@@ -59,6 +88,7 @@ type AdminTile = {
 };
 
 const ADMIN_TILES: AdminTile[] = [
+  { id: "server-config", title: "Server Configuration", blurb: "Guild ID, admin role, display name. Switch servers without touching .env.", icon: "⚙️", accent: "#6366f1" },
   { id: "news", title: "News Curation", blurb: "Filters, auto-approve rules, approval queue.", icon: "📰", accent: "#0ea5e9" },
   { id: "recommendations", title: "Recommendation Tester", blurb: "Member chips, weights, ranked results.", icon: "🎯", accent: "#22d3ee" },
   { id: "data-sync", title: "Data Sync", blurb: "Connector health + live log.", icon: "🔄", accent: "#86efac" },
@@ -228,105 +258,233 @@ function SubpageHeader({ section, onBack }: { section: AdminSection; onBack: () 
 }
 
 function NewsCurationSubpage({
-  newsKeywords,
-  onNewsKeywordsChange,
-  newsSources,
-  onNewsSourcesChange,
-  onSaveNewsControls
+  newsCards,
+  onCreateNewsCard,
+  onUpdateNewsCard,
+  onArchiveNewsCard
 }: AdminPageProps) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <IslandCard style={{ padding: 16 }}>
-        <SubsectionTitle>Filters</SubsectionTitle>
-        <Field label="Keywords / genres / titles">
-          <input
-            value={newsKeywords}
-            onChange={(e) => onNewsKeywordsChange(e.target.value)}
-            style={{ ...islandInputStyle, width: "100%" }}
-          />
-        </Field>
-        <Field label="Approved sources">
-          <input
-            value={newsSources}
-            onChange={(e) => onNewsSourcesChange(e.target.value)}
-            style={{ ...islandInputStyle, width: "100%" }}
-          />
-        </Field>
-        <IslandButton variant="primary" onClick={onSaveNewsControls} style={{ marginTop: 8 }}>
-          Save filters
-        </IslandButton>
-      </IslandCard>
-
-      <IslandCard style={{ padding: 16 }}>
-        <SubsectionTitle>Auto-approve rules</SubsectionTitle>
-        <RuleRow label="Steam News for crew-owned games" enabled />
-        <RuleRow label="PC Gamer · curated co-op tag" enabled />
-        <RuleRow label="IGN · all" enabled={false} />
-        <RuleRow label="Reddit · r/PatchNotes" enabled />
+        <SubsectionTitle>New drift log card</SubsectionTitle>
+        <p style={{ margin: "4px 0 12px", fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Posts here show up on the Home page Drift Log for the whole crew. Keep it short, in-island, and link the source if it's a patch note or article.
+        </p>
+        <NewsCardEditor
+          mode="create"
+          onSubmit={(input) => onCreateNewsCard(input)}
+        />
       </IslandCard>
 
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
-        <SubsectionTitle style={{ padding: "14px 16px 0" }}>Approval queue · 4 items</SubsectionTitle>
-        {[
-          { title: "Stardew 1.6.9 — performance fixes", source: "Steam News", ago: "12m" },
-          { title: "Risk of Rain Returns DLC roadmap", source: "Reddit", ago: "2h" },
-          { title: "Helldivers Major Order recap", source: "PC Gamer", ago: "5h" },
-          { title: "Lethal V60 reaction roundup", source: "IGN", ago: "1d" }
-        ].map((item, i) => (
-          <ApprovalRow key={item.title} entry={item} firstRow={i === 0} />
-        ))}
+        <SubsectionTitle style={{ padding: "14px 16px 0" }}>
+          Published cards · {newsCards.length}
+        </SubsectionTitle>
+        {newsCards.length === 0 ? (
+          <p
+            style={{
+              margin: 0,
+              padding: "10px 16px 16px",
+              fontSize: 13,
+              color: islandTheme.color.textMuted
+            }}
+          >
+            No drift log cards yet. Post the first one above.
+          </p>
+        ) : (
+          newsCards.map((card, i) => (
+            <NewsCardRow
+              key={card.id}
+              card={card}
+              firstRow={i === 0}
+              onUpdate={(input) => onUpdateNewsCard(card.id, input)}
+              onArchive={() => onArchiveNewsCard(card.id)}
+            />
+          ))
+        )}
       </IslandCard>
     </div>
   );
 }
 
-function RuleRow({ label, enabled }: { label: string; enabled: boolean }) {
+function NewsCardEditor({
+  mode,
+  initial,
+  onSubmit,
+  onCancel
+}: {
+  mode: "create" | "edit";
+  initial?: { title: string; body: string; icon: string; tag: string | null; sourceUrl: string | null };
+  onSubmit: (input: NewsCardInput) => void;
+  onCancel?: () => void;
+}) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [icon, setIcon] = useState(initial?.icon ?? "🌊");
+  const [tag, setTag] = useState(initial?.tag ?? "");
+  const [sourceUrl, setSourceUrl] = useState(initial?.sourceUrl ?? "");
+
+  const submit = () => {
+    const trimmedTitle = title.trim();
+    const trimmedBody = body.trim();
+    if (!trimmedTitle || !trimmedBody) return;
+    onSubmit({
+      title: trimmedTitle,
+      body: trimmedBody,
+      icon: icon.trim() || "🌊",
+      tag: tag.trim() ? tag.trim() : null,
+      sourceUrl: sourceUrl.trim() ? sourceUrl.trim() : null
+    });
+    if (mode === "create") {
+      setTitle("");
+      setBody("");
+      setIcon("🌊");
+      setTag("");
+      setSourceUrl("");
+    }
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "8px 0",
-        borderTop: `1px solid ${islandTheme.color.cardBorder}`
-      }}
-    >
-      <span style={{ fontSize: 13 }}>{label}</span>
-      <Toggle on={enabled} />
+    <div style={{ display: "grid", gap: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "72px 1fr", gap: 8 }}>
+        <Field label="Icon">
+          <input
+            value={icon}
+            maxLength={4}
+            onChange={(e) => setIcon(e.target.value)}
+            style={{ ...islandInputStyle, width: "100%", textAlign: "center", fontSize: 18 }}
+          />
+        </Field>
+        <Field label="Headline">
+          <input
+            value={title}
+            placeholder="Tide check: Stardew 1.6.9 lands"
+            onChange={(e) => setTitle(e.target.value)}
+            style={{ ...islandInputStyle, width: "100%" }}
+          />
+        </Field>
+      </div>
+      <Field label="Body">
+        <textarea
+          value={body}
+          rows={3}
+          placeholder="One short paragraph. Keep it island-flavored — what does the crew need to know?"
+          onChange={(e) => setBody(e.target.value)}
+          style={{ ...islandInputStyle, width: "100%", resize: "vertical", fontFamily: "inherit" }}
+        />
+      </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <Field label="Tag (optional)">
+          <input
+            value={tag}
+            placeholder="patch · sale · cozy"
+            onChange={(e) => setTag(e.target.value)}
+            style={{ ...islandInputStyle, width: "100%" }}
+          />
+        </Field>
+        <Field label="Source URL (optional)">
+          <input
+            value={sourceUrl}
+            placeholder="https://"
+            onChange={(e) => setSourceUrl(e.target.value)}
+            style={{ ...islandInputStyle, width: "100%" }}
+          />
+        </Field>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <IslandButton variant="primary" onClick={submit}>
+          {mode === "create" ? "Post to drift log" : "Save changes"}
+        </IslandButton>
+        {onCancel ? (
+          <IslandButton variant="secondary" onClick={onCancel}>
+            Cancel
+          </IslandButton>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function ApprovalRow({
-  entry,
-  firstRow
+function NewsCardRow({
+  card,
+  firstRow,
+  onUpdate,
+  onArchive
 }: {
-  entry: { title: string; source: string; ago: string };
+  card: NewsCard;
   firstRow: boolean;
+  onUpdate: (input: NewsCardInput) => void;
+  onArchive: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "1fr auto auto",
-        gap: 12,
         padding: "12px 16px",
-        alignItems: "center",
-        borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`
+        borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
+        display: "grid",
+        gap: 8
       }}
     >
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>{entry.title}</div>
-        <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
-          {entry.source} · {entry.ago} ago
-        </div>
-      </div>
-      <button type="button" style={smallBtn(islandTheme.color.primary, "#fff")}>
-        Approve
-      </button>
-      <button type="button" style={smallBtn("transparent", islandTheme.color.textMuted, true)}>
-        Skip
-      </button>
+      {editing ? (
+        <NewsCardEditor
+          mode="edit"
+          initial={{
+            title: card.title,
+            body: card.body,
+            icon: card.icon,
+            tag: card.tag,
+            sourceUrl: card.sourceUrl
+          }}
+          onSubmit={(input) => {
+            onUpdate(input);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "44px 1fr auto", gap: 12, alignItems: "start" }}>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                background: islandTheme.color.panelMutedBg,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 22
+              }}
+            >
+              {card.icon}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{card.title}</div>
+              <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, marginTop: 4, lineHeight: 1.5 }}>
+                {card.body}
+              </div>
+              <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 6 }}>
+                {card.tag ?? "drift log"} · posted {new Date(card.publishedAt).toLocaleDateString()}
+                {card.createdBy ? ` · by ${card.createdBy.displayName}` : ""}
+                {card.sourceUrl ? " · linked" : ""}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" style={smallBtn(islandTheme.color.primary, "#fff")} onClick={() => setEditing(true)}>
+                Edit
+              </button>
+              <button
+                type="button"
+                style={smallBtn("transparent", islandTheme.color.dangerText, true, islandTheme.color.danger)}
+                onClick={onArchive}
+              >
+                Archive
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -795,6 +953,226 @@ function LibrarySubpage() {
   );
 }
 
+// ── Server Configuration ──────────────────────────────────────────────────────
+
+const SERVER_CONFIG_META: Record<string, { hint: string; sensitive?: boolean; restart?: boolean }> = {
+  discord_guild_id: {
+    hint: 'Right-click your server in Discord › "Copy Server ID" (Developer Mode must be on).',
+    restart: false
+  },
+  guild_display_name: {
+    hint: "Shown in the admin panel header only. No effect on API behaviour."
+  },
+  parent_role_name: {
+    hint: 'The exact role name from your Discord server that grants admin access here.',
+    restart: false
+  }
+};
+
+function ServerConfigSubpage({
+  settings,
+  onUpdate
+}: {
+  settings: ServerSetting[] | null;
+  onUpdate: (key: string, value: string) => void;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries((settings ?? []).map((s) => [s.key, s.value]))
+  );
+  const [saved, setSaved] = useState<Record<string, boolean>>({});
+
+  if (settings === null) {
+    return (
+      <div style={{ display: "grid", gap: 14 }}>
+        {[0, 1, 2].map((i) => (
+          <IslandCard key={i} style={{ padding: "16px 18px" }}>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div
+                style={{
+                  height: 14,
+                  width: `${55 + i * 15}%`,
+                  borderRadius: 6,
+                  background: islandTheme.color.panelMutedBg,
+                  animation: "settingsSkelPulse 1.4s ease-in-out infinite"
+                }}
+              />
+              <div
+                style={{
+                  height: 36,
+                  borderRadius: 8,
+                  background: islandTheme.color.panelMutedBg,
+                  animation: "settingsSkelPulse 1.4s ease-in-out infinite",
+                  animationDelay: `${i * 0.15}s`
+                }}
+              />
+            </div>
+          </IslandCard>
+        ))}
+        <style>{`
+          @keyframes settingsSkelPulse {
+            0%, 100% { opacity: 0.45; }
+            50% { opacity: 0.9; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  if (settings.length === 0) {
+    return (
+      <IslandCard style={{ padding: 20 }}>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textMuted }}>
+          No configurable settings found. Run <code>npm run db:migrate</code> to apply migration 012.
+        </p>
+      </IslandCard>
+    );
+  }
+
+  const handleSave = (key: string) => {
+    onUpdate(key, drafts[key] ?? "");
+    setSaved((prev) => ({ ...prev, [key]: true }));
+    setTimeout(() => setSaved((prev) => ({ ...prev, [key]: false })), 2200);
+  };
+
+  const currentGuildId = settings.find((s) => s.key === "discord_guild_id");
+  const displayName = settings.find((s) => s.key === "guild_display_name");
+  const serverLabel = displayName?.value || currentGuildId?.value || "Not configured";
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      {/* Active server banner */}
+      <IslandCard
+        style={{
+          padding: "14px 18px",
+          background: `linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, ${islandTheme.color.panelBg} 100%)`,
+          border: `1px solid rgba(99, 102, 241, 0.35)`
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 28 }}>⚙️</span>
+          <div>
+            <div className="island-mono" style={{ fontSize: 10, color: "#818cf8", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              Currently pointed at
+            </div>
+            <div className="island-display" style={{ fontWeight: 800, fontSize: 18 }}>
+              {serverLabel}
+            </div>
+            {currentGuildId?.envDefault && !currentGuildId?.value ? (
+              <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+                Using env fallback: {currentGuildId.envDefault}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </IslandCard>
+
+      {/* Warning */}
+      <IslandCard
+        style={{
+          padding: "12px 16px",
+          background: "rgba(245, 158, 11, 0.1)",
+          border: "1px solid rgba(245, 158, 11, 0.35)"
+        }}
+      >
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <span>⚠️</span>
+          <p style={{ margin: 0, fontSize: 13, color: "#fcd34d", lineHeight: 1.5 }}>
+            Changing the <strong>Guild ID</strong> takes effect immediately on the next request —
+            all member sync, role checks, and crew data will point to the new server.
+            Run a member sync after switching to populate the new guild's roster.
+          </p>
+        </div>
+      </IslandCard>
+
+      {/* Setting rows */}
+      <div style={{ display: "grid", gap: 14 }}>
+        {settings.map((setting) => {
+          const meta = SERVER_CONFIG_META[setting.key];
+          const draft = drafts[setting.key] ?? setting.value;
+          const isDirty = draft !== setting.value;
+          const isSaved = saved[setting.key];
+
+          return (
+            <IslandCard key={setting.key} style={{ padding: "16px 18px" }}>
+              <div style={{ display: "grid", gap: 10 }}>
+                {/* Label + key */}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14 }}>{setting.label}</span>
+                  <code
+                    className="island-mono"
+                    style={{
+                      fontSize: 10,
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      background: islandTheme.color.panelMutedBg,
+                      color: islandTheme.color.textMuted
+                    }}
+                  >
+                    {setting.key}
+                  </code>
+                </div>
+
+                {/* Description */}
+                {setting.description ? (
+                  <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textMuted, lineHeight: 1.5 }}>
+                    {setting.description}
+                  </p>
+                ) : null}
+
+                {/* Env default notice */}
+                {setting.envDefault ? (
+                  <div
+                    className="island-mono"
+                    style={{
+                      fontSize: 11,
+                      color: islandTheme.color.textMuted,
+                      padding: "6px 10px",
+                      borderRadius: 7,
+                      background: islandTheme.color.panelMutedBg,
+                      border: `1px solid ${islandTheme.color.cardBorder}`
+                    }}
+                  >
+                    <span style={{ opacity: 0.6 }}>env fallback: </span>
+                    <span>{setting.envDefault}</span>
+                  </div>
+                ) : null}
+
+                {/* Hint */}
+                {meta?.hint ? (
+                  <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textMuted, fontStyle: "italic", lineHeight: 1.5 }}>
+                    💡 {meta.hint}
+                  </p>
+                ) : null}
+
+                {/* Input + save */}
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <input
+                    value={draft}
+                    onChange={(e) =>
+                      setDrafts((prev) => ({ ...prev, [setting.key]: e.target.value }))
+                    }
+                    placeholder={setting.envDefault || `Enter ${setting.label.toLowerCase()}…`}
+                    style={{ ...islandInputStyle, flex: 1 }}
+                    spellCheck={false}
+                  />
+                  <IslandButton
+                    variant={isSaved ? "secondary" : "primary"}
+                    disabled={!isDirty && !isSaved}
+                    onClick={() => handleSave(setting.key)}
+                    style={{ flexShrink: 0, minWidth: 80 }}
+                  >
+                    {isSaved ? "✓ Saved" : "Save"}
+                  </IslandButton>
+                </div>
+              </div>
+            </IslandCard>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AuditSubpage({ profileJson }: { profileJson: string }) {
   const events = [
     { who: "donmega", what: "promoted", target: "newGuest → Crew", ago: "2h" },
@@ -928,6 +1306,23 @@ function Slider({ label, value }: { label: string; value: number }) {
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function RuleRow({ label, enabled }: { label: string; enabled: boolean }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "8px 0",
+        borderTop: `1px solid ${islandTheme.color.cardBorder}`
+      }}
+    >
+      <span style={{ fontSize: 13 }}>{label}</span>
+      <Toggle on={enabled} />
     </div>
   );
 }

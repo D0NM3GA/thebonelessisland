@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, apiFetch } from "./api/client.js";
 import { GAME_NIGHTS_TILE_BG_URL, getGameNightBanner } from "./assets.js";
 import { AchievementsPage } from "./pages/Achievements.js";
@@ -7,23 +7,39 @@ import { CommunityPage } from "./pages/Community.js";
 import { GamesPage } from "./pages/Games.js";
 import { HomePage } from "./pages/Home.js";
 import { LibraryPage } from "./pages/Library.js";
+import { LoginScreen } from "./pages/LoginScreen.js";
 import { ProfilePage } from "./pages/Profile.js";
 import { ToastHost, useToastsFromStatus } from "./system/toast.js";
 import { islandCopy, islandTheme } from "./theme.js";
 import { Topbar } from "./components/Topbar.js";
+import {
+  isSteamOnboardingSkipped,
+  setSteamOnboardingSkipped,
+  SteamOnboardingModal
+} from "./components/SteamOnboarding.js";
 import type {
+  ActivityEvent,
+  CrewOwnedGame,
+  CrewWishlistGame,
+  FeaturedRecommendation,
+  FeaturedRecommendationResponse,
+  GameNewsItem,
   GameNight,
   GameNightAttendee,
   GuildMember,
   MeProfile,
+  NewsCard,
   OwnedGameLite,
   PageId,
-  Recommendation
+  Recommendation,
+  ServerSetting
 } from "./types.js";
 
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [loginExiting, setLoginExiting] = useState(false);
+  const prevAuth = useRef<boolean | null>(null);
   const [page, setPage] = useState<PageId>("home");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [results, setResults] = useState<Recommendation[]>([]);
@@ -45,6 +61,15 @@ export function App() {
   const [ownedGames, setOwnedGames] = useState<OwnedGameLite[]>([]);
   const [ownedGameSearch, setOwnedGameSearch] = useState("");
   const [excludedOwnedGameAppIds, setExcludedOwnedGameAppIds] = useState<number[]>([]);
+  const [crewGames, setCrewGames] = useState<CrewOwnedGame[]>([]);
+  const [crewWishlist, setCrewWishlist] = useState<CrewWishlistGame[]>([]);
+  const [featuredRecommendation, setFeaturedRecommendation] = useState<FeaturedRecommendation | null>(null);
+  const [composerRecommendations, setComposerRecommendations] = useState<Recommendation[]>([]);
+  const [gameNews, setGameNews] = useState<GameNewsItem[]>([]);
+  const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
+  const [newsCards, setNewsCards] = useState<NewsCard[]>([]);
+  const [serverSettings, setServerSettings] = useState<ServerSetting[] | null>(null);
+  const [steamOnboardingOpen, setSteamOnboardingOpen] = useState(false);
   const { toasts, dismiss: dismissToast } = useToastsFromStatus(status);
 
   const filteredGuildMembers = useMemo(() => {
@@ -128,6 +153,51 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const steamFlag = params.get("steam");
+    if (!steamFlag) return;
+
+    if (steamFlag === "linked") {
+      setStatus("Steam linked. Pulling your library...");
+      void (async () => {
+        await loadProfile(true);
+        await syncSteamGames(false);
+      })();
+    } else if (steamFlag === "error") {
+      const reason = params.get("steamReason");
+      setStatus(
+        reason === "cancelled"
+          ? "Steam sign-in was cancelled."
+          : reason === "verification_failed"
+            ? "Steam couldn't verify the sign-in. Please try again."
+            : reason === "not_authenticated"
+              ? "Sign in with Discord first, then link Steam."
+              : "Steam sign-in failed. Please try again."
+      );
+    }
+
+    params.delete("steam");
+    params.delete("steamReason");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated !== true) {
+      setSteamOnboardingOpen(false);
+      return;
+    }
+    if (!profileData) return;
+    if (profileData.steamId64) {
+      setSteamOnboardingOpen(false);
+      return;
+    }
+    if (isSteamOnboardingSkipped(profileData.discordUserId)) return;
+    setSteamOnboardingOpen(true);
+  }, [isAuthenticated, profileData]);
+
+  useEffect(() => {
     let isCancelled = false;
 
     const bootstrapAuth = async () => {
@@ -135,7 +205,17 @@ export function App() {
       if (isCancelled) return;
       setIsAuthenticated(authed);
       if (authed) {
-        await syncGuildMembers(true);
+        // Fire all independent fetches in parallel. syncGuildMembers (Discord POST)
+        // is handled by the background-sync effect that triggers immediately on auth.
+        await Promise.all([
+          loadGuildMembers(true),
+          loadCrewGames(true),
+          loadCrewWishlist(true),
+          loadFeaturedRecommendation(true),
+          loadGameNews(true),
+          loadActivity(true),
+          loadNewsCards(true),
+        ]);
       }
     };
 
@@ -145,6 +225,34 @@ export function App() {
       isCancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated !== true) return;
+
+    let cancelled = false;
+    const refresh = async () => {
+      if (cancelled || document.hidden) return;
+      await Promise.all([
+        loadFeaturedRecommendation(true),
+        loadActivity(true),
+        loadGameNews(true),
+      ]);
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refresh();
+    }, 5 * 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated !== true || page !== "games") return;
+    void loadComposerRecommendations(selectedMemberIds, true);
+  }, [isAuthenticated, page, selectedMemberIds]);
 
   useEffect(() => {
     if (!isAdmin && page === "admin") {
@@ -405,17 +513,275 @@ export function App() {
         method: "POST",
         credentials: "include"
       });
-      const data = (await response.json().catch(() => null)) as { syncedGames?: number; error?: string } | null;
+      const data = (await response.json().catch(() => null)) as
+        | {
+            syncedGames?: number;
+            error?: string;
+            wishlist?: { ok?: boolean; syncedItems?: number; reason?: string };
+          }
+        | null;
       if (!response.ok) {
         throw new Error(data?.error ?? `Steam sync failed (${response.status})`);
       }
-      await loadOwnedGames(true);
+      await Promise.all([
+        loadOwnedGames(true),
+        loadCrewGames(true),
+        loadCrewWishlist(true),
+        loadFeaturedRecommendation(true),
+        loadGameNews(true),
+        loadActivity(true),
+      ]);
       if (!silent) {
-        setStatus(`Steam sync complete (${data?.syncedGames ?? 0} game(s))`);
+        const wishlistInfo = data?.wishlist;
+        const wishlistDetails =
+          wishlistInfo?.ok === false
+            ? ` Wishlist sync skipped: ${wishlistInfo.reason ?? "unavailable"}.`
+            : wishlistInfo?.ok
+              ? ` Wishlist: ${wishlistInfo.syncedItems ?? 0}.`
+              : "";
+        setStatus(`Steam sync complete (${data?.syncedGames ?? 0} game(s)).${wishlistDetails}`);
       }
     } catch (error) {
       if (!silent) {
         setStatus(error instanceof Error ? error.message : "Steam sync failed");
+      }
+    }
+  }
+
+  async function loadCrewGames(silent = false) {
+    if (!silent) {
+      setStatus("Loading crew library...");
+    }
+    try {
+      const response = await apiFetch("/steam/crew-games", { credentials: "include" });
+      const data = (await response.json().catch(() => null)) as { games?: CrewOwnedGame[]; error?: string } | null;
+      if (!response.ok) {
+        throw new Error(data?.error ?? `Crew library load failed (${response.status})`);
+      }
+      setCrewGames(data?.games ?? []);
+      if (!silent) {
+        setStatus(`Loaded ${data?.games?.length ?? 0} crew game(s)`);
+      }
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Crew library load failed");
+      }
+    }
+  }
+
+  async function loadCrewWishlist(silent = true) {
+    try {
+      const response = await apiFetch("/steam/crew-wishlist", { credentials: "include" });
+      const data = (await response.json().catch(() => null)) as { games?: CrewWishlistGame[]; error?: string } | null;
+      if (!response.ok) {
+        if (!silent) {
+          setStatus(data?.error ?? `Crew wishlist load failed (${response.status})`);
+        }
+        return;
+      }
+      setCrewWishlist(data?.games ?? []);
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Crew wishlist load failed");
+      }
+    }
+  }
+
+  async function loadFeaturedRecommendation(silent = true) {
+    try {
+      const response = await apiFetch("/recommendations/featured", { credentials: "include" });
+      if (!response.ok) {
+        if (!silent) {
+          setStatus(`Featured pick load failed (${response.status})`);
+        }
+        return;
+      }
+      const data = (await response.json().catch(() => null)) as FeaturedRecommendationResponse | null;
+      setFeaturedRecommendation(data?.featured ?? null);
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Featured pick load failed");
+      }
+    }
+  }
+
+  async function loadGameNews(silent = true) {
+    try {
+      const response = await apiFetch("/games/news", { credentials: "include" });
+      const data = (await response.json().catch(() => null)) as { news?: GameNewsItem[]; error?: string } | null;
+      if (!response.ok) {
+        if (!silent) {
+          setStatus(data?.error ?? `Game news load failed (${response.status})`);
+        }
+        return;
+      }
+      setGameNews(data?.news ?? []);
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Game news load failed");
+      }
+    }
+  }
+
+  async function loadActivity(silent = true) {
+    try {
+      const response = await apiFetch("/activity?limit=25", { credentials: "include" });
+      const data = (await response.json().catch(() => null)) as { events?: ActivityEvent[]; error?: string } | null;
+      if (!response.ok) {
+        if (!silent) {
+          setStatus(data?.error ?? `Activity feed load failed (${response.status})`);
+        }
+        return;
+      }
+      setActivityEvents(data?.events ?? []);
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Activity feed load failed");
+      }
+    }
+  }
+
+  async function loadNewsCards(silent = true) {
+    try {
+      const response = await apiFetch("/news-cards", { credentials: "include" });
+      const data = (await response.json().catch(() => null)) as { cards?: NewsCard[]; error?: string } | null;
+      if (!response.ok) {
+        if (!silent) {
+          setStatus(data?.error ?? `Drift log load failed (${response.status})`);
+        }
+        return;
+      }
+      setNewsCards(data?.cards ?? []);
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Drift log load failed");
+      }
+    }
+  }
+
+  async function loadServerSettings() {
+    try {
+      const response = await apiFetch("/settings", { credentials: "include" });
+      if (!response.ok) return;
+      const data = (await response.json().catch(() => null)) as { settings?: ServerSetting[] } | null;
+      setServerSettings(data?.settings ?? []);
+    } catch {
+      // non-admin users will get 401/403 — silently ignore
+    }
+  }
+
+  async function updateServerSetting(key: string, value: string) {
+    setStatus("Saving setting…");
+    try {
+      const response = await apiFetch("/settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key, value })
+      });
+      const data = (await response.json().catch(() => null)) as { settings?: ServerSetting[]; error?: string } | null;
+      if (!response.ok) throw new Error(data?.error ?? `Save failed (${response.status})`);
+      setServerSettings(data?.settings ?? []);
+      setStatus("Setting saved");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Save failed");
+    }
+  }
+
+  async function createNewsCard(input: {
+    title: string;
+    body: string;
+    icon?: string;
+    tag?: string | null;
+    sourceUrl?: string | null;
+  }) {
+    setStatus("Posting drift log card...");
+    try {
+      const response = await apiFetch("/news-cards", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input)
+      });
+      const data = (await response.json().catch(() => null)) as { card?: NewsCard; error?: string } | null;
+      if (!response.ok || !data?.card) {
+        throw new Error(data?.error ?? `Drift log post failed (${response.status})`);
+      }
+      await loadNewsCards(true);
+      setStatus(`Posted "${data.card.title}"`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Drift log post failed");
+    }
+  }
+
+  async function updateNewsCard(
+    id: string,
+    input: { title?: string; body?: string; icon?: string; tag?: string | null; sourceUrl?: string | null }
+  ) {
+    setStatus("Updating drift log card...");
+    try {
+      const response = await apiFetch(`/news-cards/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input)
+      });
+      const data = (await response.json().catch(() => null)) as { card?: NewsCard; error?: string } | null;
+      if (!response.ok || !data?.card) {
+        throw new Error(data?.error ?? `Drift log update failed (${response.status})`);
+      }
+      await loadNewsCards(true);
+      setStatus(`Updated "${data.card.title}"`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Drift log update failed");
+    }
+  }
+
+  async function archiveNewsCard(id: string) {
+    setStatus("Archiving drift log card...");
+    try {
+      const response = await apiFetch(`/news-cards/${id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? `Drift log archive failed (${response.status})`);
+      }
+      await loadNewsCards(true);
+      setStatus("Archived drift log card");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Drift log archive failed");
+    }
+  }
+
+  async function loadComposerRecommendations(memberIds: string[], silent = true) {
+    if (memberIds.length === 0) {
+      setComposerRecommendations([]);
+      return;
+    }
+    try {
+      const response = await apiFetch("/recommendations/what-can-we-play", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          memberIds,
+          sessionLength: "any",
+          maxGroupSize: memberIds.length
+        })
+      });
+      if (!response.ok) {
+        if (!silent) {
+          setStatus(`Composer recommendation load failed (${response.status})`);
+        }
+        return;
+      }
+      const data = (await response.json()) as { recommendations: Recommendation[] };
+      setComposerRecommendations(data.recommendations);
+    } catch (error) {
+      if (!silent) {
+        setStatus(error instanceof Error ? error.message : "Composer recommendation load failed");
       }
     }
   }
@@ -461,8 +827,11 @@ export function App() {
       if (!response.ok) {
         throw new Error(data?.details ?? data?.error ?? `Member sync failed (${response.status})`);
       }
-      await loadGuildMembers(true);
-      await loadProfile(true);
+      await Promise.all([
+        loadGuildMembers(true),
+        loadProfile(true),
+        loadFeaturedRecommendation(true),
+      ]);
       if (!silent) {
         const voiceInfo = data?.voice;
         const voiceDetails =
@@ -678,73 +1047,39 @@ export function App() {
     setStatus("Saved placeholder news curation settings (UI only for now)");
   }
 
-  if (isAuthenticated !== true) {
-    const pageTitle = isAuthenticated === null ? "Checking session..." : "Welcome to The Boneless Island";
-    const pageBody =
-      isAuthenticated === null
-        ? "Hang tight while we check your Discord session."
-        : "Sign in with Discord to access the community tools and game night planner.";
+  // Trigger palm-exit animation whenever isAuthenticated transitions to true
+  useEffect(() => {
+    if (prevAuth.current !== true && isAuthenticated === true) {
+      setLoginExiting(true);
+      const t = setTimeout(() => setLoginExiting(false), 780);
+      return () => clearTimeout(t);
+    }
+    prevAuth.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  if (isAuthenticated !== true || loginExiting) {
     return (
-      <main
-        style={{
-          fontFamily: "Inter, Segoe UI, sans-serif",
-          maxWidth: islandTheme.layout.authMaxWidth,
-          margin: "2rem auto",
-          color: islandTheme.color.textPrimary,
-          backgroundColor: islandTheme.color.appBg,
-          backdropFilter: islandTheme.glass.blurStrong,
-          WebkitBackdropFilter: islandTheme.glass.blurStrong,
-          padding: islandTheme.spacing.pagePaddingWide,
-          borderRadius: islandTheme.radius.surface
-        }}
-      >
-        <section
-          style={{
-            background: islandTheme.color.panelBg,
-            backdropFilter: islandTheme.glass.blur,
-            WebkitBackdropFilter: islandTheme.glass.blur,
-            border: `1px solid ${islandTheme.color.cardBorder}`,
-            borderRadius: islandTheme.radius.card,
-            padding: islandTheme.spacing.pagePaddingWide
-          }}
-        >
-          <h1 style={{ marginTop: 0, marginBottom: 10 }}>{pageTitle}</h1>
-          <p style={{ marginTop: 0, opacity: 0.95, ...readableProseStyle }}>{pageBody}</p>
-          {authError ? (
-            <p
-              style={{
-                border: `1px solid ${islandTheme.color.danger}`,
-                background: islandTheme.color.dangerSurface,
-                color: islandTheme.color.dangerText,
-                borderRadius: islandTheme.radius.control,
-                padding: "0.65rem 0.7rem"
-              }}
-            >
-              {authError}
-            </p>
-          ) : null}
-          {isAuthenticated === false ? (
-            <a
-              href={`${API_BASE_URL}/auth/discord/login`}
-              style={{
-                display: "inline-block",
-                marginTop: 4,
-                borderRadius: islandTheme.radius.control,
-                border: `1px solid ${islandTheme.color.primary}`,
-                background: islandTheme.color.primary,
-                color: islandTheme.color.primaryText,
-                padding: "0.55rem 0.9rem",
-                textDecoration: "none",
-                fontWeight: 600
-              }}
-            >
-              Login with Discord
-            </a>
-          ) : null}
-        </section>
-      </main>
+      <LoginScreen
+        loading={isAuthenticated === null}
+        authError={authError}
+        exiting={loginExiting}
+      />
     );
   }
+
+  const handleSyncSteam = () => {
+    if (!profileData?.steamId64) {
+      setSteamOnboardingOpen(true);
+      return;
+    }
+    void syncSteamGames(false);
+  };
+  const handleLinkSteam = () => {
+    if (profileData?.discordUserId) {
+      setSteamOnboardingSkipped(profileData.discordUserId, false);
+    }
+    setSteamOnboardingOpen(true);
+  };
 
   return (
     <>
@@ -754,6 +1089,19 @@ export function App() {
         profile={profileData}
         isAdmin={isAdmin}
         onLogout={() => void logout()}
+        onSyncSteam={handleSyncSteam}
+        onLinkSteam={handleLinkSteam}
+      />
+      <div style={{ height: 62 }} aria-hidden="true" />
+      <SteamOnboardingModal
+        open={steamOnboardingOpen}
+        onClose={() => setSteamOnboardingOpen(false)}
+        onSkip={() => {
+          if (profileData?.discordUserId) {
+            setSteamOnboardingSkipped(profileData.discordUserId, true);
+          }
+          setSteamOnboardingOpen(false);
+        }}
       />
       <main
         style={{
@@ -774,6 +1122,9 @@ export function App() {
           profile={profileData}
           activeMembers={activeMembers}
           totalMemberCount={guildMembers.length}
+          featured={featuredRecommendation}
+          activityEvents={activityEvents}
+          newsCards={newsCards}
           onNavigate={setPage}
         />
       ) : null}
@@ -789,6 +1140,11 @@ export function App() {
           newNightTitle={newNightTitle}
           newNightScheduledFor={newNightScheduledFor}
           currentUserAttendingSelectedNight={currentUserAttendingSelectedNight}
+          composerRecommendations={composerRecommendations}
+          featuredRecommendation={featuredRecommendation}
+          crewGames={crewGames}
+          crewWishlist={crewWishlist}
+          gameNews={gameNews}
           onSelectNight={(id, title) => void selectNight(id, title)}
           onNewNightTitleChange={setNewNightTitle}
           onNewNightScheduledForChange={setNewNightScheduledFor}
@@ -802,9 +1158,21 @@ export function App() {
         />
       ) : null}
 
-      {page === "library" ? <LibraryPage onNavigate={setPage} /> : null}
+      {page === "library" ? (
+        <LibraryPage
+          crewGames={crewGames}
+          currentDiscordUserId={profileData?.discordUserId ?? null}
+          onNavigate={setPage}
+        />
+      ) : null}
 
-      {page === "community" ? <CommunityPage isAdmin={isAdmin} onNavigate={setPage} /> : null}
+      {page === "community" ? (
+        <CommunityPage
+          isAdmin={isAdmin}
+          activityEvents={activityEvents}
+          onNavigate={setPage}
+        />
+      ) : null}
 
       {page === "achievements" ? <AchievementsPage /> : null}
 
@@ -835,6 +1203,13 @@ export function App() {
           onNewsSourcesChange={setNewsSources}
           onSaveNewsControls={saveNewsControlsPlaceholder}
           profileJson={profileJson}
+          newsCards={newsCards}
+          onCreateNewsCard={createNewsCard}
+          onUpdateNewsCard={updateNewsCard}
+          onArchiveNewsCard={archiveNewsCard}
+          serverSettings={serverSettings}
+          onLoadServerSettings={loadServerSettings}
+          onUpdateServerSetting={updateServerSetting}
         />
       ) : null}
 

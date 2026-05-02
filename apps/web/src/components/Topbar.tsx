@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { islandTheme } from "../theme.js";
 import type { MeProfile, PageId } from "../types.js";
 import { UserMenu } from "./UserMenu.js";
@@ -16,9 +16,11 @@ type TopbarProps = {
   profile: MeProfile | null;
   isAdmin: boolean;
   onLogout: () => void;
+  onSyncSteam: () => void;
+  onLinkSteam: () => void;
 };
 
-export function Topbar({ page, onNavigate, profile, isAdmin, onLogout }: TopbarProps) {
+export function Topbar({ page, onNavigate, profile, isAdmin, onLogout, onSyncSteam, onLinkSteam }: TopbarProps) {
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -45,14 +47,15 @@ export function Topbar({ page, onNavigate, profile, isAdmin, onLogout }: TopbarP
   return (
     <header
       style={{
-        position: "sticky",
+        position: "fixed",
         top: 0,
+        left: 0,
+        right: 0,
         zIndex: 30,
         backdropFilter: "blur(14px) saturate(140%)",
         WebkitBackdropFilter: "blur(14px) saturate(140%)",
         background: islandTheme.color.panelBg,
-        borderBottom: `1px solid ${islandTheme.color.cardBorder}`,
-        marginBottom: 16
+        borderBottom: `1px solid ${islandTheme.color.cardBorder}`
       }}
     >
       <div
@@ -66,11 +69,10 @@ export function Topbar({ page, onNavigate, profile, isAdmin, onLogout }: TopbarP
           flexWrap: "wrap"
         }}
       >
-        <Brand />
+        <Brand onNavigate={onNavigate} />
         <NavBar page={page} onNavigate={onNavigate} />
         <div style={{ flex: 1, minWidth: 12 }} />
         <SearchInput value={search} onChange={setSearch} />
-        {isAdmin ? <AdminPill active={page === "admin"} onClick={() => onNavigate("admin")} /> : null}
         <UserTrigger
           buttonRef={triggerRef}
           profile={profile}
@@ -81,9 +83,13 @@ export function Topbar({ page, onNavigate, profile, isAdmin, onLogout }: TopbarP
           <UserMenu
             menuRef={menuRef}
             profile={profile}
+            page={page}
+            isAdmin={isAdmin}
             onClose={() => setMenuOpen(false)}
             onNavigate={onNavigate}
             onLogout={onLogout}
+            onSyncSteam={onSyncSteam}
+            onLinkSteam={onLinkSteam}
           />
         ) : null}
       </div>
@@ -91,9 +97,30 @@ export function Topbar({ page, onNavigate, profile, isAdmin, onLogout }: TopbarP
   );
 }
 
-function Brand() {
+function Brand({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <button
+      type="button"
+      onClick={() => onNavigate("home")}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        background: "transparent",
+        border: "none",
+        padding: "4px 6px 4px 0",
+        borderRadius: 10,
+        cursor: "pointer",
+        font: "inherit",
+        textAlign: "left"
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = islandTheme.color.secondary;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "transparent";
+      }}
+    >
       <div
         style={{
           width: 38,
@@ -101,7 +128,8 @@ function Brand() {
           borderRadius: 999,
           background: 'url("/boneless-island-logo.png") center/cover',
           border: `1px solid ${islandTheme.color.cardBorder}`,
-          boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 6px 16px rgba(0,0,0,0.3)"
+          boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 6px 16px rgba(0,0,0,0.3)",
+          flexShrink: 0
         }}
       />
       <div>
@@ -112,7 +140,7 @@ function Brand() {
           crew at the shoreline
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -184,59 +212,6 @@ function SearchInput({ value, onChange }: SearchInputProps) {
         outline: "none"
       }}
     />
-  );
-}
-
-type AdminPillProps = {
-  active: boolean;
-  onClick: () => void;
-};
-
-function AdminPill({ active, onClick }: AdminPillProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        border: `1px solid ${active ? "#f59e0b" : islandTheme.color.cardBorder}`,
-        background: active ? "rgba(245, 158, 11, 0.14)" : islandTheme.color.panelMutedBg,
-        color: islandTheme.color.textPrimary,
-        padding: "6px 10px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: 6
-      }}
-    >
-      Admin
-      <RoleBadge>PARENT</RoleBadge>
-    </button>
-  );
-}
-
-function RoleBadge({ children }: { children: ReactNode }) {
-  return (
-    <span
-      className="island-mono"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: 18,
-        height: 14,
-        padding: "0 4px",
-        borderRadius: 999,
-        background: "linear-gradient(135deg, #f59e0b, #d97706)",
-        color: "#0f172a",
-        fontSize: 9,
-        fontWeight: 800
-      }}
-    >
-      {children}
-    </span>
   );
 }
 

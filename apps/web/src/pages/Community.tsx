@@ -1,18 +1,19 @@
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { PageId } from "../types.js";
+import type { ActivityEvent, PageId } from "../types.js";
 
 type CommunityPageProps = {
   isAdmin: boolean;
+  activityEvents: ActivityEvent[];
   onNavigate: (page: PageId) => void;
 };
 
-export function CommunityPage({ isAdmin, onNavigate }: CommunityPageProps) {
+export function CommunityPage({ isAdmin, activityEvents, onNavigate }: CommunityPageProps) {
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <Hero />
       <CrewCarousel isAdmin={isAdmin} onNavigate={onNavigate} />
-      <ClipsAndActivityRow />
+      <ClipsAndActivityRow events={activityEvents} />
       <ForumsAndClubsRow />
       <EventsAndLeaderboardsRow />
     </div>
@@ -235,16 +236,75 @@ const CLIPS = [
   { title: "V60 moon, full team wipe", author: "@aloha-pirate", duration: "3:08", art: "👻", cover: "linear-gradient(135deg,#064e3b,#052e16)" }
 ];
 
-const ACTIVITY = [
-  { who: "jkraken", color: "#22d3ee", initials: "JK", action: "unlocked", target: "Reef Royalty", detail: "Deep Sea Dunkers · all 9 wrecks looted", ago: "12m ago" },
-  { who: "palmwave", color: "#86efac", initials: "PA", action: "finished", target: "Year 3 Spring", detail: "Stardew Valley · greenhouse complete", ago: "1h ago" },
-  { who: "SpeedyNugget", color: "#22d3ee", initials: "SP", action: "set a personal best on", target: "Helix-IV", detail: "Cosmic Cruiser · 0:47 (−3s)", ago: "3h ago" },
-  { who: "aloha-pirate", color: "#ef8354", initials: "AL", action: "survived", target: "V60 Moon", detail: "Lethal Company · solo · 0 deaths", ago: "5h ago" },
-  { who: "ChefNugget", color: "#fbbf24", initials: "CH", action: "published a guide:", target: "kitchen co-op tips", detail: "18 replies in #strategies", ago: "8h ago" },
-  { who: "LoreNugget", color: "#a78bfa", initials: "LO", action: "started a thread:", target: "The Lore of the Kraken Hoard", detail: "23 replies in #stories", ago: "10h ago" }
-];
+const COMMUNITY_ACTOR_COLORS = ["#22d3ee", "#a855f7", "#f4a261", "#86efac", "#fbbf77", "#ef8354", "#4ade80", "#60a5fa"];
 
-function ClipsAndActivityRow() {
+function communityColorFor(id: string | null | undefined): string {
+  if (!id) return COMMUNITY_ACTOR_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return COMMUNITY_ACTOR_COLORS[hash % COMMUNITY_ACTOR_COLORS.length];
+}
+
+function communityInitialsFor(name: string | null | undefined): string {
+  if (!name) return "??";
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "??";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function communityRelativeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const delta = Math.max(0, Date.now() - then);
+  const minutes = Math.round(delta / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  const weeks = Math.round(days / 7);
+  if (weeks < 8) return `${weeks}w ago`;
+  return `${Math.round(days / 30)}mo ago`;
+}
+
+type CommunityActivityCopy = { action: string; target: string; detail: string };
+
+function describeCommunityEvent(event: ActivityEvent): CommunityActivityCopy {
+  const payload = event.payload as Record<string, unknown>;
+  const gameName = event.game?.name ?? null;
+  switch (event.eventType) {
+    case "game_night.created":
+      return {
+        action: "scheduled",
+        target: typeof payload.title === "string" ? payload.title : "a game night",
+        detail: "Hosting the next session"
+      };
+    case "game_night.rsvp_joined":
+      return { action: "RSVP'd to", target: "the next game night", detail: "On the invite list" };
+    case "game_night.rsvp_left":
+      return { action: "stepped away from", target: "the next game night", detail: "Off the dock for now" };
+    case "game_night.game_picked":
+      return { action: "picked", target: gameName ?? "a game", detail: "Locked in for the next session" };
+    case "steam.linked":
+      return { action: "linked", target: "their Steam account", detail: "Library now visible to the crew" };
+    case "steam.unlinked":
+      return { action: "unlinked", target: "their Steam account", detail: "Library hidden from the crew" };
+    case "steam.synced": {
+      const synced = typeof payload.syncedGames === "number" ? payload.syncedGames : 0;
+      return {
+        action: "resynced",
+        target: "their library",
+        detail: `${synced} game${synced === 1 ? "" : "s"} on the boat`
+      };
+    }
+    default:
+      return { action: "fired", target: event.eventType, detail: "Crew activity" };
+  }
+}
+
+function ClipsAndActivityRow({ events }: { events: ActivityEvent[] }) {
   return (
     <section
       style={{
@@ -271,9 +331,17 @@ function ClipsAndActivityRow() {
       <div>
         <SectionHead title="Activity feed" meta="What the crew is up to." />
         <IslandCard style={{ padding: 0, overflow: "hidden", marginTop: 12 }}>
-          {ACTIVITY.map((a, i) => (
-            <ActivityRow key={a.who + i} entry={a} firstRow={i === 0} />
-          ))}
+          <div style={{ maxHeight: 400, overflowY: "auto" }}>
+            {events.length === 0 ? (
+              <div style={{ padding: "16px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
+                No island activity yet.
+              </div>
+            ) : (
+              events.slice(0, 20).map((event, i) => (
+                <ActivityRow key={event.id} event={event} firstRow={i === 0} />
+              ))
+            )}
+          </div>
         </IslandCard>
       </div>
     </section>
@@ -347,7 +415,11 @@ function ClipCard({ clip }: { clip: (typeof CLIPS)[number] }) {
   );
 }
 
-function ActivityRow({ entry, firstRow }: { entry: (typeof ACTIVITY)[number]; firstRow: boolean }) {
+function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: boolean }) {
+  const copy = describeCommunityEvent(event);
+  const actorName = event.actor?.displayName ?? "A crew member";
+  const avatar = event.actor?.avatarUrl ?? null;
+  const ago = communityRelativeAgo(event.createdAt);
   return (
     <div
       style={{
@@ -364,7 +436,9 @@ function ActivityRow({ entry, firstRow }: { entry: (typeof ACTIVITY)[number]; fi
           width: 36,
           height: 36,
           borderRadius: 999,
-          background: entry.color,
+          background: avatar
+            ? `center / cover no-repeat url(${JSON.stringify(avatar)})`
+            : communityColorFor(event.actor?.discordUserId ?? null),
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -373,16 +447,16 @@ function ActivityRow({ entry, firstRow }: { entry: (typeof ACTIVITY)[number]; fi
           fontSize: 12
         }}
       >
-        {entry.initials}
+        {avatar ? null : communityInitialsFor(actorName)}
       </div>
       <div>
         <div style={{ fontSize: 14 }}>
-          @<strong>{entry.who}</strong> {entry.action} <strong>{entry.target}</strong>
+          <strong>{actorName}</strong> {copy.action} <strong>{copy.target}</strong>
         </div>
-        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>{entry.detail}</div>
+        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>{copy.detail}</div>
       </div>
       <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-        {entry.ago}
+        {ago}
       </div>
     </div>
   );

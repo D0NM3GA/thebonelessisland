@@ -12,7 +12,8 @@
     "lint": "npm run lint --workspaces",
     "format": "prettier --write .",
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
-    "db:down": "docker compose -f infra/docker-compose.yml down"
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "db:migrate": "npm run db:migrate -w @island/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

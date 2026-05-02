@@ -4,7 +4,7 @@ Discord-first community web platform with optional Steam linking. Tropical islan
 
 ## What is included
 
-- `apps/web`: React + Vite + TypeScript. Sticky topbar (Home / Games / Community / Achievements / Admin), Discord-style user menu, full-bleed scene shell (sky + sun/moon + ocean + beach + parallax palms), day/night theme switch.
+- `apps/web`: React + Vite + TypeScript. Fixed topbar (Home / Games / Community / Achievements / Admin), Discord-style user menu, full-bleed scene shell (sky + sun/moon + ocean + beach + parallax palms), day/night theme switch.
 - `apps/api`: Express API with Discord OAuth, profile routes, Steam link/sync, rule-based recommendations, game-night CRUD + RSVP.
 - `apps/bot`: Thin Discord bot exposing `/whatcanweplay` and delegating recommendation logic to the API.
 - `packages/shared`: shared cross-app TypeScript types.
@@ -15,7 +15,7 @@ Discord-first community web platform with optional Steam linking. Tropical islan
 - Discord OAuth is the only sign-in method.
 - Discord user ID is the canonical identity key.
 - Login is restricted to members of the configured Discord guild (`DISCORD_GUILD_ID`).
-- Steam linking is optional and can be removed by users.
+- Steam linking is optional and can be removed by users. Linking is done via the official Steam OpenID 2.0 flow ("Sign in through Steam"); we never ask for or store Steam credentials.
 - Steam data is used read-only for overlap/recommendation features.
 - Recommendations API access is restricted to authenticated web sessions or trusted bot requests.
 - No password or email account storage.
@@ -48,7 +48,7 @@ API health: `http://localhost:3000/health`
 
 ## Information architecture
 
-Top nav (sticky topbar with backdrop blur):
+Top nav (fixed topbar with backdrop blur — `position: fixed` so it stays anchored during overscroll/rubber-band):
 - **Home** — hero with online count + display headline + CTAs, Featured Game card, Friends Online widget (live Discord presence), Discord-style Activity Feed (5-tab filter), Drift Log news cards, Bot CTA + Crew Ritual cards
 - **Games** — AI session composer (combined AI pick + crew roster + invite), Patches & Updates rolodex (sticky right column), scheduled game nights with RSVP, group wishlist with hype bars, library snapshot, live streams drawer (right-edge tab)
 - **Community** — crew carousel (admin button gated to Parent), recent clips, activity timeline, forums table, clubs, upcoming events, weekly leaderboards
@@ -105,13 +105,43 @@ Vote-related API endpoints (`/game-nights/:id/votes`, `/finalize`) remain alive 
 
 - Discord OAuth login + session cookie auth.
 - Auto-create user/profile on first login.
-- Profile read/update endpoint with safe preference fields.
-- Steam link/unlink + owned games sync.
+- Profile read/update endpoint with safe preference fields. `/profile/me` now exposes `steamLastSyncedAt` so the UI can show a live sync timestamp.
+- Steam linking via official Steam OpenID 2.0:
+  - `GET /steam/openid/start` redirects to `https://steamcommunity.com/openid/login`.
+  - `GET /steam/openid/return` performs the `check_authentication` round trip, extracts SteamID64 from `openid.claimed_id`, upserts `steam_links`, fires a `steam.linked` activity event, and bounces back to the web app with `?steam=linked`.
+  - Falls back to `?steam=error&steamReason=...` for cancelled / verification-failed / not-authenticated cases.
+- Steam owned-games + wishlist sync (`POST /steam/sync-owned-games`, `POST /steam/sync-wishlist`).
 - Rule-based recommendation endpoint:
   - exact overlaps
   - near matches (one missing owner)
   - scored ranking based on ownership, group fit, session length
   - protected access (logged-in user session or bot shared secret header)
+- Featured recommendation endpoint (`GET /recommendations/featured`):
+  - powers the Home Featured Game card
+  - resolves scope to `voice` (members in voice) → falls back to `crew` (full guild)
+  - enriches the top pick with header image / tags / player count / session length
+- Crew library endpoint (`GET /steam/crew-games`):
+  - powers the Library page and the AI session composer cover art
+  - aggregates owners across the guild with display name + avatar URL
+  - on-demand metadata + image enrichment for sparse rows
+- Steam wishlist sync (`POST /steam/sync-wishlist`):
+  - reads `IWishlistService/GetWishlist` for the linked Steam account
+  - upserts `user_wishlists`, prunes removed entries, enriches missing names + covers
+  - chained automatically after `POST /steam/sync-owned-games` (best-effort; private wishlists skip silently)
+- Crew wishlist endpoint (`GET /steam/crew-wishlist`):
+  - powers the Group Wishlist card on the Games page
+  - aggregates pooled wishlists with hype count + earliest add date + crew avatars
+- Game news endpoint (`GET /games/news`):
+  - powers the Games page Patches & Updates rolodex
+  - lazily ingests Steam News for the most relevant crew-owned apps (6h staleness window)
+  - tags each item with `library` / `wishlist` / `crew` scopes for client-side filtering
+- Activity ledger (`activity_events` + `GET /activity`):
+  - emitted by game-night creates / RSVPs / picks and Steam link / unlink / sync
+  - powers Home page Activity Feed and Community activity timeline
+  - server-side category mapping (`friends` / `achievements` / `milestones` / `patches`)
+- News cards (`GET /news-cards`, Parent-only `POST/PATCH/DELETE`):
+  - powers Home page Drift Log
+  - admin CRUD lives in Admin → News Curation; gated by `requireParentRole` middleware (`PARENT_ROLE_NAME` env var, defaults to `Parent`)
 - Discord slash command `/whatcanweplay` calling the API endpoint.
 
 ## Front-end implementation status
@@ -127,4 +157,6 @@ The full Boneless Island design (handoff bundle from Claude Design) has been por
 7. **Admin** — hub + 9 sub-pages.
 8. **Polish + parity** — voting state cleanup; App.tsx down 62%.
 
-Many secondary cards (activity feed, drift log news, AI pick, patches list, group wishlist, streams, community/admin tables) currently render mock data with `TODO: wire to API` markers. Backend endpoints will be added incrementally.
+**Wired to real data**: Topbar profile + **Steam status badge** (logo + sync indicator next to the avatar), **Steam onboarding modal** (post-login prompt with Steam-branded "Sign in through Steam" button + tiny "no thanks, skip for now" link, dismissal persisted per-user in `localStorage`), **User-menu Steam panel** (Steam logo, "Synced 5m ago" / "Not linked" status, ID, Sync now / Sign in through Steam buttons), Home Friends Online widget, **Home Featured Game card** (top crew-overlap pick from `/recommendations/featured`), **Home Activity Feed** (live `activity_events` ledger from game-night + Steam emitters), **Home Drift Log** (Parent-curated news cards via `/news-cards`), **Games AI session composer** (real recommendation for the selected crew, falls back to the featured pick), **Games Patches & Updates rolodex** (live Steam News for crew-owned + wishlisted apps via `/games/news`), **Games Group Wishlist** (pooled crew wishlists from `/steam/crew-wishlist` with real cover art + hype bar), **Library page** (full crew library from `/steam/crew-games` with real owner avatars + per-game `★ MINE` badge), **Community activity timeline** (same `/activity` ledger), **Admin → News Curation** (full CRUD for drift-log cards), Games scheduled-nights cards + RSVP, Profile (Steam link visibility + owned-games exclusions).
+
+**Still mock for now**: live streams drawer, Community crew carousel + clips + forums + clubs + events + leaderboards, most Admin sub-pages outside News Curation. These need new ingestion pipelines (Twitch API, clips storage, forum schema) and will land incrementally.

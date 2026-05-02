@@ -3,10 +3,15 @@ import cors from "cors";
 import express from "express";
 import { ZodError } from "zod";
 import { env } from "./config.js";
+import { activityRouter } from "./routes/activity.js";
 import { authRouter } from "./routes/auth.js";
+import { gameNewsRouter } from "./routes/gameNews.js";
 import { gameNightRouter } from "./routes/gameNights.js";
 import { membersRouter } from "./routes/members.js";
+import { newsCardsRouter } from "./routes/newsCards.js";
 import { profileRouter } from "./routes/profile.js";
+import { settingsRouter } from "./routes/settings.js";
+import { loadSettings } from "./lib/serverSettings.js";
 import { recommendationRouter } from "./routes/recommendations.js";
 import { steamRouter } from "./routes/steam.js";
 
@@ -37,7 +42,11 @@ app.use("/profile", profileRouter);
 app.use("/steam", steamRouter);
 app.use("/recommendations", recommendationRouter);
 app.use("/game-nights", gameNightRouter);
+app.use("/games", gameNewsRouter);
+app.use("/activity", activityRouter);
+app.use("/news-cards", newsCardsRouter);
 app.use("/members", membersRouter);
+app.use("/settings", settingsRouter);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error instanceof ZodError) {
@@ -49,6 +58,16 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ error: "Internal server error" });
 });
 
-app.listen(Number(env.API_PORT), () => {
-  console.log(`API listening on ${env.API_PORT}`);
-});
+// Load server settings from DB before accepting requests
+loadSettings()
+  .then(() => {
+    app.listen(Number(env.API_PORT), () => {
+      console.log(`API listening on ${env.API_PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to load server settings — starting anyway:", err);
+    app.listen(Number(env.API_PORT), () => {
+      console.log(`API listening on ${env.API_PORT} (settings not loaded)`);
+    });
+  });
