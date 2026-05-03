@@ -44,7 +44,7 @@ INFORMATION ARCHITECTURE (current):
 Top nav: Home · Games · Community · Achievements · Admin (gated to "Parent" role)
 Topbar uses `position: fixed` (not sticky) so it stays locked to the viewport during overscroll/rubber-band. A 62px spacer div in App.tsx compensates for the removed document-flow space.
 User menu (avatar dropdown): Discord profile + custom status + rich presence + status picker + theme toggle (Day/Night) + Profile + Sign out
-Sub-pages: Games → Library; Admin hub → 9 sub-pages (News Curation, Recommendation Tester, Data Sync, Members & Roles, Game Night Moderation, Forum Moderation, Tournaments, Game Library, Audit Log)
+Sub-pages: Games → Library; Admin hub → 8 sub-pages (Configuration, News, Data Sync, Members & Roles, Game Nights & Events, Forum Moderation, Game Library, Audit Log)
 
 CORE FEATURE PILLARS:
 
@@ -100,9 +100,10 @@ PRIMARY PROBLEM TO SOLVE:
 - Future: automated weekly digest
 
 8. ADMIN
-- Hub of 9 tinted tiles → sub-pages
+- Hub of 8 tinted tiles → sub-pages
 - Role-gated to Discord "Parent" role
-- News curation, recommendation tester, data sync health, member roles, game-night mod, forum mod, tournaments, library overrides, audit log
+- Configuration (Discord server + AI provider merged), News (external feeds + game news curation + drift log merged), Data Sync (connectors + live log), Members & Roles, Game Nights & Events (game night mod + recommendation tester merged), Forum Moderation, Game Library, Audit Log
+- Tournaments deliberately removed — no near-term plans to implement
 
 VISUAL SYSTEM:
 - Tropical sky/ocean/beach scene (full-bleed fixed background, z-index -10)
@@ -152,7 +153,7 @@ CURRENT STATE:
   - **Onboarding modal** shown post-login if the user hasn't linked Steam and hasn't dismissed it (Steam-branded panel, big "Sign in through Steam" CTA, tiny "no thanks, skip for now" link; dismissal stored per-user in `localStorage`).
   - **Topbar Steam status badge** (Steam logo + green/grey sync dot) sitting beside the avatar trigger so the brand is always visible.
   - **User-menu Steam panel** with the Steam logo, last sync ("Synced 12m ago"), SteamID64, and a Sync now / Sign in through Steam button.
-- Steam owned-games + wishlist sync working (`POST /steam/sync-owned-games`, `POST /steam/sync-wishlist`)
+- Steam owned-games + wishlist sync working (`POST /steam/sync-owned-games`, `POST /steam/sync-wishlist`). Both endpoints enforce 30-minute per-user cooldown (uses existing `last_synced_at` column) and pass through Steam 429 `Retry-After` headers. After a successful owned-games sync, top 8 games by playtime are immediately ingested for news (fire-and-forget) so first-time home page visit has articles ready.
 - Rule-based recommendation endpoint live
 - Featured recommendation endpoint live (`GET /recommendations/featured`, voice→crew scope fallback) — powers Home Featured Game card
 - Crew library endpoint live (`GET /steam/crew-games` returns games with owner display name + avatar) — powers Library page + composer cover art
@@ -164,7 +165,9 @@ CURRENT STATE:
 - Design implementation: 8 phases shipped (foundation, topbar, home, games, library, community, admin, cleanup)
 - Topbar: `position: fixed` (not sticky) — prevents overscroll/rubber-band drift. 62px spacer div in App.tsx compensates for removed document flow.
 - Home Activity Feed: capped at 5 events (`ACTIVITY_FEED_LIMIT`). "View full feed — N more →" button + section header "Open community →" both navigate to Community. `SectionHead` now accepts optional `onAction` callback.
-- Real-data wired pages: Home (Featured + Friends Online + Activity Feed + Drift Log), Games (AI session composer reads composer recs / falls back to featured, Patches rolodex from Steam News, Group Wishlist from real crew wishlists), Library (full crew list with avatars + MINE badge), Community (activity timeline), Admin (News Curation CRUD), Profile, Topbar, scheduled-nights cards. Live streams drawer + remaining Community cards (crew carousel, clips, forums, clubs, events, leaderboards) + most other Admin sub-pages remain mock until ingestion pipelines land.
+- General news ingestion: 60-minute server-side cooldown (`lastIngestedAt` + `INGEST_COOLDOWN_MS`) prevents hammering RSS feeds; frontend news/activity poll interval 20 minutes (was 5). AI summaries computed once per article and shared across all users — no per-user AI queries.
+- Admin panel: consolidated from 12 tiles to 8. Server Config + AI Settings → Configuration; News Sources + News Curation → News (+ game news curation trigger); Game Night Mod + Recommendation Tester → Game Nights & Events. Tournaments removed entirely. Data Sync is now observability-only (connectors + live log).
+- Real-data wired pages: Home (Featured + Friends Online + Activity Feed + Drift Log), Games (AI session composer reads composer recs / falls back to featured, Patches rolodex from Steam News, Group Wishlist from real crew wishlists), Library (full crew list with avatars + MINE badge), Community (activity timeline), Admin (News Curation CRUD + server settings + AI settings + news sources), Profile, Topbar, scheduled-nights cards. Live streams drawer + remaining Community cards (crew carousel, clips, forums, clubs, events, leaderboards) + most other Admin sub-pages remain mock until ingestion pipelines land.
 
 ASSISTANT EXPECTATIONS:
 - Assume this is a long-lived project
@@ -172,3 +175,4 @@ ASSISTANT EXPECTATIONS:
 - Bias toward maintainable, incremental solutions
 - Explain architectural decisions briefly when relevant
 - Ask clarifying questions ONLY if strictly necessary
+- Use industry standard best practices

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db/client.js";
-import { ingestAndCurateGeneralNews, curateUncuratedGeneralNews } from "../lib/generalNewsIngestion.js";
+import { ingestAndCurateGeneralNews, curateUncuratedGeneralNews, resetAllCuration } from "../lib/generalNewsIngestion.js";
 
 export const generalNewsRouter = Router();
 
@@ -109,5 +109,21 @@ generalNewsRouter.post("/general/curate", async (_req, res) => {
   } catch (err) {
     console.error("[generalNews] POST /news/general/curate error:", err);
     res.status(500).json({ ok: false, error: "Curation failed" });
+  }
+});
+
+/**
+ * POST /news/general/recurate
+ * Admin endpoint — reset curation on all rows then run a curation pass.
+ * Use this after prompt changes to regenerate all summaries.
+ */
+generalNewsRouter.post("/general/recurate", async (_req, res) => {
+  try {
+    const reset = await resetAllCuration();
+    const curated = await curateUncuratedGeneralNews();
+    res.json({ ok: true, reset, curated });
+  } catch (err) {
+    console.error("[generalNews] POST /news/general/recurate error:", err);
+    res.status(500).json({ ok: false, error: "Recurate failed" });
   }
 });

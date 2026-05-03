@@ -5,16 +5,12 @@ import type { NewsCard, Recommendation, ServerSetting } from "../types.js";
 
 type AdminSection =
   | "hub"
-  | "server-config"
-  | "ai-settings"
-  | "news-sources"
+  | "configuration"
   | "news"
-  | "recommendations"
   | "data-sync"
   | "members"
-  | "game-nights"
+  | "events"
   | "forums"
-  | "tournaments"
   | "library"
   | "audit";
 
@@ -47,6 +43,7 @@ type AdminPageProps = {
   onTriggerNewsCuration: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
   onTriggerGeneralNewsIngest: () => Promise<{ ok: boolean; fetched?: number; curated?: number; error?: string }>;
   onTriggerGeneralNewsCurate: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+  onTriggerGeneralNewsRecurate: () => Promise<{ ok: boolean; reset?: number; curated?: number; error?: string }>;
 };
 
 export function AdminPage(props: AdminPageProps) {
@@ -54,7 +51,7 @@ export function AdminPage(props: AdminPageProps) {
 
   const handleSelectSection = (s: AdminSection) => {
     setSection(s);
-    if ((s === "server-config" || s === "ai-settings" || s === "news-sources") && props.serverSettings === null) {
+    if ((s === "configuration" || s === "news") && props.serverSettings === null) {
       props.onLoadServerSettings();
     }
   };
@@ -66,34 +63,37 @@ export function AdminPage(props: AdminPageProps) {
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <SubpageHeader section={section} onBack={() => setSection("hub")} />
-      {section === "server-config" ? (
-        <ServerConfigSubpage
-          settings={props.serverSettings}
-          onUpdate={props.onUpdateServerSetting}
-        />
-      ) : null}
-      {section === "ai-settings" ? (
-        <AISettingsSubpage
+      {section === "configuration" ? (
+        <ConfigurationSubpage
           settings={props.serverSettings}
           onUpdate={props.onUpdateServerSetting}
           onTest={props.onTestAIConnection}
         />
       ) : null}
-      {section === "news-sources" ? (
-        <NewsSourcesSubpage
+      {section === "news" ? (
+        <NewsSubpage
           settings={props.serverSettings}
           onUpdate={props.onUpdateServerSetting}
           onIngest={props.onTriggerGeneralNewsIngest}
           onCurate={props.onTriggerGeneralNewsCurate}
+          onRecurate={props.onTriggerGeneralNewsRecurate}
+          onCurateGameNews={props.onTriggerNewsCuration}
+          newsCards={props.newsCards}
+          onCreateNewsCard={props.onCreateNewsCard}
+          onUpdateNewsCard={props.onUpdateNewsCard}
+          onArchiveNewsCard={props.onArchiveNewsCard}
         />
       ) : null}
-      {section === "news" ? <NewsCurationSubpage {...props} /> : null}
-      {section === "recommendations" ? <RecommendationsSubpage {...props} /> : null}
-      {section === "data-sync" ? <DataSyncSubpage onTriggerCuration={props.onTriggerNewsCuration} /> : null}
+      {section === "data-sync" ? <DataSyncSubpage /> : null}
       {section === "members" ? <MembersSubpage /> : null}
-      {section === "game-nights" ? <GameNightsModSubpage /> : null}
+      {section === "events" ? (
+        <EventsSubpage
+          selectedMemberCount={props.selectedMemberCount}
+          recommendations={props.recommendations}
+          onRunRecommendation={props.onRunRecommendation}
+        />
+      ) : null}
       {section === "forums" ? <ForumsModSubpage /> : null}
-      {section === "tournaments" ? <TournamentsSubpage /> : null}
       {section === "library" ? <LibrarySubpage /> : null}
       {section === "audit" ? <AuditSubpage profileJson={props.profileJson} /> : null}
     </div>
@@ -109,16 +109,12 @@ type AdminTile = {
 };
 
 const ADMIN_TILES: AdminTile[] = [
-  { id: "server-config", title: "Server Configuration", blurb: "Guild ID, admin role, display name. Switch servers without touching .env.", icon: "⚙️", accent: "#6366f1" },
-  { id: "ai-settings", title: "AI Settings", blurb: "Provider, model, API key, enable/disable. Swap between Anthropic and OpenAI without touching code.", icon: "🤖", accent: "#8b5cf6" },
-  { id: "news-sources", title: "News Sources", blurb: "External RSS feeds, GNews API key, developer diversity cap, manual ingestion triggers.", icon: "🌐", accent: "#0ea5e9" },
-  { id: "news", title: "News Curation", blurb: "Drift log cards: post, edit, and archive community updates for the home page.", icon: "📰", accent: "#22d3ee" },
-  { id: "recommendations", title: "Recommendation Tester", blurb: "Member chips, weights, ranked results.", icon: "🎯", accent: "#22d3ee" },
+  { id: "configuration", title: "Configuration", blurb: "Discord server, AI provider, API keys. All server-level settings in one place.", icon: "⚙️", accent: "#6366f1" },
+  { id: "news", title: "News", blurb: "External RSS feeds, GNews key, manual triggers, and community drift log cards.", icon: "📰", accent: "#0ea5e9" },
   { id: "data-sync", title: "Data Sync", blurb: "Connector health + live log.", icon: "🔄", accent: "#86efac" },
   { id: "members", title: "Members & Roles", blurb: "Roster, role mapping, onboarding queue.", icon: "👥", accent: "#a78bfa" },
-  { id: "game-nights", title: "Game Night Moderation", blurb: "Lock/reopen sessions, force picks, defaults.", icon: "🎮", accent: "#f59e0b" },
+  { id: "events", title: "Game Nights & Events", blurb: "Session defaults, active nights, and recommendation engine tester.", icon: "🎮", accent: "#f59e0b" },
   { id: "forums", title: "Forum Moderation", blurb: "Reports, channel access, word filter.", icon: "💬", accent: "#ef8354" },
-  { id: "tournaments", title: "Tournaments", blurb: "Schedule + bracket preview.", icon: "🏆", accent: "#fbbf24" },
   { id: "library", title: "Game Library", blurb: "Featured pick, tag/visibility overrides.", icon: "🗂", accent: "#fb7185" },
   { id: "audit", title: "Audit Log", blurb: "Searchable trail with CSV export.", icon: "📜", accent: "#94a3b8" }
 ];
@@ -285,7 +281,12 @@ function NewsCurationSubpage({
   onCreateNewsCard,
   onUpdateNewsCard,
   onArchiveNewsCard
-}: AdminPageProps) {
+}: {
+  newsCards: NewsCard[];
+  onCreateNewsCard: (input: NewsCardInput) => void;
+  onUpdateNewsCard: (id: string, input: Partial<NewsCardInput>) => void;
+  onArchiveNewsCard: (id: string) => void;
+}) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <IslandCard style={{ padding: 16 }}>
@@ -512,11 +513,103 @@ function NewsCardRow({
   );
 }
 
+function NewsSubpage({
+  settings,
+  onUpdate,
+  onIngest,
+  onCurate,
+  onRecurate,
+  onCurateGameNews,
+  newsCards,
+  onCreateNewsCard,
+  onUpdateNewsCard,
+  onArchiveNewsCard
+}: {
+  settings: ServerSetting[] | null;
+  onUpdate: (key: string, value: string) => void;
+  onIngest: () => Promise<{ ok: boolean; fetched?: number; curated?: number; error?: string }>;
+  onCurate: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+  onRecurate: () => Promise<{ ok: boolean; reset?: number; curated?: number; error?: string }>;
+  onCurateGameNews: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+  newsCards: NewsCard[];
+  onCreateNewsCard: (input: NewsCardInput) => void;
+  onUpdateNewsCard: (id: string, input: Partial<NewsCardInput>) => void;
+  onArchiveNewsCard: (id: string) => void;
+}) {
+  const [gameCurateState, setGameCurateState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [gameCurateMsg, setGameCurateMsg] = useState("");
+
+  const handleGameCurate = async () => {
+    setGameCurateState("running");
+    setGameCurateMsg("");
+    const result = await onCurateGameNews();
+    if (result.ok) {
+      setGameCurateState("done");
+      setGameCurateMsg(`Curated ${result.curated ?? 0} article${result.curated === 1 ? "" : "s"}`);
+    } else {
+      setGameCurateState("error");
+      setGameCurateMsg(result.error ?? "Curation failed");
+    }
+    setTimeout(() => setGameCurateState("idle"), 5000);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 28 }}>
+      <div style={{ display: "grid", gap: 16 }}>
+        <MergedSectionLabel title="External Feeds" />
+        <NewsSourcesSubpage
+          settings={settings}
+          onUpdate={onUpdate}
+          onIngest={onIngest}
+          onCurate={onCurate}
+          onRecurate={onRecurate}
+        />
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <MergedSectionLabel title="Game News Curation" />
+        <IslandCard style={{ padding: 16, display: "grid", gap: 12 }}>
+          <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+            Re-score and summarize un-curated game news items using the active AI provider.
+            Runs automatically on the next news fetch — use this to force an immediate pass.
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <IslandButton
+              variant="secondary"
+              onClick={handleGameCurate}
+              disabled={gameCurateState === "running"}
+            >
+              {gameCurateState === "running" ? "Curating…" : "Re-curate Game News"}
+            </IslandButton>
+            {gameCurateMsg ? (
+              <span style={{ fontSize: 12, color: gameCurateState === "error" ? islandTheme.color.danger : islandTheme.color.success }}>
+                {gameCurateMsg}
+              </span>
+            ) : null}
+          </div>
+        </IslandCard>
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <MergedSectionLabel title="Drift Log" />
+        <NewsCurationSubpage
+          newsCards={newsCards}
+          onCreateNewsCard={onCreateNewsCard}
+          onUpdateNewsCard={onUpdateNewsCard}
+          onArchiveNewsCard={onArchiveNewsCard}
+        />
+      </div>
+    </div>
+  );
+}
+
 function RecommendationsSubpage({
   selectedMemberCount,
   recommendations,
   onRunRecommendation
-}: AdminPageProps) {
+}: {
+  selectedMemberCount: number;
+  recommendations: Recommendation[];
+  onRunRecommendation: () => void;
+}) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <IslandCard style={{ padding: 16, display: "grid", gap: 10 }}>
@@ -581,31 +674,14 @@ function RecRow({ rec, firstRow }: { rec: Recommendation; firstRow: boolean }) {
   );
 }
 
-function DataSyncSubpage({ onTriggerCuration }: { onTriggerCuration: () => Promise<{ ok: boolean; curated?: number; error?: string }> }) {
-  const [curationState, setCurationState] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [curationMsg, setCurationMsg] = useState("");
-
-  const handleCurate = async () => {
-    setCurationState("running");
-    setCurationMsg("");
-    const result = await onTriggerCuration();
-    if (result.ok) {
-      setCurationState("done");
-      setCurationMsg(`Curated ${result.curated ?? 0} article${result.curated === 1 ? "" : "s"}`);
-    } else {
-      setCurationState("error");
-      setCurationMsg(result.error ?? "Curation failed");
-    }
-    setTimeout(() => setCurationState("idle"), 5000);
-  };
-
+function DataSyncSubpage() {
   const connectors = [
     { name: "Discord OAuth", status: "ok", last: "live" },
     { name: "Discord Members", status: "ok", last: "60s" },
     { name: "Discord Voice State", status: "ok", last: "15s" },
     { name: "Steam OpenID", status: "ok", last: "live" },
-    { name: "Steam OwnedGames", status: "warn", last: "26m · throttled" },
-    { name: "Steam Wishlist", status: "off", last: "not wired" }
+    { name: "Steam OwnedGames", status: "ok", last: "30m" },
+    { name: "Steam Wishlist", status: "ok", last: "30m" }
   ];
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -614,33 +690,6 @@ function DataSyncSubpage({ onTriggerCuration }: { onTriggerCuration: () => Promi
         {connectors.map((c, i) => (
           <ConnectorRow key={c.name} entry={c} firstRow={i === 0} />
         ))}
-      </IslandCard>
-
-      <IslandCard style={{ padding: 16, display: "grid", gap: 12 }}>
-        <SubsectionTitle>AI News Curation</SubsectionTitle>
-        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
-          Re-score and summarize un-curated game news items using the active AI provider.
-          Runs automatically on the next news fetch — use this to force an immediate pass.
-        </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <IslandButton
-            variant="secondary"
-            onClick={handleCurate}
-            disabled={curationState === "running"}
-          >
-            {curationState === "running" ? "Curating…" : "Re-curate News"}
-          </IslandButton>
-          {curationMsg ? (
-            <span
-              style={{
-                fontSize: 12,
-                color: curationState === "error" ? islandTheme.color.danger : islandTheme.color.success
-              }}
-            >
-              {curationMsg}
-            </span>
-          ) : null}
-        </div>
       </IslandCard>
 
       <IslandCard style={{ padding: 16 }}>
@@ -662,7 +711,9 @@ function DataSyncSubpage({ onTriggerCuration }: { onTriggerCuration: () => Promi
 {`[ok]   discord.member.sync     guild=1172780198912065536  count=24      4.2s
 [ok]   discord.voice.snapshot  in_voice=4                              0.6s
 [ok]   steam.owned.refresh     user=donmega   games=141    180KB       2.1s
-[warn] steam.owned.refresh     user=palmwave  HTTP 429 retry-after=60
+[ok]   steam.wishlist.refresh  user=donmega   items=38                 1.1s
+[ok]   steam.owned.refresh     user=palmwave  games=87     120KB       1.8s
+[ok]   steam.wishlist.refresh  user=palmwave  items=12                 0.4s
 [ok]   game_nights.scan        scheduled=3   upcoming=2                0.2s`}
         </pre>
       </IslandCard>
@@ -923,48 +974,29 @@ function ForumsModSubpage() {
   );
 }
 
-function TournamentsSubpage() {
+function EventsSubpage({
+  selectedMemberCount,
+  recommendations,
+  onRunRecommendation
+}: {
+  selectedMemberCount: number;
+  recommendations: Recommendation[];
+  onRunRecommendation: () => void;
+}) {
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <IslandCard style={{ padding: 16 }}>
-        <SubsectionTitle>Schedule</SubsectionTitle>
-        {[
-          { date: "May 03", title: "Beach BBQ Tournament", game: "Deep Sea Dunkers", entries: 14 },
-          { date: "May 10", title: "Speedrun Sunday", game: "Cosmic Cruiser", entries: 8 },
-          { date: "May 24", title: "Cozy Co-op Cup", game: "Stardew Valley", entries: 6 }
-        ].map((e) => (
-          <div
-            key={e.title}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "80px 1fr auto",
-              gap: 12,
-              padding: "10px 0",
-              borderTop: `1px solid ${islandTheme.color.cardBorder}`,
-              alignItems: "center"
-            }}
-          >
-            <span className="island-mono" style={{ fontSize: 11, color: islandTheme.palette.sandWarmAccent }}>
-              {e.date}
-            </span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{e.title}</div>
-              <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
-                {e.game} · {e.entries} entries
-              </div>
-            </div>
-            <button type="button" style={smallBtn("transparent", islandTheme.color.textMuted, true)}>
-              Bracket
-            </button>
-          </div>
-        ))}
-      </IslandCard>
-      <IslandCard style={{ padding: 16 }}>
-        <SubsectionTitle>Bracket preview</SubsectionTitle>
-        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle }}>
-          Single-elim bracket renders here once a tournament locks at start time.
-        </p>
-      </IslandCard>
+    <div style={{ display: "grid", gap: 28 }}>
+      <div style={{ display: "grid", gap: 12 }}>
+        <MergedSectionLabel title="Game Nights" />
+        <GameNightsModSubpage />
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <MergedSectionLabel title="Recommendation Engine" />
+        <RecommendationsSubpage
+          selectedMemberCount={selectedMemberCount}
+          recommendations={recommendations}
+          onRunRecommendation={onRunRecommendation}
+        />
+      </div>
     </div>
   );
 }
@@ -1050,12 +1082,14 @@ function NewsSourcesSubpage({
   settings,
   onUpdate,
   onIngest,
-  onCurate
+  onCurate,
+  onRecurate
 }: {
   settings: ServerSetting[] | null;
   onUpdate: (key: string, value: string) => void;
   onIngest: () => Promise<{ ok: boolean; fetched?: number; curated?: number; error?: string }>;
   onCurate: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+  onRecurate: () => Promise<{ ok: boolean; reset?: number; curated?: number; error?: string }>;
 }) {
   const getSetting = (key: string) => settings?.find((s) => s.key === key)?.value ?? "";
 
@@ -1072,6 +1106,8 @@ function NewsSourcesSubpage({
   const [ingestMsg, setIngestMsg] = useState("");
   const [curateState, setCurateState] = useState<"idle" | "running" | "done" | "error">("idle");
   const [curateMsg, setCurateMsg] = useState("");
+  const [recurateState, setRecurateState] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [recurateMsg, setRecurateMsg] = useState("");
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const initializedRef = useRef(false);
 
@@ -1351,6 +1387,39 @@ function NewsSourcesSubpage({
             )}
           </div>
         </div>
+
+        <div style={{ borderTop: `1px solid ${islandTheme.color.cardBorder}`, paddingTop: 12 }}>
+          <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Regenerate All Summaries</div>
+          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
+            Reset curation on all articles and re-run AI with the updated prompt. Use after prompt changes to get longer, richer summaries. Processes {10} articles per run.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <IslandButton
+              variant="danger"
+              onClick={async () => {
+                setRecurateState("running");
+                setRecurateMsg("");
+                const result = await onRecurate();
+                if (result.ok) {
+                  setRecurateState("done");
+                  setRecurateMsg(`Reset ${result.reset ?? 0} · curated ${result.curated ?? 0} this pass`);
+                } else {
+                  setRecurateState("error");
+                  setRecurateMsg(result.error ?? "Failed");
+                }
+                setTimeout(() => setRecurateState("idle"), 8000);
+              }}
+              disabled={recurateState === "running"}
+            >
+              {recurateState === "running" ? "Regenerating…" : "Regenerate All Summaries"}
+            </IslandButton>
+            {recurateMsg && (
+              <span style={{ fontSize: 12, color: recurateState === "error" ? islandTheme.color.danger : islandTheme.color.success }}>
+                {recurateMsg}
+              </span>
+            )}
+          </div>
+        </div>
       </IslandCard>
     </div>
   );
@@ -1620,6 +1689,44 @@ function AuditSubpage({ profileJson }: { profileJson: string }) {
           {profileJson}
         </pre>
       </details>
+    </div>
+  );
+}
+
+function MergedSectionLabel({ title }: { title: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ flex: 1, height: 1, background: islandTheme.color.cardBorder }} />
+      <span
+        className="island-mono"
+        style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: islandTheme.color.textMuted }}
+      >
+        {title}
+      </span>
+      <div style={{ flex: 1, height: 1, background: islandTheme.color.cardBorder }} />
+    </div>
+  );
+}
+
+function ConfigurationSubpage({
+  settings,
+  onUpdate,
+  onTest
+}: {
+  settings: ServerSetting[] | null;
+  onUpdate: (key: string, value: string) => void;
+  onTest: (opts: { provider: string; model?: string; apiKey?: string }) => Promise<{ ok: boolean; provider?: string; model?: string; error?: string }>;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 28 }}>
+      <div style={{ display: "grid", gap: 16 }}>
+        <MergedSectionLabel title="Discord Server" />
+        <ServerConfigSubpage settings={settings} onUpdate={onUpdate} />
+      </div>
+      <div style={{ display: "grid", gap: 16 }}>
+        <MergedSectionLabel title="AI Provider" />
+        <AISettingsSubpage settings={settings} onUpdate={onUpdate} onTest={onTest} />
+      </div>
     </div>
   );
 }

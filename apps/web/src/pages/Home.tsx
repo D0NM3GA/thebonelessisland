@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type {
@@ -792,25 +793,32 @@ function NewsArticleModal({
   const fullText = truncateContents(item.contents, 2000);
   const ago = relativeAgo(item.publishedAt);
 
-  // Close on Escape
+  // Prevent background scroll without moving page position, close on Escape
   useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 1000,
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
-        padding: "0 0 0 0"
+        padding: "clamp(12px, 3vh, 32px) clamp(12px, 3vw, 32px)"
       }}
     >
       {/* Backdrop */}
@@ -826,22 +834,21 @@ function NewsArticleModal({
         }}
       />
 
-      {/* Sheet */}
+      {/* Dialog */}
       <div
         style={{
           position: "relative",
           zIndex: 1,
           width: "100%",
-          maxWidth: 720,
-          maxHeight: "90vh",
+          maxWidth: 680,
+          maxHeight: "85vh",
           overflowY: "auto",
-          borderRadius: "20px 20px 0 0",
+          borderRadius: 16,
           background: islandTheme.color.panelBg,
           backdropFilter: islandTheme.glass.blurStrong,
           WebkitBackdropFilter: islandTheme.glass.blurStrong,
           border: `1px solid ${islandTheme.color.cardBorder}`,
-          borderBottom: "none",
-          padding: "28px 28px 40px"
+          padding: "24px 24px 32px"
         }}
       >
         {/* Close button */}
@@ -1033,7 +1040,8 @@ function NewsArticleModal({
           </a>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

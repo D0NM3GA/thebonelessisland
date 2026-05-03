@@ -5,6 +5,7 @@ import { db } from "../db/client.js";
 import { recordEvent } from "../lib/activityEvents.js";
 import { requireSession } from "../lib/auth.js";
 import { enrichGameMetadataFromSteam, enrichMissingGameImages } from "../lib/gameCatalogEnrichment.js";
+import { ingestNewsForApps } from "../lib/gameNewsIngestion.js";
 import { getGuildId } from "../lib/serverSettings.js";
 
 const linkSchema = z.object({
@@ -31,13 +32,14 @@ type SteamWishlistItem = {
 
 type SyncWishlistResult =
   | { ok: true; syncedItems: number }
-  | { ok: false; status: number | null; reason: string };
+  | { ok: false; status: number | null; reason: string; retryAfterSeconds?: number };
 
 async function fetchSteamWishlistItems(steamId64: string): Promise<{
   ok: boolean;
   status: number | null;
   items: SteamWishlistItem[];
   reason?: string;
+  retryAfterSeconds?: number;
 }> {
   if (!env.STEAM_WEB_API_KEY) {
     return { ok: false, status: null, items: [], reason: "Missing STEAM_WEB_API_KEY in environment" };
@@ -47,6 +49,10 @@ async function fetchSteamWishlistItems(steamId64: string): Promise<{
   const response = await fetch(url).catch(() => null);
   if (!response) {
     return { ok: false, status: null, items: [], reason: "Steam wishlist request failed" };
+  }
+  if (response.status === 429) {
+    const retryAfterSeconds = parseInt(response.headers.get("Retry-After") ?? "60", 10);
+    return { ok: false, status: 429, items: [], reason: "Steam wishlist rate limited", retryAfterSeconds };
   }
   if (!response.ok) {
     return { ok: false, status: response.status, items: [], reason: `Steam wishlist request returned ${response.status}` };
@@ -71,7 +77,7 @@ async function fetchSteamWishlistItems(steamId64: string): Promise<{
 async function syncWishlistForUser(userId: string, steamId64: string): Promise<SyncWishlistResult> {
   const fetched = await fetchSteamWishlistItems(steamId64);
   if (!fetched.ok) {
-    return { ok: false, status: fetched.status, reason: fetched.reason ?? "Wishlist sync failed" };
+    return { ok: false, status: fetched.status, reason: fetched.reason ?? "Wishlist sync failed", retryAfterSeconds: fetched.retryAfterSeconds };
   }
 
   const items = fetched.items;
@@ -290,11 +296,13 @@ steamRouter.post("/unlink", async (_req, res) => {
   res.json({ ok: true });
 });
 
+const OWNED_GAMES_COOLDOWN_MS = 30 * 60 * 1000;
+
 steamRouter.post("/sync-owned-games", async (_req, res) => {
   const discordUserId = String(res.locals.userId);
-  const link = await db.query<{ user_id: string; steam_id64: string }>(
+  const link = await db.query<{ user_id: string; steam_id64: string; last_synced_at: string | null }>(
     `
-      SELECT sl.user_id, sl.steam_id64
+      SELECT sl.user_id, sl.steam_id64, sl.last_synced_at
       FROM steam_links sl
       INNER JOIN users u ON u.id = sl.user_id
       WHERE u.discord_user_id = $1
@@ -311,11 +319,27 @@ steamRouter.post("/sync-owned-games", async (_req, res) => {
     return;
   }
 
+  const lastSynced = link.rows[0].last_synced_at ? new Date(link.rows[0].last_synced_at).getTime() : 0;
+  const msSinceSync = Date.now() - lastSynced;
+  if (msSinceSync < OWNED_GAMES_COOLDOWN_MS) {
+    const retryAfterSecs = Math.ceil((OWNED_GAMES_COOLDOWN_MS - msSinceSync) / 1000);
+    res.setHeader("Retry-After", String(retryAfterSecs));
+    res.status(429).json({ error: "Sync cooldown active", retryAfterSeconds: retryAfterSecs });
+    return;
+  }
+
   try {
     const apiUrl =
       "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/" +
       `?key=${env.STEAM_WEB_API_KEY}&steamid=${link.rows[0].steam_id64}&include_appinfo=1`;
     const steamResponse = await fetch(apiUrl);
+
+    if (steamResponse.status === 429) {
+      const retryAfter = steamResponse.headers.get("Retry-After") ?? "60";
+      res.setHeader("Retry-After", retryAfter);
+      res.status(429).json({ error: "Steam API rate limited", retryAfterSeconds: parseInt(retryAfter, 10) });
+      return;
+    }
 
     if (!steamResponse.ok) {
       res.status(502).json({ error: "Steam API request failed" });
@@ -357,6 +381,14 @@ steamRouter.post("/sync-owned-games", async (_req, res) => {
 
     await db.query(`UPDATE steam_links SET last_synced_at = NOW() WHERE user_id = $1`, [link.rows[0].user_id]);
 
+    const topAppIds = games
+      .sort((a, b) => (b.playtime_forever ?? 0) - (a.playtime_forever ?? 0))
+      .slice(0, 8)
+      .map((g) => g.appid);
+    if (topAppIds.length > 0) {
+      void ingestNewsForApps(topAppIds, { maxApps: 8 }).catch(() => {});
+    }
+
     const wishlistResult = await syncWishlistForUser(link.rows[0].user_id, link.rows[0].steam_id64).catch((error: unknown) => {
       const msg = error instanceof Error ? error.message : String(error);
       console.error("Wishlist sync threw during sync-owned-games:", msg, error);
@@ -387,9 +419,9 @@ steamRouter.post("/sync-owned-games", async (_req, res) => {
 
 steamRouter.post("/sync-wishlist", async (_req, res) => {
   const discordUserId = String(res.locals.userId);
-  const link = await db.query<{ user_id: string; steam_id64: string }>(
+  const link = await db.query<{ user_id: string; steam_id64: string; last_synced_at: string | null }>(
     `
-      SELECT sl.user_id, sl.steam_id64
+      SELECT sl.user_id, sl.steam_id64, sl.last_synced_at
       FROM steam_links sl
       INNER JOIN users u ON u.id = sl.user_id
       WHERE u.discord_user_id = $1
@@ -406,9 +438,24 @@ steamRouter.post("/sync-wishlist", async (_req, res) => {
     return;
   }
 
+  const lastSynced = link.rows[0].last_synced_at ? new Date(link.rows[0].last_synced_at).getTime() : 0;
+  const msSinceSync = Date.now() - lastSynced;
+  if (msSinceSync < OWNED_GAMES_COOLDOWN_MS) {
+    const retryAfterSecs = Math.ceil((OWNED_GAMES_COOLDOWN_MS - msSinceSync) / 1000);
+    res.setHeader("Retry-After", String(retryAfterSecs));
+    res.status(429).json({ error: "Sync cooldown active", retryAfterSeconds: retryAfterSecs });
+    return;
+  }
+
   try {
     const result = await syncWishlistForUser(link.rows[0].user_id, link.rows[0].steam_id64);
     if (!result.ok) {
+      if (result.status === 429) {
+        const retryAfter = String(result.retryAfterSeconds ?? 60);
+        res.setHeader("Retry-After", retryAfter);
+        res.status(429).json({ error: "Steam API rate limited", retryAfterSeconds: parseInt(retryAfter, 10) });
+        return;
+      }
       res.status(502).json({ error: result.reason, status: result.status });
       return;
     }

@@ -243,7 +243,7 @@ export function App() {
 
     const intervalId = window.setInterval(() => {
       void refresh();
-    }, 5 * 60 * 1000);
+    }, 20 * 60 * 1000);
 
     return () => {
       cancelled = true;
@@ -261,6 +261,10 @@ export function App() {
       setPage("home");
     }
   }, [isAdmin, page]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [page]);
 
   useEffect(() => {
     if (!selectedNightId) return;
@@ -803,6 +807,18 @@ export function App() {
     }
   }
 
+  async function triggerGeneralNewsRecurate() {
+    try {
+      const response = await apiFetch("/news/general/recurate", { method: "POST", credentials: "include" });
+      const data = (await response.json().catch(() => null)) as {
+        ok: boolean; reset?: number; curated?: number; error?: string;
+      } | null;
+      return data ?? { ok: false, error: "No response" };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Request failed" };
+    }
+  }
+
   async function createNewsCard(input: {
     title: string;
     body: string;
@@ -1330,6 +1346,7 @@ export function App() {
           onTriggerNewsCuration={triggerNewsCuration}
           onTriggerGeneralNewsIngest={triggerGeneralNewsIngest}
           onTriggerGeneralNewsCurate={triggerGeneralNewsCurate}
+          onTriggerGeneralNewsRecurate={triggerGeneralNewsRecurate}
         />
       ) : null}
 

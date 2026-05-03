@@ -54,10 +54,12 @@ const RSS_FEEDS: Record<string, { name: string; url: string }> = {
 
 // Per-feed recent item cap — avoid flooding on first run
 const ITEMS_PER_FEED = 15;
-// Max articles to AI-curate per ingestion run
-const CURATION_BATCH_SIZE = 20;
+// Max articles to AI-curate per ingestion run (smaller batch = room for longer summaries)
+const CURATION_BATCH_SIZE = 10;
 
 let ingestionInFlight = false;
+let lastIngestedAt = 0;
+const INGEST_COOLDOWN_MS = 60 * 60 * 1000;
 
 const rssParser = new Parser({
   timeout: 10_000,
@@ -299,7 +301,7 @@ async function curateGeneralNewsBatch(
     id: it.external_id,
     source: it.source_name,
     title: it.title,
-    excerpt: it.contents ? it.contents.slice(0, 220) + (it.contents.length > 220 ? "…" : "") : ""
+    excerpt: it.contents ? it.contents.slice(0, 800) + (it.contents.length > 800 ? "…" : "") : ""
   }));
 
   const systemPrompt = `# Role
@@ -315,6 +317,17 @@ Curate a batch of general gaming news articles from external outlets (RSS feeds 
 - \`community\`: Trending gaming news that matches crew genre interests but not specific games they own
 - \`personal\`: Directly about games or series the crew actively plays (check Crew genre tags + top owned games in context)
 
+# Summary guidelines
+
+Write a comprehensive, detailed summary that gives readers the full picture without needing to visit the source. Cover:
+1. **What happened** — the core news fact, announcement, or event
+2. **Context** — why it matters, background on the game/studio/situation
+3. **Details** — specific numbers, dates, features, changes, or quotes where available
+4. **Crew angle** — how this might affect or interest this particular gaming community (skip if not applicable)
+5. **What's next** — expected follow-up, release date, or open questions
+
+Aim for 150–300 words. Write in a direct, conversational gamer tone — informative but not dry. No bullet points in the summary; use flowing prose. Don't start with "This article" or restate the title.
+
 # Output format
 
 Return a JSON array — one object per input article, in the same order.
@@ -325,7 +338,7 @@ Return a JSON array — one object per input article, in the same order.
     "relevanceScore": <number 0.0–1.0>,
     "label": "<top_news | community | personal>",
     "spoilerWarning": <true | false>,
-    "summary": "<2–3 sentence casual gamer summary>",
+    "summary": "<comprehensive 150-300 word summary following the guidelines above>",
     "duplicate": <true | false>
   }
 ]
@@ -341,7 +354,7 @@ Return ONLY the JSON array.`;
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent }
     ],
-    { maxTokens: 3072 }
+    { maxTokens: 8192 }
   );
 
   const raw = result.text.trim();
@@ -364,6 +377,7 @@ export async function ingestAndCurateGeneralNews(): Promise<{ fetched: number; c
   const enabled = getAISetting("news_general_enabled");
   if (enabled === "false") return { fetched: 0, curated: 0 };
   if (ingestionInFlight) return { fetched: 0, curated: 0 };
+  if (Date.now() - lastIngestedAt < INGEST_COOLDOWN_MS) return { fetched: 0, curated: 0 };
   ingestionInFlight = true;
 
   let totalFetched = 0;
@@ -440,10 +454,22 @@ export async function ingestAndCurateGeneralNews(): Promise<{ fetched: number; c
   } catch (err) {
     console.error("[generalNews] Ingestion error:", err);
   } finally {
+    lastIngestedAt = Date.now();
     ingestionInFlight = false;
   }
 
   return { fetched: totalFetched, curated: totalCurated };
+}
+
+/**
+ * Reset all existing curation data so rows will be re-processed by the next curation pass.
+ * Used when the curation prompt changes and summaries need to be regenerated.
+ */
+export async function resetAllCuration(): Promise<number> {
+  const result = await db.query<{ count: string }>(
+    `UPDATE general_news SET ai_curated_at = NULL RETURNING id`
+  );
+  return result.rowCount ?? 0;
 }
 
 /**
