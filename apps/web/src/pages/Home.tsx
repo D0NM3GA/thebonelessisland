@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { IslandCard } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type {
@@ -42,6 +41,8 @@ export function HomePage({
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []);
 
+  const featuredArticle = generalNews[0] ?? null;
+
   return (
     <div>
       {heroPhase !== "gone" && (
@@ -63,12 +64,22 @@ export function HomePage({
         </div>
       )}
       <div style={{ display: "grid", gap: 28 }}>
-        <NewsAndFriendsRow
-          generalNews={generalNews}
-          activeMembers={activeMembers}
-          totalMemberCount={totalMemberCount}
-          onNavigate={onNavigate}
-        />
+        {featuredArticle && <FeaturedNewsCard item={featuredArticle} onNavigate={onNavigate} />}
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            gap: 16,
+            alignItems: "start"
+          }}
+        >
+          <FriendsOnline
+            activeMembers={activeMembers}
+            totalMemberCount={totalMemberCount}
+            onNavigate={onNavigate}
+          />
+          <NuggiesSnapshot onNavigate={onNavigate} />
+        </section>
         <ActivityFeed events={activityEvents} onNavigate={onNavigate} />
         <DriftLog cards={newsCards} />
         <BotAndRitualRow />
@@ -203,283 +214,25 @@ function HeroButton({ variant, onClick, children }: HeroButtonProps) {
   );
 }
 
-// ── Gaming News Feed ──────────────────────────────────────────────────────────
+// â”€â”€ Featured News Card (home snapshot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-type NewsTab = "all" | "top_news" | "community" | "personal";
-
-const NEWS_TABS: Array<{ id: NewsTab; label: string; emoji: string }> = [
-  { id: "all", label: "All", emoji: "" },
-  { id: "top_news", label: "Breaking", emoji: "🔥" },
-  { id: "community", label: "Trending", emoji: "🌊" },
-  { id: "personal", label: "Your games", emoji: "🎮" }
-];
-
-const LABEL_COLORS: Record<string, string> = {
-  top_news: "#f59e0b",
-  community: "#22d3ee",
-  personal: "#4ade80"
-};
-
-const LABEL_LABELS: Record<string, string> = {
-  top_news: "🔥 Breaking",
-  community: "🌊 Trending",
-  personal: "🎮 Crew pick"
-};
-
-const NEWS_PAGE_SIZE = 8;
-
-function NewsAndFriendsRow({
-  generalNews,
-  activeMembers,
-  totalMemberCount,
+function FeaturedNewsCard({
+  item,
   onNavigate
 }: {
-  generalNews: GeneralNewsItem[];
-  activeMembers: GuildMember[];
-  totalMemberCount: number;
+  item: GeneralNewsItem;
   onNavigate: (page: PageId) => void;
 }) {
-  return (
-    <section
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-        gap: 16,
-        alignItems: "start"
-      }}
-    >
-      <GamingNewsFeed news={generalNews} />
-      <FriendsOnline
-        activeMembers={activeMembers}
-        totalMemberCount={totalMemberCount}
-        onNavigate={onNavigate}
-      />
-    </section>
-  );
-}
-
-function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
-  const [tab, setTab] = useState<NewsTab>("all");
-  const [showAll, setShowAll] = useState(false);
-  const [revealedSpoilers, setRevealedSpoilers] = useState<Set<string>>(new Set());
-  const [activeArticle, setActiveArticle] = useState<GeneralNewsItem | null>(null);
-
-  const filtered = useMemo(() => {
-    if (tab === "all") return news;
-    return news.filter((item) => item.aiLabel === tab);
-  }, [news, tab]);
-
-  const hero = filtered[0] ?? null;
-  const rest = filtered.slice(1);
-  const visibleRest = showAll ? rest : rest.slice(0, NEWS_PAGE_SIZE - 1);
-  const hasMore = rest.length > NEWS_PAGE_SIZE - 1 && !showAll;
-
-  function revealSpoiler(id: string) {
-    setRevealedSpoilers((prev) => new Set([...prev, id]));
-  }
-
-  return (
-    <>
-      <section style={{ display: "grid", gap: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <h2 className="island-display" style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>
-              Gaming news
-            </h2>
-            <div className="island-mono" style={{ marginTop: 4, fontSize: 11, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Fresh from the shore · AI-curated for the crew
-            </div>
-          </div>
-        </div>
-
-        {/* Tab bar */}
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {NEWS_TABS.map((t) => {
-            const active = t.id === tab;
-            const count = t.id === "all" ? news.length : news.filter((n) => n.aiLabel === t.id).length;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => { setTab(t.id); setShowAll(false); }}
-                style={{
-                  border: "none",
-                  background: active ? "rgba(37, 99, 235, 0.22)" : "transparent",
-                  color: active ? islandTheme.color.textPrimary : islandTheme.color.textSubtle,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  padding: "6px 14px",
-                  borderRadius: 999,
-                  cursor: "pointer",
-                  font: "inherit",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5
-                }}
-              >
-                {t.emoji ? <span>{t.emoji}</span> : null}
-                {t.label}
-                {count > 0 && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      background: active ? "rgba(37, 99, 235, 0.35)" : islandTheme.color.panelMutedBg,
-                      color: islandTheme.color.textMuted,
-                      borderRadius: 999,
-                      padding: "1px 6px",
-                      fontWeight: 700
-                    }}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {news.length === 0 ? (
-          <NewsEmptyState />
-        ) : filtered.length === 0 ? (
-          <IslandCard style={{ padding: "16px 18px" }}>
-            <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>
-              Nothing in this category right now. Check back after the next curation pass.
-            </div>
-          </IslandCard>
-        ) : (
-          <>
-            {/* Hero card */}
-            {hero && (
-              <NewsHeroCard
-                item={hero}
-                spoilerRevealed={revealedSpoilers.has(hero.externalId)}
-                onRevealSpoiler={() => revealSpoiler(hero.externalId)}
-                onOpen={() => setActiveArticle(hero)}
-              />
-            )}
-
-            {/* Supporting grid */}
-            {visibleRest.length > 0 && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-                  gap: 10
-                }}
-              >
-                {visibleRest.map((item) => (
-                  <NewsCard
-                    key={item.externalId}
-                    item={item}
-                    spoilerRevealed={revealedSpoilers.has(item.externalId)}
-                    onRevealSpoiler={() => revealSpoiler(item.externalId)}
-                    onOpen={() => setActiveArticle(item)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {hasMore && (
-              <button
-                type="button"
-                onClick={() => setShowAll(true)}
-                style={{
-                  alignSelf: "flex-start",
-                  background: "transparent",
-                  border: "none",
-                  color: islandTheme.color.primaryGlow,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  padding: 0,
-                  font: "inherit"
-                }}
-              >
-                {rest.length - (NEWS_PAGE_SIZE - 1)} more stories from the shore →
-              </button>
-            )}
-          </>
-        )}
-      </section>
-
-      {activeArticle && (
-        <NewsArticleModal
-          item={activeArticle}
-          onClose={() => setActiveArticle(null)}
-        />
-      )}
-    </>
-  );
-}
-
-function NewsEmptyState() {
-  return (
-    <IslandCard style={{ padding: "20px 22px" }}>
-      <div style={{ display: "grid", gap: 12 }}>
-        {/* Skeleton shimmer for 2 placeholder cards */}
-        {[0, 1].map((i) => (
-          <div
-            key={i}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "40px 1fr",
-              gap: 12,
-              alignItems: "start",
-              opacity: 0.4 - i * 0.1
-            }}
-          >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 8,
-                background: islandTheme.color.panelMutedBg,
-                animation: "shimmer 1.6s ease-in-out infinite"
-              }}
-            />
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ height: 13, borderRadius: 6, background: islandTheme.color.panelMutedBg, width: "70%" }} />
-              <div style={{ height: 11, borderRadius: 6, background: islandTheme.color.panelMutedBg, width: "90%" }} />
-              <div style={{ height: 11, borderRadius: 6, background: islandTheme.color.panelMutedBg, width: "55%" }} />
-            </div>
-          </div>
-        ))}
-        <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textMuted, lineHeight: 1.5 }}>
-          Curation is running — the tide brings in fresh picks every few minutes. Sync your Steam library to prime the feed.
-        </p>
-      </div>
-      <style>{`
-        @keyframes shimmer {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-      `}</style>
-    </IslandCard>
-  );
-}
-
-function NewsHeroCard({
-  item,
-  spoilerRevealed,
-  onRevealSpoiler,
-  onOpen
-}: {
-  item: GeneralNewsItem;
-  spoilerRevealed: boolean;
-  onRevealSpoiler: () => void;
-  onOpen: () => void;
-}) {
-  const isSpoiler = item.aiSpoilerWarning && !spoilerRevealed;
-  const summary = item.aiSummary ?? truncateContents(item.contents, 200);
-  const labelColor = LABEL_COLORS[item.aiLabel ?? ""] ?? islandTheme.color.textMuted;
-  const labelText = LABEL_LABELS[item.aiLabel ?? ""] ?? null;
+  const displayTags = (item.aiTags?.length ?? 0) > 0 ? item.aiTags.slice(0, 3) : [item.sourceName];
+  const summary = item.aiSummary
+    ?? (item.contents ? item.contents.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 200) + "â€¦" : null);
 
   return (
     <article
       role="button"
       tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpen(); }}
+      onClick={() => onNavigate("games-news")}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onNavigate("games-news"); }}
       style={{
         position: "relative",
         borderRadius: 16,
@@ -488,11 +241,8 @@ function NewsHeroCard({
           ? `linear-gradient(135deg, rgba(8,16,34,0.92) 40%, rgba(8,16,34,0.6) 75%, rgba(8,16,34,0.25) 100%), url("${item.imageUrl}") center / cover no-repeat`
           : `linear-gradient(135deg, rgba(37,99,235,0.28) 0%, ${islandTheme.color.panelBg} 80%)`,
         border: `1px solid ${islandTheme.color.cardBorder}`,
-        padding: "24px 24px 20px",
-        display: "grid",
-        gap: 10,
-        transition: "transform 180ms ease, box-shadow 180ms ease",
-        cursor: "pointer"
+        cursor: "pointer",
+        transition: "transform 180ms ease, box-shadow 180ms ease"
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-2px)";
@@ -503,545 +253,113 @@ function NewsHeroCard({
         e.currentTarget.style.boxShadow = "none";
       }}
     >
-      {/* Top row: source name + label badge */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          {item.sourceName}
-        </span>
-        {labelText && (
-          <span
-            className="island-mono"
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: labelColor,
-              background: `${labelColor}22`,
-              border: `1px solid ${labelColor}44`,
-              borderRadius: 999,
-              padding: "2px 8px",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {labelText}
-          </span>
-        )}
-      </div>
-
-      {/* Title */}
-      <h3
-        className="island-display"
-        style={{
-          margin: 0,
-          fontSize: "clamp(17px, 2.5vw, 22px)",
-          lineHeight: 1.15,
-          color: islandTheme.color.textPrimary
-        }}
-      >
-        {item.title}
-      </h3>
-
-      {/* Summary / spoiler */}
-      {isSpoiler ? (
-        <SpoilerBlock onReveal={(e) => { e.stopPropagation(); onRevealSpoiler(); }} />
-      ) : summary ? (
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, opacity: 0.95 }}>
-          {summary}
-        </p>
-      ) : null}
-
-      {/* Meta row */}
-      <NewsMetaRow item={item} />
-    </article>
-  );
-}
-
-function NewsCard({
-  item,
-  spoilerRevealed,
-  onRevealSpoiler,
-  onOpen
-}: {
-  item: GeneralNewsItem;
-  spoilerRevealed: boolean;
-  onRevealSpoiler: () => void;
-  onOpen: () => void;
-}) {
-  const isSpoiler = item.aiSpoilerWarning && !spoilerRevealed;
-  const summary = item.aiSummary ?? truncateContents(item.contents, 120);
-  const labelColor = LABEL_COLORS[item.aiLabel ?? ""] ?? null;
-  const labelText = LABEL_LABELS[item.aiLabel ?? ""] ?? null;
-
-  return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpen(); }}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "36px 1fr",
-        gap: 10,
-        padding: "12px 14px",
-        borderRadius: 12,
-        background: islandTheme.color.panelBg,
-        backdropFilter: islandTheme.glass.blur,
-        WebkitBackdropFilter: islandTheme.glass.blur,
-        border: `1px solid ${islandTheme.color.cardBorder}`,
-        cursor: "pointer",
-        transition: "border-color 140ms ease, transform 140ms ease",
-        height: "100%",
-        boxSizing: "border-box"
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = islandTheme.color.primaryGlow;
-        e.currentTarget.style.transform = "translateY(-1px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = islandTheme.color.cardBorder;
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
-    >
-      {/* Source thumbnail / fallback icon */}
-      <div>
-        {item.imageUrl ? (
-          <img
-            src={item.imageUrl}
-            alt=""
-            style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              background: islandTheme.color.panelMutedBg,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 16
-            }}
-          >
-            📰
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div style={{ minWidth: 0, display: "grid", gap: 4 }}>
-        {labelText && labelColor && (
-          <span
-            className="island-mono"
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              color: labelColor,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em"
-            }}
-          >
-            {labelText}
-          </span>
-        )}
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            lineHeight: 1.3,
-            overflow: "hidden",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical"
-          }}
-        >
-          {item.title}
-        </div>
-        {isSpoiler ? (
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); onRevealSpoiler(); }}
-            style={{
-              background: "rgba(245, 158, 11, 0.12)",
-              border: "1px solid rgba(245, 158, 11, 0.3)",
-              borderRadius: 6,
-              color: "#f59e0b",
-              fontSize: 11,
-              padding: "3px 8px",
-              cursor: "pointer",
-              font: "inherit",
-              textAlign: "left"
-            }}
-          >
-            ⚠ Spoiler — tap to reveal
-          </button>
-        ) : summary ? (
-          <div
-            style={{
-              fontSize: 12,
-              color: islandTheme.color.textSubtle,
-              lineHeight: 1.45,
-              overflow: "hidden",
-              display: "-webkit-box",
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: "vertical"
-            }}
-          >
-            {summary}
-          </div>
-        ) : null}
-        <NewsMetaRow item={item} compact />
-      </div>
-    </article>
-  );
-}
-
-function SpoilerBlock({ onReveal }: { onReveal: (e: React.MouseEvent) => void }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 14px",
-        borderRadius: 10,
-        background: "rgba(245, 158, 11, 0.08)",
-        border: "1px solid rgba(245, 158, 11, 0.25)"
-      }}
-    >
-      <span style={{ fontSize: 18 }}>⚠</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#f59e0b" }}>Spoiler warning</div>
-        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
-          This article contains story spoilers. Summary hidden.
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onReveal}
-        style={{
-          background: "rgba(245, 158, 11, 0.15)",
-          border: "1px solid rgba(245, 158, 11, 0.35)",
-          borderRadius: 8,
-          color: "#f59e0b",
-          fontSize: 12,
-          fontWeight: 700,
-          padding: "5px 10px",
-          cursor: "pointer",
-          font: "inherit",
-          whiteSpace: "nowrap"
-        }}
-      >
-        Reveal
-      </button>
-    </div>
-  );
-}
-
-function NewsMetaRow({ item, compact = false }: { item: GeneralNewsItem; compact?: boolean }) {
-  const ago = relativeAgo(item.publishedAt);
-  const crewMatch = item.matchedTags.length > 0;
-
-  return (
-    <div
-      className="island-mono"
-      style={{
-        display: "flex",
-        gap: 8,
-        alignItems: "center",
-        fontSize: compact ? 10 : 11,
-        color: islandTheme.color.textMuted,
-        flexWrap: "wrap",
-        marginTop: compact ? 2 : 4
-      }}
-    >
-      <span>{ago}</span>
-      {!compact && (
-        <>
-          <span style={{ opacity: 0.4 }}>·</span>
-          <span style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{item.sourceName}</span>
-        </>
-      )}
-      {crewMatch && (
-        <>
-          <span style={{ opacity: 0.4 }}>·</span>
-          <span style={{ color: "#4ade80" }}>crew match</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function truncateContents(contents: string | null, maxChars: number): string | null {
-  if (!contents) return null;
-  const stripped = contents.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
-  return stripped.length > maxChars ? stripped.slice(0, maxChars) + "…" : stripped;
-}
-
-// ── News Article Modal ────────────────────────────────────────────────────────
-
-function NewsArticleModal({
-  item,
-  onClose
-}: {
-  item: GeneralNewsItem;
-  onClose: () => void;
-}) {
-  const labelColor = LABEL_COLORS[item.aiLabel ?? ""] ?? islandTheme.color.textMuted;
-  const labelText = LABEL_LABELS[item.aiLabel ?? ""] ?? null;
-  const fullText = truncateContents(item.contents, 2000);
-  const ago = relativeAgo(item.publishedAt);
-
-  // Prevent background scroll without moving page position, close on Escape
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "clamp(12px, 3vh, 32px) clamp(12px, 3vw, 32px)"
-      }}
-    >
-      {/* Backdrop */}
-      <div
-        role="presentation"
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(4, 8, 20, 0.72)",
-          backdropFilter: "blur(6px)",
-          WebkitBackdropFilter: "blur(6px)"
-        }}
-      />
-
-      {/* Dialog */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          width: "100%",
-          maxWidth: 680,
-          maxHeight: "85vh",
-          overflowY: "auto",
-          borderRadius: 16,
-          background: islandTheme.color.panelBg,
-          backdropFilter: islandTheme.glass.blurStrong,
-          WebkitBackdropFilter: islandTheme.glass.blurStrong,
-          border: `1px solid ${islandTheme.color.cardBorder}`,
-          padding: "24px 24px 32px"
-        }}
-      >
-        {/* Close button */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close article"
-          style={{
-            position: "absolute",
-            top: 18,
-            right: 18,
-            width: 34,
-            height: 34,
-            borderRadius: "50%",
-            border: `1px solid ${islandTheme.color.cardBorder}`,
-            background: islandTheme.color.panelMutedBg,
-            color: islandTheme.color.textMuted,
-            fontSize: 16,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            font: "inherit"
-          }}
-        >
-          ✕
-        </button>
-
-        {/* Hero image */}
-        {item.imageUrl && (
-          <div
-            style={{
-              marginBottom: 20,
-              borderRadius: 12,
-              overflow: "hidden",
-              maxHeight: 200
-            }}
-          >
-            <img
-              src={item.imageUrl}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          </div>
-        )}
-
-        {/* Source + label row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {item.sourceName}
-          </span>
-          {item.author && (
-            <>
-              <span style={{ fontSize: 11, color: islandTheme.color.textMuted, opacity: 0.5 }}>·</span>
-              <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>{item.author}</span>
-            </>
-          )}
-          <span style={{ fontSize: 11, color: islandTheme.color.textMuted, opacity: 0.5 }}>·</span>
-          <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>{ago}</span>
-          {labelText && (
+      <div style={{ padding: "24px 24px 20px", display: "grid", gap: 10 }}>
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          {displayTags.map((tag) => (
             <span
+              key={tag}
               className="island-mono"
               style={{
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 700,
-                color: labelColor,
-                background: `${labelColor}22`,
-                border: `1px solid ${labelColor}44`,
-                borderRadius: 999,
-                padding: "2px 8px",
                 textTransform: "uppercase",
-                letterSpacing: "0.06em"
+                letterSpacing: "0.07em",
+                color: islandTheme.color.textMuted,
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 999,
+                padding: "2px 7px",
+                background: "rgba(255,255,255,0.06)"
               }}
             >
-              {labelText}
+              {tag}
             </span>
-          )}
+          ))}
         </div>
-
-        {/* Headline */}
-        <h2
+        <h3
           className="island-display"
-          style={{ margin: "0 0 18px", fontSize: "clamp(20px, 3vw, 26px)", lineHeight: 1.15, fontWeight: 800 }}
+          style={{ margin: 0, fontSize: "clamp(18px, 2.5vw, 24px)", lineHeight: 1.15, color: islandTheme.color.textPrimary }}
         >
           {item.title}
-        </h2>
-
-        {/* AI summary */}
-        {item.aiSummary && (
-          <div
-            style={{
-              padding: "14px 18px",
-              borderRadius: 12,
-              background: "rgba(37, 99, 235, 0.12)",
-              border: "1px solid rgba(37, 99, 235, 0.2)",
-              marginBottom: 20
-            }}
-          >
-            <div
-              className="island-mono"
-              style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.primaryGlow, marginBottom: 6 }}
-            >
-              AI Summary
-            </div>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: islandTheme.color.textPrimary }}>
-              {item.aiSummary}
-            </p>
-          </div>
+        </h3>
+        {item.aiSubtitle && (
+          <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, opacity: 0.85, lineHeight: 1.4 }}>
+            {item.aiSubtitle}
+          </p>
         )}
-
-        {/* Why it's relevant */}
-        {item.matchedTags.length > 0 && (
-          <div
-            style={{
-              padding: "12px 16px",
-              borderRadius: 10,
-              background: "rgba(74, 222, 128, 0.08)",
-              border: "1px solid rgba(74, 222, 128, 0.2)",
-              marginBottom: 20
-            }}
-          >
-            <div
-              className="island-mono"
-              style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "#4ade80", marginBottom: 6 }}
-            >
-              Why it's relevant to your crew
-            </div>
-            <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
-              Matches crew interests:{" "}
-              <span style={{ color: islandTheme.color.textPrimary }}>
-                {item.matchedTags.slice(0, 6).join(", ")}
-              </span>
-            </p>
-          </div>
+        {summary && (
+          <p style={{ margin: 0, fontSize: 14, color: islandTheme.color.textSubtle, lineHeight: 1.5, opacity: 0.9 }}>
+            {summary}
+          </p>
         )}
-
-        {/* Full article text */}
-        {fullText && (
-          <div style={{ marginBottom: 24 }}>
-            <div
-              className="island-mono"
-              style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted, marginBottom: 10 }}
-            >
-              Article
-            </div>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: islandTheme.color.textSubtle }}>
-              {fullText}
-            </p>
-          </div>
-        )}
-
-        {/* Source link */}
-        <div
-          style={{
-            paddingTop: 18,
-            borderTop: `1px solid ${islandTheme.color.cardBorder}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 10
-          }}
-        >
-          <div>
-            <div className="island-mono" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted, marginBottom: 2 }}>
-              Source
-            </div>
-            <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>{item.sourceName}</div>
-          </div>
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
+        <div style={{ marginTop: 4 }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onNavigate("games-news"); }}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "9px 18px",
-              borderRadius: 10,
-              background: islandTheme.color.primary,
-              color: "#fff",
+              background: "transparent",
+              border: `1px solid ${islandTheme.color.cardBorder}`,
+              color: islandTheme.color.textPrimary,
+              padding: "8px 16px",
+              borderRadius: 999,
               fontSize: 13,
               fontWeight: 700,
-              textDecoration: "none",
+              cursor: "pointer",
               font: "inherit"
             }}
           >
-            Read full article →
-          </a>
+            Read all gaming news →
+          </button>
         </div>
       </div>
-    </div>,
-    document.body
+    </article>
+  );
+}
+
+// â”€â”€ Nuggies Snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+function NuggiesSnapshot({ onNavigate }: { onNavigate: (page: PageId) => void }) {
+  return (
+    <IslandCard
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        padding: 18,
+        background: `linear-gradient(135deg, rgba(251,191,119,0.12) 0%, ${islandTheme.color.panelBg} 100%)`,
+        border: `1px solid rgba(251,191,119,0.2)`
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h3 className="island-display" style={{ margin: 0, fontSize: 17 }}>Nuggies</h3>
+        <span style={{ fontSize: 22 }}>ðŸ—</span>
+      </div>
+      <div
+        className="island-display"
+        style={{ fontSize: 36, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1 }}
+      >
+        â€”
+      </div>
+      <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+        Earn for attendance, daily claims, and more. Economy launching soon.
+      </div>
+      <button
+        type="button"
+        onClick={() => onNavigate("nuggies")}
+        style={{
+          alignSelf: "flex-start",
+          background: "transparent",
+          border: "none",
+          color: islandTheme.color.primaryGlow,
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: "pointer",
+          padding: 0,
+          font: "inherit"
+        }}
+      >
+        View Nuggies →
+      </button>
+    </IslandCard>
   );
 }
 
@@ -1072,7 +390,7 @@ function FriendsOnline({
           className="island-mono"
           style={{ fontSize: 11, color: islandTheme.color.textMuted }}
         >
-          {activeMembers.length} / {totalMemberCount || "—"}
+          {activeMembers.length} / {totalMemberCount || "â€”"}
         </span>
       </div>
       <div style={{ display: "grid", gap: 6 }}>
@@ -1100,7 +418,7 @@ function FriendsOnline({
           font: "inherit"
         }}
       >
-        All {totalMemberCount || "—"} crew →
+        All {totalMemberCount || "â€”"} crew →
       </button>
     </IslandCard>
   );
@@ -1261,7 +579,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
     case "game_night.created": {
       const title = typeof payload.title === "string" ? payload.title : "a new session";
       return {
-        icon: "🌴",
+        icon: "ðŸŒ´",
         metaText: ago,
         body: (
           <>
@@ -1272,7 +590,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
     }
     case "game_night.rsvp_joined":
       return {
-        icon: "🪵",
+        icon: "ðŸªµ",
         metaText: ago,
         body: (
           <>
@@ -1282,7 +600,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "game_night.rsvp_left":
       return {
-        icon: "🌫",
+        icon: "ðŸŒ«",
         metaText: ago,
         body: (
           <>
@@ -1292,7 +610,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "game_night.game_picked":
       return {
-        icon: "🎯",
+        icon: "ðŸŽ¯",
         metaText: ago,
         body: (
           <>
@@ -1302,7 +620,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "steam.linked":
       return {
-        icon: "🔗",
+        icon: "ðŸ”—",
         metaText: ago,
         body: (
           <>
@@ -1312,7 +630,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "steam.unlinked":
       return {
-        icon: "🪢",
+        icon: "ðŸª¢",
         metaText: ago,
         body: (
           <>
@@ -1323,22 +641,22 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
     case "steam.synced": {
       const synced = typeof payload.syncedGames === "number" ? payload.syncedGames : 0;
       return {
-        icon: "🔄",
+        icon: "ðŸ”„",
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> resynced their library — <Target>{synced} game{synced === 1 ? "" : "s"}</Target>.
+            <strong>{actorName}</strong> resynced their library â€” <Target>{synced} game{synced === 1 ? "" : "s"}</Target>.
           </>
         )
       };
     }
     default:
       return {
-        icon: "✨",
+        icon: "âœ¨",
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> · {event.eventType}
+            <strong>{actorName}</strong> Â· {event.eventType}
           </>
         )
       };
@@ -1359,7 +677,7 @@ function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavig
     <section id="activity" style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Activity feed"
-        meta="Latest from your crew — RSVPs, game picks, and library syncs."
+        meta="Latest from your crew â€” RSVPs, game picks, and library syncs."
         action="Open community →"
         onAction={() => onNavigate("community")}
       />
@@ -1400,7 +718,7 @@ function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavig
           {sliced.length === 0 ? (
             <div style={{ padding: "24px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
               {events.length === 0
-                ? "No island activity yet — schedule a game night or sync your library to get the dock buzzing."
+                ? "No island activity yet â€” schedule a game night or sync your library to get the dock buzzing."
                 : "Nothing in this category right now."}
             </div>
           ) : (
@@ -1426,7 +744,7 @@ function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavig
               font: "inherit"
             }}
           >
-            View full feed — {visible.length - ACTIVITY_FEED_LIMIT} more event{visible.length - ACTIVITY_FEED_LIMIT !== 1 ? "s" : ""} →
+            View full feed â€” {visible.length - ACTIVITY_FEED_LIMIT} more event{visible.length - ACTIVITY_FEED_LIMIT !== 1 ? "s" : ""} →
           </button>
         )}
       </IslandCard>
@@ -1530,7 +848,7 @@ function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: bool
           justifyContent: "center"
         }}
       >
-        ⋯
+        â‹¯
       </span>
     </div>
   );
@@ -1570,7 +888,7 @@ function DriftLog({ cards }: { cards: NewsCardData[] }) {
 function NewsCardTile({ card }: { card: NewsCardData }) {
   const ago = relativeAgo(card.publishedAt);
   const tag = card.tag ? card.tag : "drift log";
-  const meta = `${tag} · ${ago}`;
+  const meta = `${tag} Â· ${ago}`;
   const content = (
     <article
       style={{
@@ -1649,7 +967,7 @@ function BotAndRitualRow() {
         eyebrow="Try the bot"
         title="/whatcanweplay"
         body="Drop the slash command in any island channel. The bot pings the API, scans the crew's libraries, and surfaces overlap and near-matches in three seconds."
-        ctaLabel="Open in Discord ↗"
+        ctaLabel="Open in Discord â†—"
         primary
       />
       <CtaCard

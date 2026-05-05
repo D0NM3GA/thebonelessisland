@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, apiFetch } from "./api/client.js";
 import { GAME_NIGHTS_TILE_BG_URL, getGameNightBanner } from "./assets.js";
-import { AchievementsPage } from "./pages/Achievements.js";
 import { AdminPage } from "./pages/Admin.js";
 import { CommunityPage } from "./pages/Community.js";
 import { GamesPage } from "./pages/Games.js";
+import { GamingNewsPage } from "./pages/GamingNews.js";
 import { HomePage } from "./pages/Home.js";
 import { LibraryPage } from "./pages/Library.js";
 import { LoginScreen } from "./pages/LoginScreen.js";
+import { NuggiesPage } from "./pages/Nuggies.js";
 import { ProfilePage } from "./pages/Profile.js";
 import { ToastHost, useToastsFromStatus } from "./system/toast.js";
 import { islandCopy, islandTheme } from "./theme.js";
@@ -35,6 +36,15 @@ import type {
   Recommendation,
   ServerSetting
 } from "./types.js";
+
+function ComingSoonPage({ title, description }: { title: string; description: string }) {
+  return (
+    <div style={{ paddingTop: 10 }}>
+      <h1 style={{ fontFamily: "inherit", fontSize: 28, fontWeight: 800, margin: "0 0 8px" }}>{title}</h1>
+      <p style={{ margin: 0, fontSize: 15, opacity: 0.7 }}>{description}</p>
+    </div>
+  );
+}
 
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -1306,7 +1316,27 @@ export function App() {
         />
       ) : null}
 
-      {page === "achievements" ? <AchievementsPage /> : null}
+      {page === "games-news" ? (
+        <GamingNewsPage generalNews={generalNews} />
+      ) : null}
+
+      {page === "community-forums" ? (
+        <ComingSoonPage title="Forums" description="Island discussions and crew talk. Coming soon." />
+      ) : null}
+
+      {page === "community-leaderboard" ? (
+        <ComingSoonPage title="Leaderboard" description="Top Nuggies holders across the crew. Coming soon." />
+      ) : null}
+
+      {page === "nuggies" ? <NuggiesPage /> : null}
+
+      {page === "nuggies-history" ? (
+        <ComingSoonPage title="Nuggies History" description="Your full transaction log. Coming soon." />
+      ) : null}
+
+      {page === "nuggies-milestones" ? (
+        <ComingSoonPage title="Milestones" description="Badge tracking and achievement milestones. Coming soon." />
+      ) : null}
 
       {page === "profile" ? (
         <ProfilePage

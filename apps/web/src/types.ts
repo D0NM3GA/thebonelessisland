@@ -1,9 +1,14 @@
 export type PageId =
   | "home"
   | "games"
+  | "games-news"
   | "library"
   | "community"
-  | "achievements"
+  | "community-forums"
+  | "community-leaderboard"
+  | "nuggies"
+  | "nuggies-history"
+  | "nuggies-milestones"
   | "profile"
   | "admin";
 
@@ -155,8 +160,14 @@ export type GeneralNewsItem = {
   matchedTags: string[];
   aiRelevanceScore: number | null;
   aiSummary: string | null;
+  aiSubtitle: string | null;
+  aiTags: string[];
+  aiWhyRecommended: string | null;
   aiLabel: "top_news" | "community" | "personal" | null;
   aiSpoilerWarning: boolean;
+  aiGameTitle: string | null;
+  upvotes: number;
+  downvotes: number;
 };
 
 export type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";

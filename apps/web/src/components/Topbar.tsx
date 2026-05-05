@@ -2,13 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { islandTheme } from "../theme.js";
 import type { MeProfile, PageId } from "../types.js";
 import { UserMenu } from "./UserMenu.js";
-
-const NAV_ITEMS: Array<{ id: PageId; label: string }> = [
-  { id: "home", label: "Home" },
-  { id: "games", label: "Games" },
-  { id: "community", label: "Community" },
-  { id: "achievements", label: "Achievements" }
-];
+import { MegaMenu } from "./MegaMenu.js";
 
 type TopbarProps = {
   page: PageId;
@@ -70,7 +64,7 @@ export function Topbar({ page, onNavigate, profile, isAdmin, onLogout, onSyncSte
         }}
       >
         <Brand onNavigate={onNavigate} />
-        <NavBar page={page} onNavigate={onNavigate} />
+        <MegaMenu page={page} onNavigate={onNavigate} isAdmin={isAdmin} />
         <div style={{ flex: 1, minWidth: 12 }} />
         <SearchInput value={search} onChange={setSearch} />
         <UserTrigger
@@ -133,7 +127,7 @@ function Brand({ onNavigate }: { onNavigate: (page: PageId) => void }) {
         }}
       />
       <div>
-        <div className="island-display" style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.01em" }}>
+        <div className="island-display" style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.01em", color: islandTheme.color.textPrimary }}>
           The Boneless Island
         </div>
         <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: -2 }}>
@@ -141,47 +135,6 @@ function Brand({ onNavigate }: { onNavigate: (page: PageId) => void }) {
         </div>
       </div>
     </button>
-  );
-}
-
-type NavBarProps = {
-  page: PageId;
-  onNavigate: (id: PageId) => void;
-};
-
-function NavBar({ page, onNavigate }: NavBarProps) {
-  return (
-    <nav style={{ display: "flex", gap: 4, marginLeft: 8 }}>
-      {NAV_ITEMS.map((item) => {
-        const active = page === item.id;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onNavigate(item.id)}
-            style={{
-              border: "none",
-              background: active ? "rgba(37, 99, 235, 0.22)" : "transparent",
-              color: active ? islandTheme.color.textPrimary : islandTheme.color.textSubtle,
-              fontSize: 14,
-              fontWeight: 500,
-              padding: "8px 12px",
-              borderRadius: 999,
-              cursor: "pointer",
-              transition: "background 140ms, color 140ms"
-            }}
-            onMouseEnter={(e) => {
-              if (!active) e.currentTarget.style.background = islandTheme.color.secondary;
-            }}
-            onMouseLeave={(e) => {
-              if (!active) e.currentTarget.style.background = "transparent";
-            }}
-          >
-            {item.label}
-          </button>
-        );
-      })}
-    </nav>
   );
 }
 
