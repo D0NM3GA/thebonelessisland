@@ -81,15 +81,52 @@ const OUTLET_TAG_BLOCKLIST = new Set(
   Object.values(RSS_FEEDS).map((f) => f.name.toLowerCase())
 );
 
-/** Strip outlet names and blank entries from AI-generated tags. */
-function sanitizeTags(tags: string[]): string[] {
+// Taxonomy allowlists — only these values are accepted for each category
+const ALLOWED_CONTENT_TYPES = new Set([
+  "News", "Patch Notes", "Announcement", "Review", "Preview",
+  "Opinion", "Interview", "Feature", "Rumor"
+]);
+const ALLOWED_GENRES = new Set([
+  "FPS", "RPG", "Strategy", "Horror", "Platformer", "Survival",
+  "Battle Royale", "MOBA", "Racing", "Puzzle", "Fighting", "Sim", "MMO"
+]);
+const ALLOWED_PLATFORMS = new Set([
+  "PC", "PlayStation", "Xbox", "Nintendo", "Mobile", "VR"
+]);
+
+/** Fetch lowercased set of all crew game + studio names for Crew Pick tag validation. */
+async function getCrewEntityNames(): Promise<Set<string>> {
+  const result = await db.query<{ name: string }>(
+    `SELECT DISTINCT LOWER(g.name) AS name FROM user_games ug INNER JOIN games g ON g.app_id = ug.app_id
+     UNION
+     SELECT DISTINCT LOWER(d) AS name FROM user_games ug
+     INNER JOIN games g ON g.app_id = ug.app_id,
+     UNNEST(g.developers) AS d`
+  );
+  return new Set(result.rows.map((r) => r.name));
+}
+
+/**
+ * Strip tags that don't belong to the taxonomy allowlist.
+ * Crew Pick tags (game/studio names) are validated against crewNames.
+ * Pass an empty Set when crew names aren't available.
+ */
+function sanitizeTags(tags: string[], crewNames: Set<string> = new Set()): string[] {
   const result = tags.filter((t) => {
-    const lower = t.trim().toLowerCase();
-    const blocked = OUTLET_TAG_BLOCKLIST.has(lower);
-    if (blocked) console.log(`[generalNews] sanitizeTags: blocked "${t}"`);
-    return lower.length > 0 && !blocked;
+    const trimmed = t.trim();
+    const lower = trimmed.toLowerCase();
+    if (!lower) return false;
+    if (OUTLET_TAG_BLOCKLIST.has(lower)) return false;
+    if (ALLOWED_CONTENT_TYPES.has(trimmed)) return true;
+    if (ALLOWED_GENRES.has(trimmed)) return true;
+    if (ALLOWED_PLATFORMS.has(trimmed)) return true;
+    if (crewNames.has(lower)) return true;
+    return false;
   });
-  console.log(`[generalNews] sanitizeTags: input=[${tags.join("|")}] → output=[${result.join("|")}]`);
+  if (result.length !== tags.length) {
+    const dropped = tags.filter((t) => !result.includes(t));
+    console.log(`[generalNews] sanitizeTags: dropped [${dropped.join("|")}] → kept [${result.join("|")}]`);
+  }
   return result;
 }
 
@@ -531,7 +568,9 @@ export async function ingestAndCurateGeneralNews(force = false): Promise<{ fetch
   let totalCurated = 0;
 
   try {
-    const [crewTags, gameNames] = await Promise.all([getCrewGameTags(), getCrewGameNames()]);
+    const [crewTags, gameNames, crewEntityNames] = await Promise.all([
+      getCrewGameTags(), getCrewGameNames(), getCrewEntityNames()
+    ]);
 
     // Determine which RSS sources are enabled
     const rawSources = getAISetting("news_rss_sources") ?? "pcgamer,rockpapershotgun,eurogamer,kotaku";
@@ -590,7 +629,7 @@ export async function ingestAndCurateGeneralNews(force = false): Promise<{ fetch
                    ai_curated_at       = NOW()
                WHERE id = $9`,
               [res.relevanceScore, res.summary, res.label, res.spoilerWarning ?? false,
-               res.subtitle || null, sanitizeTags(res.tags ?? []), res.whyRecommended ?? null,
+               res.subtitle || null, sanitizeTags(res.tags ?? [], crewEntityNames), res.whyRecommended ?? null,
                res.gameTitle ?? null, row.id]
             );
             totalCurated++;
@@ -645,13 +684,13 @@ export async function debugCurateOne(): Promise<{
   if (!article) return { article: null, rawAiResult: null, sanitizedTags: [] };
 
   try {
-    const crewContext = await buildCrewContext();
+    const [crewContext, crewEntityNames] = await Promise.all([buildCrewContext(), getCrewEntityNames()]);
     const results = await curateGeneralNewsBatch([article], crewContext);
     const raw = results[0] ?? null;
     return {
       article,
       rawAiResult: raw,
-      sanitizedTags: raw ? sanitizeTags(raw.tags ?? []) : []
+      sanitizedTags: raw ? sanitizeTags(raw.tags ?? [], crewEntityNames) : []
     };
   } catch (err) {
     return {
@@ -682,7 +721,7 @@ export async function curateUncuratedGeneralNews(): Promise<number> {
   if (uncurated.rows.length === 0) return 0;
 
   try {
-    const crewContext = await buildCrewContext();
+    const [crewContext, crewEntityNames] = await Promise.all([buildCrewContext(), getCrewEntityNames()]);
     const results = await curateGeneralNewsBatch(uncurated.rows, crewContext);
     let count = 0;
 
@@ -696,8 +735,7 @@ export async function curateUncuratedGeneralNews(): Promise<number> {
           [row.id]
         );
       } else {
-        const tags = sanitizeTags(res.tags ?? []);
-        console.log(`[generalNews] curate saving tags for ${row.id}: [${tags.join("|")}]`);
+        const tags = sanitizeTags(res.tags ?? [], crewEntityNames);
         await db.query(
           `UPDATE general_news
            SET ai_relevance_score  = $1,

@@ -1,6 +1,9 @@
+import { useState, useEffect } from "react";
+import { apiFetch } from "../api/client.js";
 import { IslandCard } from "../islandUi.js";
+import { NuggieBadge } from "../components/NuggieBadge.js";
 import { islandTheme } from "../theme.js";
-import type { ActivityEvent, PageId } from "../types.js";
+import type { ActivityEvent, NuggiesLeaderboardEntry, PageId } from "../types.js";
 
 type CommunityPageProps = {
   isAdmin: boolean;
@@ -9,13 +12,23 @@ type CommunityPageProps = {
 };
 
 export function CommunityPage({ isAdmin, activityEvents, onNavigate }: CommunityPageProps) {
+  const [nuggiesLeaderboard, setNuggiesLeaderboard] = useState<NuggiesLeaderboardEntry[]>([]);
+
+  useEffect(() => {
+    void apiFetch("/nuggies/leaderboard")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { leaderboard: NuggiesLeaderboardEntry[] } | null) => {
+        if (d?.leaderboard) setNuggiesLeaderboard(d.leaderboard.slice(0, 5));
+      });
+  }, []);
+
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <Hero />
       <CrewCarousel isAdmin={isAdmin} onNavigate={onNavigate} />
       <ClipsAndActivityRow events={activityEvents} />
       <ForumsAndClubsRow />
-      <EventsAndLeaderboardsRow />
+      <EventsAndLeaderboardsRow nuggiesLeaderboard={nuggiesLeaderboard} />
     </div>
   );
 }
@@ -606,15 +619,7 @@ const EVENTS = [
   { month: "MAY", day: "17", title: "Cozy Game Jam Watch Party", detail: "Stream + chat · 7pm", count: "22 going" }
 ];
 
-const LEADERBOARD = [
-  { rank: "🥇", name: "jkraken", color: "#22d3ee", initials: "JK", game: "Cosmic Cruiser", score: "24,810" },
-  { rank: "🥈", name: "SpeedyNugget", color: "#22d3ee", initials: "SP", game: "Cosmic Cruiser", score: "19,440" },
-  { rank: "🥉", name: "aloha-pirate", color: "#ef8354", initials: "AL", game: "Lethal Company", score: "14,302" },
-  { rank: "#4", name: "palmwave", color: "#86efac", initials: "PA", game: "Stardew Valley", score: "11,870" },
-  { rank: "#5", name: "ChefNugget", color: "#fbbf24", initials: "CH", game: "Chef's Kitchen", score: "9,914" }
-];
-
-function EventsAndLeaderboardsRow() {
+function EventsAndLeaderboardsRow({ nuggiesLeaderboard }: { nuggiesLeaderboard: NuggiesLeaderboardEntry[] }) {
   return (
     <section
       style={{
@@ -632,11 +637,17 @@ function EventsAndLeaderboardsRow() {
         </IslandCard>
       </div>
       <div>
-        <SectionHead title="Leaderboards · this week" meta="Top scorers across the library." action="All boards →" />
+        <SectionHead title="Nuggies · top islanders" meta="Most Nuggies earned on the island." action="Full leaderboard →" />
         <IslandCard style={{ padding: 0, overflow: "hidden", marginTop: 12 }}>
-          {LEADERBOARD.map((row, i) => (
-            <LeaderRow key={row.name} row={row} firstRow={i === 0} />
-          ))}
+          {nuggiesLeaderboard.length === 0 ? (
+            <div style={{ padding: "16px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
+              Leaderboard loading…
+            </div>
+          ) : (
+            nuggiesLeaderboard.map((entry, i) => (
+              <NuggiesLeaderRow key={entry.discordUserId} entry={entry} firstRow={i === 0} />
+            ))
+          )}
         </IslandCard>
       </div>
     </section>
@@ -705,7 +716,8 @@ function EventRow({ entry, firstRow }: { entry: (typeof EVENTS)[number]; firstRo
   );
 }
 
-function LeaderRow({ row, firstRow }: { row: (typeof LEADERBOARD)[number]; firstRow: boolean }) {
+function NuggiesLeaderRow({ entry, firstRow }: { entry: NuggiesLeaderboardEntry; firstRow: boolean }) {
+  const rankLabel = entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : `#${entry.rank}`;
   return (
     <div
       style={{
@@ -723,36 +735,44 @@ function LeaderRow({ row, firstRow }: { row: (typeof LEADERBOARD)[number]; first
           fontWeight: 800,
           fontSize: 18,
           textAlign: "center",
-          color: row.rank.startsWith("#") ? islandTheme.color.textMuted : islandTheme.palette.sandWarmAccent
+          color: entry.rank <= 3 ? islandTheme.palette.sandWarmAccent : islandTheme.color.textMuted
         }}
       >
-        {row.rank}
+        {rankLabel}
       </div>
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 999,
-          background: row.color,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 800,
-          color: "white",
-          fontSize: 12
-        }}
-      >
-        {row.initials}
-      </div>
+      {entry.avatarUrl ? (
+        <img src={entry.avatarUrl} alt="" width={36} height={36} style={{ borderRadius: 999 }} />
+      ) : (
+        <div
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 999,
+            background: islandTheme.color.panelMutedBg,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontWeight: 800,
+            color: islandTheme.color.textMuted,
+            fontSize: 12
+          }}
+        >
+          {entry.username.slice(0, 2).toUpperCase()}
+        </div>
+      )}
       <div>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>{row.name}</div>
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted }}>{row.game}</div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>{entry.username}</div>
+        {entry.equippedTitle && (
+          <div style={{ marginTop: 2 }}>
+            <NuggieBadge item={{ ...entry.equippedTitle, itemType: entry.equippedTitle.itemType as "title" | "flair" | "badge" }} size="sm" />
+          </div>
+        )}
       </div>
       <span
         className="island-mono"
-        style={{ fontWeight: 700, fontSize: 14, color: islandTheme.palette.sandWarmAccent }}
+        style={{ fontWeight: 700, fontSize: 13, color: islandTheme.palette.sandWarmAccent }}
       >
-        {row.score}
+        ₦{entry.balance.toLocaleString()}
       </span>
     </div>
   );

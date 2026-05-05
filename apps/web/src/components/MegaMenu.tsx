@@ -29,7 +29,7 @@ const NAV_GROUPS: NavGroup[] = [
     defaultId: "community",
     children: [
       { id: "community", label: "Members", description: "Who's on the island right now" },
-      { id: "community-forums", label: "Forums", description: "Island discussions and crew talk", badge: "soon" },
+      { id: "community-forums", label: "Forums", description: "Island discussions and crew talk" },
       { id: "community-leaderboard", label: "Leaderboard", description: "Top Nuggies holders", badge: "soon" }
     ]
   },

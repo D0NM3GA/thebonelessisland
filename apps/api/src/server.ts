@@ -11,9 +11,12 @@ import { generalNewsRouter } from "./routes/generalNews.js";
 import { gameNightRouter } from "./routes/gameNights.js";
 import { membersRouter } from "./routes/members.js";
 import { newsCardsRouter } from "./routes/newsCards.js";
+import { nuggiesRouter } from "./routes/nuggies.js";
+import { forumsRouter } from "./routes/forums.js";
 import { profileRouter } from "./routes/profile.js";
 import { settingsRouter } from "./routes/settings.js";
 import { loadSettings } from "./lib/serverSettings.js";
+import { runMigrations } from "./db/runMigrations.js";
 import { recommendationRouter } from "./routes/recommendations.js";
 import { steamRouter } from "./routes/steam.js";
 
@@ -51,6 +54,8 @@ app.use("/activity", activityRouter);
 app.use("/news-cards", newsCardsRouter);
 app.use("/members", membersRouter);
 app.use("/settings", settingsRouter);
+app.use("/nuggies", nuggiesRouter);
+app.use("/forums", forumsRouter);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (error instanceof ZodError) {
@@ -62,16 +67,22 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ error: "Internal server error" });
 });
 
-// Load server settings from DB before accepting requests
-loadSettings()
-  .then(() => {
-    app.listen(Number(env.API_PORT), () => {
-      console.log(`API listening on ${env.API_PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error("Failed to load server settings — starting anyway:", err);
-    app.listen(Number(env.API_PORT), () => {
-      console.log(`API listening on ${env.API_PORT} (settings not loaded)`);
-    });
+// Run migrations + load settings before accepting requests
+async function bootstrap() {
+  try {
+    const { applied, skipped } = await runMigrations();
+    console.log(`[boot] migrations: ${applied} applied, ${skipped} skipped`);
+  } catch (err) {
+    console.error("[boot] migration runner failed:", err);
+  }
+  try {
+    await loadSettings();
+  } catch (err) {
+    console.error("[boot] settings load failed — starting anyway:", err);
+  }
+  app.listen(Number(env.API_PORT), () => {
+    console.log(`API listening on ${env.API_PORT}`);
   });
+}
+
+void bootstrap();

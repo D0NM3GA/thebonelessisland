@@ -1,6 +1,29 @@
 import { Request, Response, NextFunction } from "express";
 import { db } from "../db/client.js";
+import { env } from "../config.js";
 import { getGuildId, getParentRoleName } from "./serverSettings.js";
+
+/** Accepts either a valid session OR a bot request (shared secret + x-discord-user-id header). */
+export function requireBotOrSession(req: Request, res: Response, next: NextFunction) {
+  const botSecret = req.get("x-island-bot-secret");
+  if (botSecret && env.BOT_API_SHARED_SECRET && botSecret === env.BOT_API_SHARED_SECRET) {
+    const discordUserId = req.get("x-discord-user-id");
+    if (!discordUserId) {
+      res.status(400).json({ error: "Bot requests require x-discord-user-id header" });
+      return;
+    }
+    res.locals.userId = discordUserId;
+    next();
+    return;
+  }
+  const userId = req.session?.userId;
+  if (!userId) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  res.locals.userId = userId;
+  next();
+}
 
 export function requireSession(req: Request, res: Response, next: NextFunction) {
   const userId = req.session?.userId;

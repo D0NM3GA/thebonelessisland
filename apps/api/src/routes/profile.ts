@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
+import { getEquippedItems } from "../lib/nuggiesLedger.js";
 
 const patchSchema = z.object({
   steamVisibility: z.enum(["private", "members", "public"]).optional(),
@@ -57,6 +58,21 @@ profileRouter.get("/me", async (req, res) => {
     return;
   }
 
+  // Nuggies balance + opted-out + equipped items
+  const [balRow, optRow, equippedItems] = await Promise.all([
+    db.query<{ balance: string }>(
+      `SELECT nb.balance FROM nuggies_balances nb
+       INNER JOIN users u ON u.id = nb.user_id
+       WHERE u.discord_user_id = $1`,
+      [row.discord_user_id]
+    ),
+    db.query<{ nuggies_opted_out: boolean }>(
+      "SELECT nuggies_opted_out FROM users WHERE discord_user_id = $1",
+      [row.discord_user_id]
+    ),
+    getEquippedItems(row.discord_user_id).catch(() => []),
+  ]);
+
   res.json({
     profile: {
       discordUserId: row.discord_user_id,
@@ -69,7 +85,10 @@ profileRouter.get("/me", async (req, res) => {
       steamLastSyncedAt: row.steam_last_synced_at,
       roleNames: row.role_names ?? [],
       inVoice: Boolean(row.in_voice),
-      richPresenceText: row.rich_presence_text ?? "Presence unavailable"
+      richPresenceText: row.rich_presence_text ?? "Presence unavailable",
+      nuggieBalance: parseInt(balRow.rows[0]?.balance ?? "0", 10),
+      nuggiesOptedOut: optRow.rows[0]?.nuggies_opted_out ?? false,
+      equippedItems,
     }
   });
 });

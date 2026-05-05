@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { IslandCard } from "../islandUi.js";
+import { NuggieBadge } from "../components/NuggieBadge.js";
 import { islandTheme } from "../theme.js";
 import type {
   ActivityCategory,
@@ -63,8 +64,7 @@ export function HomePage({
           </div>
         </div>
       )}
-      <div style={{ display: "grid", gap: 28 }}>
-        {featuredArticle && <FeaturedNewsCard item={featuredArticle} onNavigate={onNavigate} />}
+      <div style={{ display: "grid", gap: 20 }}>
         <section
           style={{
             display: "grid",
@@ -73,13 +73,14 @@ export function HomePage({
             alignItems: "start"
           }}
         >
+          <NuggiesSnapshot profile={profile} onNavigate={onNavigate} />
           <FriendsOnline
             activeMembers={activeMembers}
             totalMemberCount={totalMemberCount}
             onNavigate={onNavigate}
           />
-          <NuggiesSnapshot onNavigate={onNavigate} />
         </section>
+        {featuredArticle && <FeaturedNewsCard item={featuredArticle} onNavigate={onNavigate} />}
         <ActivityFeed events={activityEvents} onNavigate={onNavigate} />
         <DriftLog cards={newsCards} />
         <BotAndRitualRow />
@@ -214,7 +215,7 @@ function HeroButton({ variant, onClick, children }: HeroButtonProps) {
   );
 }
 
-// â”€â”€ Featured News Card (home snapshot) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Featured News Card (home snapshot) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 function FeaturedNewsCard({
   item,
@@ -224,8 +225,6 @@ function FeaturedNewsCard({
   onNavigate: (page: PageId) => void;
 }) {
   const displayTags = (item.aiTags?.length ?? 0) > 0 ? item.aiTags.slice(0, 3) : [item.sourceName];
-  const summary = item.aiSummary
-    ?? (item.contents ? item.contents.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 200) + "â€¦" : null);
 
   return (
     <article
@@ -235,89 +234,98 @@ function FeaturedNewsCard({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onNavigate("games-news"); }}
       style={{
         position: "relative",
-        borderRadius: 16,
+        borderRadius: 14,
         overflow: "hidden",
         background: item.imageUrl
-          ? `linear-gradient(135deg, rgba(8,16,34,0.92) 40%, rgba(8,16,34,0.6) 75%, rgba(8,16,34,0.25) 100%), url("${item.imageUrl}") center / cover no-repeat`
-          : `linear-gradient(135deg, rgba(37,99,235,0.28) 0%, ${islandTheme.color.panelBg} 80%)`,
+          ? `linear-gradient(135deg, rgba(8,16,34,0.93) 35%, rgba(8,16,34,0.55) 75%, rgba(8,16,34,0.2) 100%), url("${item.imageUrl}") center / cover no-repeat`
+          : `linear-gradient(135deg, rgba(37,99,235,0.22) 0%, ${islandTheme.color.panelBg} 80%)`,
         border: `1px solid ${islandTheme.color.cardBorder}`,
         cursor: "pointer",
-        transition: "transform 180ms ease, box-shadow 180ms ease"
+        transition: "transform 160ms ease, box-shadow 160ms ease"
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-2px)";
-        e.currentTarget.style.boxShadow = "0 20px 45px rgba(0,0,0,0.35)";
+        e.currentTarget.style.transform = "translateY(-1px)";
+        e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.28)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "translateY(0)";
         e.currentTarget.style.boxShadow = "none";
       }}
     >
-      <div style={{ padding: "24px 24px 20px", display: "grid", gap: 10 }}>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-          {displayTags.map((tag) => (
-            <span
-              key={tag}
-              className="island-mono"
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                color: islandTheme.color.textMuted,
-                border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 999,
-                padding: "2px 7px",
-                background: "rgba(255,255,255,0.06)"
-              }}
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-        <h3
-          className="island-display"
-          style={{ margin: 0, fontSize: "clamp(18px, 2.5vw, 24px)", lineHeight: 1.15, color: islandTheme.color.textPrimary }}
-        >
-          {item.title}
-        </h3>
-        {item.aiSubtitle && (
-          <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, opacity: 0.85, lineHeight: 1.4 }}>
-            {item.aiSubtitle}
-          </p>
-        )}
-        {summary && (
-          <p style={{ margin: 0, fontSize: 14, color: islandTheme.color.textSubtle, lineHeight: 1.5, opacity: 0.9 }}>
-            {summary}
-          </p>
-        )}
-        <div style={{ marginTop: 4 }}>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onNavigate("games-news"); }}
-            style={{
-              background: "transparent",
-              border: `1px solid ${islandTheme.color.cardBorder}`,
-              color: islandTheme.color.textPrimary,
-              padding: "8px 16px",
-              borderRadius: 999,
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              font: "inherit"
-            }}
+      <div
+        style={{
+          padding: "14px 18px",
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          flexWrap: "wrap"
+        }}
+      >
+        <div style={{ flex: "1 1 0", minWidth: 0, display: "grid", gap: 6 }}>
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {displayTags.map((tag) => (
+              <span
+                key={tag}
+                className="island-mono"
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: islandTheme.color.textMuted,
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  borderRadius: 999,
+                  padding: "2px 7px",
+                  background: "rgba(255,255,255,0.06)"
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+          <h3
+            className="island-display"
+            style={{ margin: 0, fontSize: "clamp(15px, 2vw, 18px)", lineHeight: 1.2, color: islandTheme.color.textPrimary }}
           >
-            Read all gaming news →
-          </button>
+            {item.title}
+          </h3>
+          {item.aiSubtitle && (
+            <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textSubtle, opacity: 0.8, lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {item.aiSubtitle}
+            </p>
+          )}
         </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onNavigate("games-news"); }}
+          style={{
+            flexShrink: 0,
+            background: "transparent",
+            border: `1px solid ${islandTheme.color.cardBorder}`,
+            color: islandTheme.color.textPrimary,
+            padding: "7px 14px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            font: "inherit",
+            whiteSpace: "nowrap"
+          }}
+        >
+          All gaming news →
+        </button>
       </div>
     </article>
   );
 }
 
-// â”€â”€ Nuggies Snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â"€â"€ Nuggies Snapshot â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
-function NuggiesSnapshot({ onNavigate }: { onNavigate: (page: PageId) => void }) {
+function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; onNavigate: (page: PageId) => void }) {
+  const balance = profile?.nuggieBalance;
+  const optedOut = profile?.nuggiesOptedOut ?? false;
+  const equipped = profile?.equippedItems ?? [];
+
   return (
     <IslandCard
       style={{
@@ -331,17 +339,26 @@ function NuggiesSnapshot({ onNavigate }: { onNavigate: (page: PageId) => void })
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 className="island-display" style={{ margin: 0, fontSize: 17 }}>Nuggies</h3>
-        <span style={{ fontSize: 22 }}>ðŸ—</span>
+        <span style={{ fontSize: 22 }}>{"🍗"}</span>
       </div>
       <div
         className="island-display"
         style={{ fontSize: 36, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1 }}
       >
-        â€”
+        {balance !== undefined && !optedOut ? `₦${balance.toLocaleString()}` : "—"}
       </div>
-      <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
-        Earn for attendance, daily claims, and more. Economy launching soon.
-      </div>
+      {equipped.length > 0 && !optedOut && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {equipped.map((item) => (
+            <NuggieBadge key={item.id} item={item} size="sm" />
+          ))}
+        </div>
+      )}
+      {optedOut && (
+        <div style={{ fontSize: 12, color: islandTheme.color.textSubtle }}>
+          Balance hidden (opted out)
+        </div>
+      )}
       <button
         type="button"
         onClick={() => onNavigate("nuggies")}
@@ -357,12 +374,11 @@ function NuggiesSnapshot({ onNavigate }: { onNavigate: (page: PageId) => void })
           font: "inherit"
         }}
       >
-        View Nuggies →
+        {"View Nuggies →"}
       </button>
     </IslandCard>
   );
 }
-
 function FriendsOnline({
   activeMembers,
   totalMemberCount,
@@ -390,7 +406,7 @@ function FriendsOnline({
           className="island-mono"
           style={{ fontSize: 11, color: islandTheme.color.textMuted }}
         >
-          {activeMembers.length} / {totalMemberCount || "â€”"}
+          {activeMembers.length} / {totalMemberCount || '—'}
         </span>
       </div>
       <div style={{ display: "grid", gap: 6 }}>
@@ -418,7 +434,7 @@ function FriendsOnline({
           font: "inherit"
         }}
       >
-        All {totalMemberCount || "â€”"} crew →
+        All {totalMemberCount || "—"} crew →
       </button>
     </IslandCard>
   );
@@ -579,7 +595,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
     case "game_night.created": {
       const title = typeof payload.title === "string" ? payload.title : "a new session";
       return {
-        icon: "ðŸŒ´",
+        icon: "🌴",
         metaText: ago,
         body: (
           <>
@@ -590,7 +606,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
     }
     case "game_night.rsvp_joined":
       return {
-        icon: "ðŸªµ",
+        icon: "🪵",
         metaText: ago,
         body: (
           <>
@@ -600,7 +616,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "game_night.rsvp_left":
       return {
-        icon: "ðŸŒ«",
+        icon: "🌫",
         metaText: ago,
         body: (
           <>
@@ -610,7 +626,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "game_night.game_picked":
       return {
-        icon: "ðŸŽ¯",
+        icon: "🎯",
         metaText: ago,
         body: (
           <>
@@ -620,7 +636,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "steam.linked":
       return {
-        icon: "ðŸ”—",
+        icon: "🔗",
         metaText: ago,
         body: (
           <>
@@ -630,7 +646,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
       };
     case "steam.unlinked":
       return {
-        icon: "ðŸª¢",
+        icon: "🪢",
         metaText: ago,
         body: (
           <>
@@ -641,22 +657,22 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
     case "steam.synced": {
       const synced = typeof payload.syncedGames === "number" ? payload.syncedGames : 0;
       return {
-        icon: "ðŸ”„",
+        icon: "🔄",
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> resynced their library â€” <Target>{synced} game{synced === 1 ? "" : "s"}</Target>.
+            <strong>{actorName}</strong> resynced their library — <Target>{synced} game{synced === 1 ? "" : "s"}</Target>.
           </>
         )
       };
     }
     default:
       return {
-        icon: "âœ¨",
+        icon: "✨",
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> Â· {event.eventType}
+            <strong>{actorName}</strong> · {event.eventType}
           </>
         )
       };
@@ -677,7 +693,7 @@ function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavig
     <section id="activity" style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Activity feed"
-        meta="Latest from your crew â€” RSVPs, game picks, and library syncs."
+        meta="Latest from your crew — RSVPs, game picks, and library syncs."
         action="Open community →"
         onAction={() => onNavigate("community")}
       />
@@ -718,7 +734,7 @@ function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavig
           {sliced.length === 0 ? (
             <div style={{ padding: "24px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
               {events.length === 0
-                ? "No island activity yet â€” schedule a game night or sync your library to get the dock buzzing."
+                ? "No island activity yet — schedule a game night or sync your library to get the dock buzzing."
                 : "Nothing in this category right now."}
             </div>
           ) : (
@@ -744,7 +760,7 @@ function ActivityFeed({ events, onNavigate }: { events: ActivityEvent[]; onNavig
               font: "inherit"
             }}
           >
-            View full feed â€” {visible.length - ACTIVITY_FEED_LIMIT} more event{visible.length - ACTIVITY_FEED_LIMIT !== 1 ? "s" : ""} →
+            View full feed — {visible.length - ACTIVITY_FEED_LIMIT} more event{visible.length - ACTIVITY_FEED_LIMIT !== 1 ? "s" : ""} →
           </button>
         )}
       </IslandCard>
@@ -848,7 +864,7 @@ function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: bool
           justifyContent: "center"
         }}
       >
-        â‹¯
+        ···
       </span>
     </div>
   );
@@ -888,7 +904,7 @@ function DriftLog({ cards }: { cards: NewsCardData[] }) {
 function NewsCardTile({ card }: { card: NewsCardData }) {
   const ago = relativeAgo(card.publishedAt);
   const tag = card.tag ? card.tag : "drift log";
-  const meta = `${tag} Â· ${ago}`;
+  const meta = `${tag} · ${ago}`;
   const content = (
     <article
       style={{
@@ -967,7 +983,7 @@ function BotAndRitualRow() {
         eyebrow="Try the bot"
         title="/whatcanweplay"
         body="Drop the slash command in any island channel. The bot pings the API, scans the crew's libraries, and surfaces overlap and near-matches in three seconds."
-        ctaLabel="Open in Discord â†—"
+        ctaLabel="Open in Discord ↗"
         primary
       />
       <CtaCard

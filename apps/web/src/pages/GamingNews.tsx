@@ -71,11 +71,11 @@ const NEWS_PAGE_SIZE = 8;
 type FilterPillRowProps = {
   label: string;
   options: string[];
-  active: string | null;
-  onSelect: (value: string | null) => void;
+  activeTags: Set<string>;
+  onTagClick: (tag: string) => void;
 };
 
-function FilterPillRow({ label, options, active, onSelect }: FilterPillRowProps) {
+function FilterPillRow({ label, options, activeTags, onTagClick }: FilterPillRowProps) {
   return (
     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
       <span
@@ -91,12 +91,12 @@ function FilterPillRow({ label, options, active, onSelect }: FilterPillRowProps)
         {label}
       </span>
       {options.map((opt) => {
-        const isActive = opt === active;
+        const isActive = activeTags.has(opt);
         return (
           <button
             key={opt}
             type="button"
-            onClick={() => onSelect(isActive ? null : opt)}
+            onClick={() => onTagClick(opt)}
             className="island-mono"
             style={{
               border: `1px solid ${isActive ? islandTheme.color.primary : islandTheme.color.border}`,
@@ -125,12 +125,20 @@ function FilterPillRow({ label, options, active, onSelect }: FilterPillRowProps)
 
 function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
   const [tab, setTab] = useState<NewsTab>("all");
-  const [activeGenre, setActiveGenre] = useState<string | null>(null);
-  const [activePlatform, setActivePlatform] = useState<string | null>(null);
+  const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<"latest" | "top">("latest");
   const [showAll, setShowAll] = useState(false);
   const [revealedSpoilers, setRevealedSpoilers] = useState<Set<string>>(new Set());
   const [activeArticle, setActiveArticle] = useState<GeneralNewsItem | null>(null);
+
+  function handleTagClick(tag: string) {
+    setActiveTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(tag)) next.delete(tag); else next.add(tag);
+      return next;
+    });
+    setShowAll(false);
+  }
 
   const availableGenres = useMemo(() => {
     const freq: Record<string, number> = {};
@@ -153,15 +161,15 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
   }, [news]);
 
   function resetFilters() {
-    setActiveGenre(null);
-    setActivePlatform(null);
+    setActiveTags(new Set());
     setShowAll(false);
   }
 
   const filtered = useMemo(() => {
     let items = tab === "all" ? news : news.filter((item) => item.aiLabel === tab);
-    if (activeGenre) items = items.filter((i) => (i.aiTags ?? []).includes(activeGenre));
-    if (activePlatform) items = items.filter((i) => (i.aiTags ?? []).includes(activePlatform));
+    if (activeTags.size > 0) {
+      items = items.filter((i) => [...activeTags].every((t) => (i.aiTags ?? []).includes(t)));
+    }
     if (sortMode === "top") {
       items = [...items].sort((a, b) => {
         const sa = (a.aiRelevanceScore ?? 0) + (a.upvotes - a.downvotes * 0.5) * 0.08;
@@ -170,7 +178,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
       });
     }
     return items;
-  }, [news, tab, activeGenre, activePlatform, sortMode]);
+  }, [news, tab, activeTags, sortMode]);
 
   const hero = filtered[0] ?? null;
   const rest = filtered.slice(1);
@@ -263,8 +271,8 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
           <FilterPillRow
             label="Genre"
             options={availableGenres}
-            active={activeGenre}
-            onSelect={(v) => { setActiveGenre(v); setShowAll(false); }}
+            activeTags={activeTags}
+            onTagClick={handleTagClick}
           />
         )}
 
@@ -272,18 +280,54 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
           <FilterPillRow
             label="Platform"
             options={availablePlatforms}
-            active={activePlatform}
-            onSelect={(v) => { setActivePlatform(v); setShowAll(false); }}
+            activeTags={activeTags}
+            onTagClick={handleTagClick}
           />
         )}
 
+        {activeTags.size > 0 && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              Active filters
+            </span>
+            {[...activeTags].map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => handleTagClick(tag)}
+                className="island-mono"
+                style={{
+                  fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                  border: `1px solid ${islandTheme.color.primary}`,
+                  background: "rgba(37,99,235,0.15)",
+                  color: islandTheme.color.textPrimary,
+                  borderRadius: 999, padding: "2px 8px", cursor: "pointer", font: "inherit",
+                  display: "flex", alignItems: "center", gap: 4
+                }}
+              >
+                {tag} ×
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="island-mono"
+              style={{
+                fontSize: 10, color: islandTheme.color.textMuted, background: "transparent",
+                border: "none", cursor: "pointer", font: "inherit", padding: "2px 4px"
+              }}
+            >
+              Clear all
+            </button>
+          </div>
+        )}
 
         {news.length === 0 ? (
           <NewsEmptyState />
         ) : filtered.length === 0 ? (
           <IslandCard style={{ padding: "16px 18px" }}>
             <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>
-              Nothing in this category right now. Check back after the next curation pass.
+              Nothing matches these filters right now. Check back after the next curation pass.
             </div>
           </IslandCard>
         ) : (
@@ -294,6 +338,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
                 spoilerRevealed={revealedSpoilers.has(hero.externalId)}
                 onRevealSpoiler={() => revealSpoiler(hero.externalId)}
                 onOpen={() => setActiveArticle(hero)}
+                onTagClick={handleTagClick}
               />
             )}
 
@@ -312,6 +357,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
                     spoilerRevealed={revealedSpoilers.has(item.externalId)}
                     onRevealSpoiler={() => revealSpoiler(item.externalId)}
                     onOpen={() => setActiveArticle(item)}
+                    onTagClick={handleTagClick}
                   />
                 ))}
               </div>
@@ -400,12 +446,14 @@ function NewsHeroCard({
   item,
   spoilerRevealed,
   onRevealSpoiler,
-  onOpen
+  onOpen,
+  onTagClick
 }: {
   item: GeneralNewsItem;
   spoilerRevealed: boolean;
   onRevealSpoiler: () => void;
   onOpen: () => void;
+  onTagClick?: (tag: string) => void;
 }) {
   const { mode } = useDayNight();
   const [userVote, setUserVote] = useState<1 | -1 | 0>(0);
@@ -501,24 +549,7 @@ function NewsHeroCard({
 
         <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
           {displayTags.map((tag) => (
-            <span
-              key={tag}
-              className="island-mono"
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                textTransform: "uppercase",
-                letterSpacing: "0.07em",
-                color: islandTheme.color.textMuted,
-                border: `1px solid ${islandTheme.color.cardBorder}`,
-                borderRadius: 999,
-                padding: "2px 7px",
-                background: islandTheme.color.panelMutedBg,
-                whiteSpace: "nowrap"
-              }}
-            >
-              {tag}
-            </span>
+            <TagPill key={tag} tag={tag} onTagClick={onTagClick} />
           ))}
         </div>
 
@@ -549,7 +580,7 @@ function NewsHeroCard({
           display: "grid",
           gridTemplateColumns: "auto 1fr auto",
           gap: 8,
-          alignItems: "center",
+          alignItems: "start",
           padding: "10px 24px",
           borderTop: `1px solid ${islandTheme.color.cardBorder}`,
           background: islandTheme.color.panelMutedBg
@@ -569,7 +600,8 @@ function NewsHeroCard({
             borderRadius: 6,
             display: "flex",
             alignItems: "center",
-            font: "inherit"
+            font: "inherit",
+            marginTop: 1
           }}
         >
           <ShareIcon />
@@ -580,72 +612,14 @@ function NewsHeroCard({
           style={{
             fontSize: 10,
             color: islandTheme.color.textMuted,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            lineHeight: 1.4,
             letterSpacing: "0.02em"
           }}
         >
           {whyText}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <button
-            type="button"
-            onClick={(e) => handleVote(e, 1)}
-            aria-label="Good for the crew"
-            aria-pressed={userVote === 1}
-            title="Good for the crew"
-            style={{
-              background: "transparent",
-              border: "none",
-              borderRadius: 4,
-              color: userVote === 1 ? "#4ade80" : islandTheme.color.textMuted,
-              cursor: "pointer",
-              padding: "3px 4px",
-              display: "flex",
-              alignItems: "center",
-              font: "inherit",
-              transition: `color ${islandTheme.motion.dur.fast} ease`
-            }}
-          >
-            <ChevronUpIcon />
-          </button>
-          <span
-            className="island-mono"
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: netVotes > 0 ? "#4ade80" : netVotes < 0 ? "#f87171" : islandTheme.color.textMuted,
-              minWidth: 16,
-              textAlign: "center",
-              lineHeight: 1
-            }}
-          >
-            {netVotes}
-          </span>
-          <button
-            type="button"
-            onClick={(e) => handleVote(e, -1)}
-            aria-label="Not for us"
-            aria-pressed={userVote === -1}
-            title="Not for us"
-            style={{
-              background: "transparent",
-              border: "none",
-              borderRadius: 4,
-              color: userVote === -1 ? "#f87171" : islandTheme.color.textMuted,
-              cursor: "pointer",
-              padding: "3px 4px",
-              display: "flex",
-              alignItems: "center",
-              font: "inherit",
-              transition: `color ${islandTheme.motion.dur.fast} ease`
-            }}
-          >
-            <ChevronDownIcon />
-          </button>
-        </div>
+        <VoteControls userVote={userVote} netVotes={netVotes} onVote={handleVote} />
       </div>
     </article>
   );
@@ -657,12 +631,14 @@ function NewsCard({
   item,
   spoilerRevealed,
   onRevealSpoiler,
-  onOpen
+  onOpen,
+  onTagClick
 }: {
   item: GeneralNewsItem;
   spoilerRevealed: boolean;
   onRevealSpoiler: () => void;
   onOpen: () => void;
+  onTagClick?: (tag: string) => void;
 }) {
   const [userVote, setUserVote] = useState<1 | -1 | 0>(0);
 
@@ -728,24 +704,7 @@ function NewsCard({
     >
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", padding: "10px 12px 0" }}>
         {displayTags.map((tag) => (
-          <span
-            key={tag}
-            className="island-mono"
-            style={{
-              fontSize: 9,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-              color: islandTheme.color.textMuted,
-              border: `1px solid ${islandTheme.color.cardBorder}`,
-              borderRadius: 999,
-              padding: "2px 7px",
-              background: islandTheme.color.panelMutedBg,
-              whiteSpace: "nowrap"
-            }}
-          >
-            {tag}
-          </span>
+          <TagPill key={tag} tag={tag} onTagClick={onTagClick} />
         ))}
       </div>
 
@@ -846,7 +805,7 @@ function NewsCard({
           display: "grid",
           gridTemplateColumns: "auto 1fr auto",
           gap: 8,
-          alignItems: "center",
+          alignItems: "start",
           padding: "8px 12px",
           borderTop: `1px solid ${islandTheme.color.cardBorder}`,
           marginTop: 8
@@ -868,7 +827,8 @@ function NewsCard({
             alignItems: "center",
             justifyContent: "center",
             font: "inherit",
-            transition: `color ${islandTheme.motion.dur.fast} ease`
+            transition: `color ${islandTheme.motion.dur.fast} ease`,
+            marginTop: 1
           }}
           onMouseEnter={(e) => { e.currentTarget.style.color = islandTheme.color.textSubtle; }}
           onMouseLeave={(e) => { e.currentTarget.style.color = islandTheme.color.textMuted; }}
@@ -881,74 +841,119 @@ function NewsCard({
           style={{
             fontSize: 10,
             color: islandTheme.color.textMuted,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            lineHeight: 1.4,
             letterSpacing: "0.02em"
           }}
         >
           {whyText}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <button
-            type="button"
-            onClick={(e) => handleVote(e, 1)}
-            aria-label="Good for the crew"
-            aria-pressed={userVote === 1}
-            title="Good for the crew"
-            style={{
-              background: "transparent",
-              border: "none",
-              borderRadius: 4,
-              color: userVote === 1 ? "#4ade80" : islandTheme.color.textMuted,
-              cursor: "pointer",
-              padding: "3px 4px",
-              display: "flex",
-              alignItems: "center",
-              font: "inherit",
-              transition: `color ${islandTheme.motion.dur.fast} ease`
-            }}
-          >
-            <ChevronUpIcon />
-          </button>
-          <span
-            className="island-mono"
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: netVotes > 0 ? "#4ade80" : netVotes < 0 ? "#f87171" : islandTheme.color.textMuted,
-              minWidth: 16,
-              textAlign: "center",
-              lineHeight: 1
-            }}
-          >
-            {netVotes}
-          </span>
-          <button
-            type="button"
-            onClick={(e) => handleVote(e, -1)}
-            aria-label="Not for us"
-            aria-pressed={userVote === -1}
-            title="Not for us"
-            style={{
-              background: "transparent",
-              border: "none",
-              borderRadius: 4,
-              color: userVote === -1 ? "#f87171" : islandTheme.color.textMuted,
-              cursor: "pointer",
-              padding: "3px 4px",
-              display: "flex",
-              alignItems: "center",
-              font: "inherit",
-              transition: `color ${islandTheme.motion.dur.fast} ease`
-            }}
-          >
-            <ChevronDownIcon />
-          </button>
-        </div>
+        <VoteControls userVote={userVote} netVotes={netVotes} onVote={handleVote} />
       </div>
     </article>
+  );
+}
+
+// ── Shared Sub-Components ─────────────────────────────────────────────────────
+
+function TagPill({ tag, onTagClick }: { tag: string; onTagClick?: (tag: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onTagClick?.(tag); }}
+      className="island-mono"
+      style={{
+        fontSize: 9,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.07em",
+        color: islandTheme.color.textMuted,
+        border: `1px solid ${islandTheme.color.cardBorder}`,
+        borderRadius: 999,
+        padding: "2px 7px",
+        background: islandTheme.color.panelMutedBg,
+        whiteSpace: "nowrap",
+        cursor: onTagClick ? "pointer" : "default",
+        font: "inherit",
+        transition: `border-color ${islandTheme.motion.dur.fast} ease`
+      }}
+      onMouseEnter={(e) => {
+        if (onTagClick) e.currentTarget.style.borderColor = islandTheme.color.primaryGlow;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = islandTheme.color.cardBorder;
+      }}
+    >
+      {tag}
+    </button>
+  );
+}
+
+type VoteControlsProps = {
+  userVote: 1 | -1 | 0;
+  netVotes: number;
+  onVote: (e: React.MouseEvent, dir: 1 | -1) => void;
+};
+
+function VoteControls({ userVote, netVotes, onVote }: VoteControlsProps) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <button
+        type="button"
+        onClick={(e) => onVote(e, 1)}
+        aria-label="Rate AI summary as helpful"
+        aria-pressed={userVote === 1}
+        title="Rate AI summary — helpful"
+        style={{
+          background: "transparent",
+          border: "none",
+          borderRadius: 4,
+          color: userVote === 1 ? "#4ade80" : islandTheme.color.textMuted,
+          cursor: "pointer",
+          padding: "3px 4px",
+          display: "flex",
+          alignItems: "center",
+          font: "inherit",
+          transition: `color ${islandTheme.motion.dur.fast} ease`
+        }}
+      >
+        <ThumbUpIcon />
+      </button>
+      <span
+        className="island-mono"
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: netVotes > 0 ? "#4ade80" : netVotes < 0 ? "#f87171" : islandTheme.color.textMuted,
+          minWidth: 16,
+          textAlign: "center",
+          lineHeight: 1
+        }}
+      >
+        {netVotes}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => onVote(e, -1)}
+        aria-label="Rate AI summary as not helpful"
+        aria-pressed={userVote === -1}
+        title="Rate AI summary — not helpful"
+        style={{
+          background: "transparent",
+          border: "none",
+          borderRadius: 4,
+          color: userVote === -1 ? "#f87171" : islandTheme.color.textMuted,
+          cursor: "pointer",
+          padding: "3px 4px",
+          display: "flex",
+          alignItems: "center",
+          font: "inherit",
+          transition: `color ${islandTheme.motion.dur.fast} ease`
+        }}
+      >
+        <ThumbDownIcon />
+      </button>
+    </div>
   );
 }
 
@@ -1143,44 +1148,67 @@ function NewsArticleModal({ item, onClose }: { item: GeneralNewsItem; onClose: (
           </div>
         )}
 
-        <div
+        <details
           style={{
-            paddingTop: 18,
             borderTop: `1px solid ${islandTheme.color.cardBorder}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 10
+            paddingTop: 18,
+            marginTop: 4
           }}
         >
-          <div>
-            <div className="island-mono" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted, marginBottom: 2 }}>
-              Source
-            </div>
-            <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>{item.sourceName}</div>
-          </div>
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <summary
             style={{
-              display: "inline-flex",
+              cursor: "pointer",
+              fontSize: 12,
+              color: islandTheme.color.textMuted,
+              fontWeight: 600,
+              listStyle: "none",
+              display: "flex",
               alignItems: "center",
               gap: 6,
-              padding: "9px 18px",
-              borderRadius: 10,
-              background: islandTheme.color.primary,
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 700,
-              textDecoration: "none",
-              font: "inherit"
+              userSelect: "none"
             }}
           >
-            Read full article →
-          </a>
-        </div>
+            <span style={{ fontSize: 10 }}>▶</span>
+            Source attribution
+          </summary>
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 10
+            }}
+          >
+            <div>
+              <div className="island-mono" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted, marginBottom: 2 }}>
+                Source
+              </div>
+              <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>{item.sourceName}</div>
+            </div>
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "9px 18px",
+                borderRadius: 10,
+                background: islandTheme.color.primary,
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                textDecoration: "none",
+                font: "inherit"
+              }}
+            >
+              Read full article →
+            </a>
+          </div>
+        </details>
       </div>
     </div>,
     document.body
@@ -1243,18 +1271,20 @@ function ShareIcon() {
   );
 }
 
-function ChevronUpIcon() {
+function ThumbUpIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="4 11 8 7 12 11" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" />
+      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
     </svg>
   );
 }
 
-function ChevronDownIcon() {
+function ThumbDownIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="4 5 8 9 12 5" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" />
+      <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
     </svg>
   );
 }

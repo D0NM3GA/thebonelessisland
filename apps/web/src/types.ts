@@ -63,6 +63,9 @@ export type MeProfile = {
   roleNames: string[];
   inVoice: boolean;
   richPresenceText: string;
+  nuggieBalance: number;
+  nuggiesOptedOut: boolean;
+  equippedItems: EquippedItem[];
 };
 
 export type OwnedGameLite = {
@@ -200,6 +203,217 @@ export type NewsCard = {
   publishedAt: string;
   updatedAt: string;
   createdBy: ActivityActor | null;
+};
+
+export type EquippedItem = {
+  id: number;
+  name: string;
+  itemType: "title" | "flair" | "badge";
+  itemData: { emoji: string; label?: string; color: string };
+};
+
+export type NuggieTransaction = {
+  id: number;
+  amount: number;
+  type: string;
+  reason: string;
+  referenceId: string | null;
+  createdAt: string;
+};
+
+export type NuggiesShopItem = {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  itemType: "title" | "flair" | "badge";
+  itemData: { emoji: string; label?: string; color: string };
+  owned: boolean;
+  equipped: boolean;
+};
+
+export type NuggiesInventoryItem = {
+  itemId: number;
+  name: string;
+  itemType: "title" | "flair" | "badge";
+  itemData: { emoji: string; label?: string; color: string };
+  price: number;
+  equipped: boolean;
+  purchasedAt: string;
+};
+
+export type NuggiesLoan = {
+  id: number;
+  status: string;
+  principal: number;
+  amountDue: number;
+  collateral: number;
+  dueAt: string;
+  isLender: boolean;
+  createdAt: string;
+};
+
+export type NuggiesLeaderboardEntry = {
+  rank: number;
+  discordUserId: string;
+  username: string;
+  avatarUrl: string | null;
+  balance: number;
+  equippedTitle: EquippedItem | null;
+};
+
+export type ForumAuthor = {
+  discordUserId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type ForumCategory = {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  accentColor: string;
+  position: number;
+  isLocked: boolean;
+  threadCount: number;
+  lastActivity: {
+    threadId: number;
+    threadTitle: string | null;
+    threadSlug: string | null;
+    at: string | null;
+    userDisplayName: string | null;
+    userAvatarUrl: string | null;
+  } | null;
+};
+
+export type ForumThreadListItem = {
+  id: number;
+  title: string;
+  slug: string;
+  isPinned: boolean;
+  isLocked: boolean;
+  viewCount: number;
+  replyCount: number;
+  createdAt: string;
+  lastReplyAt: string | null;
+  author: ForumAuthor;
+  lastReplyUser: { displayName: string; avatarUrl: string | null } | null;
+};
+
+export type ForumThreadDetail = {
+  id: number;
+  categoryId: number;
+  categorySlug: string;
+  categoryName: string;
+  categoryIcon: string;
+  categoryAccent: string;
+  title: string;
+  slug: string;
+  isPinned: boolean;
+  isLocked: boolean;
+  viewCount: number;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  author: ForumAuthor;
+};
+
+export type ForumPost = {
+  id: number;
+  threadId: number;
+  body: string;
+  isOp: boolean;
+  isDeleted: boolean;
+  editedAt: string | null;
+  createdAt: string;
+  author: ForumAuthor;
+  reactionCount: number;
+  userReacted: boolean;
+};
+
+export type ForumFeedSort = "latest" | "top" | "unanswered" | "mine";
+
+export type ForumFeedThread = {
+  id: number;
+  title: string;
+  slug: string;
+  isPinned: boolean;
+  isLocked: boolean;
+  viewCount: number;
+  replyCount: number;
+  createdAt: string;
+  lastReplyAt: string | null;
+  categorySlug: string;
+  categoryName: string;
+  categoryIcon: string;
+  categoryAccent: string;
+  author: ForumAuthor;
+  lastReplyUser: { displayName: string; avatarUrl: string | null } | null;
+};
+
+export type ForumStats = {
+  threadsTotal: number;
+  postsTotal: number;
+  categoriesTotal: number;
+  postsToday: number;
+  topAuthors: { displayName: string; avatarUrl: string | null; postCount: number }[];
+  mine: { threadCount: number; postCount: number };
+};
+
+export type ForumRecentThread = {
+  id: number;
+  title: string;
+  slug: string;
+  isPinned: boolean;
+  isLocked: boolean;
+  replyCount: number;
+  createdAt: string;
+  lastReplyAt: string | null;
+  categorySlug: string;
+  categoryName: string;
+  categoryIcon: string;
+  categoryAccent: string;
+  author: { displayName: string; avatarUrl: string | null };
+};
+
+export type ForumReport = {
+  id: number;
+  reason: string;
+  status: string;
+  createdAt: string;
+  postId: number | null;
+  threadId: number | null;
+  threadTitle: string | null;
+  threadSlug: string | null;
+  postBody: string | null;
+  reporterDisplayName: string;
+  reporterUsername: string;
+  targetDisplayName: string | null;
+};
+
+export type ForumBan = {
+  discordUserId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  reason: string;
+  expiresAt: string | null;
+  createdAt: string;
+  bannedByDisplayName: string;
+};
+
+export type ForumModLogEntry = {
+  id: number;
+  action: string;
+  notes: string | null;
+  createdAt: string;
+  moderatorDisplayName: string;
+  targetThreadTitle: string | null;
+  targetThreadId: number | null;
+  targetPostId: number | null;
+  targetUserDisplayName: string | null;
 };
 
 export type ServerSetting = {

@@ -8,7 +8,8 @@ import { GamingNewsPage } from "./pages/GamingNews.js";
 import { HomePage } from "./pages/Home.js";
 import { LibraryPage } from "./pages/Library.js";
 import { LoginScreen } from "./pages/LoginScreen.js";
-import { NuggiesPage } from "./pages/Nuggies.js";
+import { AchievementsPage } from "./pages/Achievements.js";
+import { ForumsPage } from "./pages/Forums.js";
 import { ProfilePage } from "./pages/Profile.js";
 import { ToastHost, useToastsFromStatus } from "./system/toast.js";
 import { islandCopy, islandTheme } from "./theme.js";
@@ -1321,14 +1322,14 @@ export function App() {
       ) : null}
 
       {page === "community-forums" ? (
-        <ComingSoonPage title="Forums" description="Island discussions and crew talk. Coming soon." />
+        <ForumsPage profile={profileData} isAdmin={isAdmin} />
       ) : null}
 
       {page === "community-leaderboard" ? (
         <ComingSoonPage title="Leaderboard" description="Top Nuggies holders across the crew. Coming soon." />
       ) : null}
 
-      {page === "nuggies" ? <NuggiesPage /> : null}
+      {page === "nuggies" ? <AchievementsPage /> : null}
 
       {page === "nuggies-history" ? (
         <ComingSoonPage title="Nuggies History" description="Your full transaction log. Coming soon." />

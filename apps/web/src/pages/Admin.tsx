@@ -1,7 +1,18 @@
 import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { apiFetch } from "../api/client.js";
 import { IslandButton, IslandCard, islandInputStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { NewsCard, Recommendation, ServerSetting } from "../types.js";
+import type {
+  ForumBan,
+  ForumCategory,
+  ForumModLogEntry,
+  ForumReport,
+  GameNight,
+  NewsCard,
+  NuggiesShopItem,
+  Recommendation,
+  ServerSetting
+} from "../types.js";
 
 type AdminSection =
   | "hub"
@@ -12,6 +23,7 @@ type AdminSection =
   | "events"
   | "forums"
   | "library"
+  | "economy"
   | "audit";
 
 type NewsCardInput = {
@@ -95,6 +107,7 @@ export function AdminPage(props: AdminPageProps) {
       ) : null}
       {section === "forums" ? <ForumsModSubpage /> : null}
       {section === "library" ? <LibrarySubpage /> : null}
+      {section === "economy" ? <EconomySubpage /> : null}
       {section === "audit" ? <AuditSubpage profileJson={props.profileJson} /> : null}
     </div>
   );
@@ -116,6 +129,7 @@ const ADMIN_TILES: AdminTile[] = [
   { id: "events", title: "Game Nights & Events", blurb: "Session defaults, active nights, and recommendation engine tester.", icon: "🎮", accent: "#f59e0b" },
   { id: "forums", title: "Forum Moderation", blurb: "Reports, channel access, word filter.", icon: "💬", accent: "#ef8354" },
   { id: "library", title: "Game Library", blurb: "Featured pick, tag/visibility overrides.", icon: "🗂", accent: "#fb7185" },
+  { id: "economy", title: "Economy", blurb: "Nuggies balances, grant/deduct, attendance awards, and shop management.", icon: "🍗", accent: "#f59e0b" },
   { id: "audit", title: "Audit Log", blurb: "Searchable trail with CSV export.", icon: "📜", accent: "#94a3b8" }
 ];
 
@@ -927,50 +941,478 @@ function GameNightsModSubpage() {
 }
 
 function ForumsModSubpage() {
-  const reports = [
-    { who: "@anonymous", target: "#late-boat thread #4823", reason: "Spam", ago: "1h" },
-    { who: "@LoreNugget", target: "#stories thread #4801", reason: "Off-topic", ago: "5h" }
-  ];
+  const [tab, setTab] = useState<"reports" | "categories" | "bans" | "log">("reports");
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <IslandCard style={{ padding: 0, overflow: "hidden" }}>
-        <SubsectionTitle style={{ padding: "14px 16px 0" }}>Reports · {reports.length}</SubsectionTitle>
-        {reports.map((r, i) => (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {(["reports", "categories", "bans", "log"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            style={{
+              background: tab === t ? islandTheme.color.primary : islandTheme.color.panelMutedBg,
+              color: tab === t ? islandTheme.color.primaryText : islandTheme.color.textSubtle,
+              border: `1px solid ${tab === t ? islandTheme.color.primary : islandTheme.color.cardBorder}`,
+              borderRadius: 999,
+              padding: "6px 14px",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              font: "inherit",
+              textTransform: "capitalize"
+            }}
+          >
+            {t === "log" ? "Mod Log" : t}
+          </button>
+        ))}
+      </div>
+      {tab === "reports" ? <ForumReportsTab /> : null}
+      {tab === "categories" ? <ForumCategoriesTab /> : null}
+      {tab === "bans" ? <ForumBansTab /> : null}
+      {tab === "log" ? <ForumModLogTab /> : null}
+    </div>
+  );
+}
+
+function ForumReportsTab() {
+  const [reports, setReports] = useState<ForumReport[] | null>(null);
+
+  const load = async () => {
+    const r = await apiFetch("/forums/admin/reports").then((r) => r.json()).catch(() => ({ reports: [] }));
+    setReports(r.reports ?? []);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  async function resolve(id: number, action: "dismiss" | "delete_post" | "delete_thread") {
+    await apiFetch(`/forums/admin/reports/${id}/resolve`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action })
+    });
+    await load();
+  }
+
+  if (reports === null) {
+    return <IslandCard><p style={{ margin: 0, color: islandTheme.color.textSubtle }}>Loading reports…</p></IslandCard>;
+  }
+
+  return (
+    <IslandCard style={{ padding: 0, overflow: "hidden" }}>
+      <SubsectionTitle style={{ padding: "14px 16px 0" }}>Open Reports · {reports.length}</SubsectionTitle>
+      {reports.length === 0 ? (
+        <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>
+          No open reports. The crew is being well-behaved.
+        </p>
+      ) : (
+        reports.map((r, i) => (
           <div
-            key={r.target}
+            key={r.id}
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr auto auto",
+              gap: 8,
+              padding: "14px 16px",
+              borderTop: i === 0 ? "none" : `1px solid ${islandTheme.color.cardBorder}`
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                {r.threadTitle ? `Thread: ${r.threadTitle}` : `Report #${r.id}`}
+                {r.postId ? <span style={{ color: islandTheme.color.textMuted, marginLeft: 6, fontSize: 11 }}>· post #{r.postId}</span> : null}
+              </div>
+              <div style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+                {new Date(r.createdAt).toLocaleString()}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: islandTheme.color.textSubtle }}>
+              Reporter: <strong>{r.reporterDisplayName}</strong> @{r.reporterUsername}
+              {r.targetDisplayName ? ` · Target: ${r.targetDisplayName}` : ""}
+            </div>
+            <div style={{ fontSize: 13, color: islandTheme.color.textPrimary, fontStyle: "italic" }}>
+              "{r.reason}"
+            </div>
+            {r.postBody ? (
+              <div
+                style={{
+                  fontSize: 12,
+                  background: islandTheme.color.panelMutedBg,
+                  border: `1px solid ${islandTheme.color.cardBorder}`,
+                  borderRadius: 8,
+                  padding: 10,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  color: islandTheme.color.textSubtle
+                }}
+              >
+                {r.postBody.slice(0, 500)}
+                {r.postBody.length > 500 ? "…" : ""}
+              </div>
+            ) : null}
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => resolve(r.id, "dismiss")} style={smallBtn(islandTheme.color.panelMutedBg, islandTheme.color.textSubtle, true)}>
+                Dismiss
+              </button>
+              {r.postId ? (
+                <button type="button" onClick={() => resolve(r.id, "delete_post")} style={smallBtn("transparent", "#fca5a5", true, "#7f1d1d")}>
+                  Delete Post
+                </button>
+              ) : null}
+              {r.threadId ? (
+                <button type="button" onClick={() => resolve(r.id, "delete_thread")} style={smallBtn("transparent", "#fca5a5", true, "#7f1d1d")}>
+                  Delete Thread
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ))
+      )}
+    </IslandCard>
+  );
+}
+
+function ForumCategoriesTab() {
+  const [categories, setCategories] = useState<ForumCategory[] | null>(null);
+  const [editing, setEditing] = useState<ForumCategory | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const load = async () => {
+    const r = await apiFetch("/forums/categories").then((r) => r.json()).catch(() => ({ categories: [] }));
+    setCategories(r.categories ?? []);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  async function remove(id: number) {
+    if (!window.confirm("Delete this category? All threads in it will be removed.")) return;
+    await apiFetch(`/forums/admin/categories/${id}`, { method: "DELETE" });
+    await load();
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {creating ? (
+        <CategoryEditor mode="create" onCancel={() => setCreating(false)} onSaved={async () => { setCreating(false); await load(); }} />
+      ) : (
+        <IslandButton variant="primary" onClick={() => setCreating(true)} style={{ alignSelf: "flex-start" }}>
+          + New Category
+        </IslandButton>
+      )}
+      {editing ? (
+        <CategoryEditor
+          mode="edit"
+          initial={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={async () => { setEditing(null); await load(); }}
+        />
+      ) : null}
+      <IslandCard style={{ padding: 0, overflow: "hidden" }}>
+        <SubsectionTitle style={{ padding: "14px 16px 0" }}>
+          Categories · {categories?.length ?? 0}
+        </SubsectionTitle>
+        {categories === null ? (
+          <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>Loading…</p>
+        ) : categories.length === 0 ? (
+          <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>No categories yet.</p>
+        ) : (
+          categories.map((c, i) => (
+            <div
+              key={c.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr auto auto auto",
+                gap: 12,
+                padding: "12px 16px",
+                alignItems: "center",
+                borderTop: i === 0 ? "none" : `1px solid ${islandTheme.color.cardBorder}`
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  background: `${c.accentColor}33`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 18
+                }}
+              >
+                {c.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{c.name} {c.isLocked ? "🔒" : ""}</div>
+                <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+                  /{c.slug} · {c.threadCount} threads · pos {c.position}
+                </div>
+              </div>
+              <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, padding: "2px 8px", border: `1px solid ${islandTheme.color.cardBorder}`, borderRadius: 999 }}>
+                {c.accentColor}
+              </div>
+              <button type="button" onClick={() => setEditing(c)} style={smallBtn(islandTheme.color.panelMutedBg, islandTheme.color.textSubtle, true)}>
+                Edit
+              </button>
+              <button type="button" onClick={() => remove(c.id)} style={smallBtn("transparent", "#fca5a5", true, "#7f1d1d")}>
+                Delete
+              </button>
+            </div>
+          ))
+        )}
+      </IslandCard>
+    </div>
+  );
+}
+
+function CategoryEditor({
+  mode,
+  initial,
+  onCancel,
+  onSaved
+}: {
+  mode: "create" | "edit";
+  initial?: ForumCategory;
+  onCancel: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [slug, setSlug] = useState(initial?.slug ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [icon, setIcon] = useState(initial?.icon ?? "💬");
+  const [accent, setAccent] = useState(initial?.accentColor ?? "#3b82f6");
+  const [position, setPosition] = useState(initial?.position ?? 999);
+  const [isLocked, setIsLocked] = useState(initial?.isLocked ?? false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const url = mode === "create" ? "/forums/admin/categories" : `/forums/admin/categories/${initial?.id}`;
+      const method = mode === "create" ? "POST" : "PATCH";
+      const body = mode === "create"
+        ? { slug, name, description, icon, accentColor: accent, position, isLocked }
+        : { name, description, icon, accentColor: accent, position, isLocked };
+      const r = await apiFetch(url, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => null);
+        throw new Error(data?.error ?? "Save failed");
+      }
+      await onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <IslandCard style={{ padding: 16 }}>
+      <SubsectionTitle>{mode === "create" ? "New category" : `Edit: ${initial?.name}`}</SubsectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+        {mode === "create" ? (
+          <Field label="Slug (URL-safe)">
+            <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="general" style={{ ...islandInputStyle, width: "100%" }} />
+          </Field>
+        ) : null}
+        <Field label="Name">
+          <input value={name} onChange={(e) => setName(e.target.value)} style={{ ...islandInputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Icon (emoji)">
+          <input value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} style={{ ...islandInputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Accent color (#hex)">
+          <input value={accent} onChange={(e) => setAccent(e.target.value)} style={{ ...islandInputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Position (lower = higher)">
+          <input type="number" value={position} onChange={(e) => setPosition(parseInt(e.target.value, 10) || 0)} style={{ ...islandInputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Locked (no new threads)">
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="checkbox" checked={isLocked} onChange={(e) => setIsLocked(e.target.checked)} />
+            <span style={{ fontSize: 13 }}>{isLocked ? "Locked" : "Open"}</span>
+          </label>
+        </Field>
+      </div>
+      <Field label="Description">
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+          style={{ ...islandInputStyle, width: "100%", resize: "vertical", fontFamily: "inherit" }}
+        />
+      </Field>
+      {error ? (
+        <p style={{ margin: "4px 0 8px", fontSize: 12, color: islandTheme.color.dangerText }}>{error}</p>
+      ) : null}
+      <div style={{ display: "flex", gap: 8 }}>
+        <IslandButton variant="primary" onClick={save} disabled={busy || name.length === 0 || (mode === "create" && slug.length < 2)}>
+          {busy ? "Saving…" : "Save"}
+        </IslandButton>
+        <IslandButton onClick={onCancel}>Cancel</IslandButton>
+      </div>
+    </IslandCard>
+  );
+}
+
+function ForumBansTab() {
+  const [bans, setBans] = useState<ForumBan[] | null>(null);
+  const [discordUserId, setDiscordUserId] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    const r = await apiFetch("/forums/admin/bans").then((r) => r.json()).catch(() => ({ bans: [] }));
+    setBans(r.bans ?? []);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  async function ban() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await apiFetch("/forums/admin/bans", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ discordUserId: discordUserId.trim(), reason: reason.trim() })
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => null);
+        throw new Error(data?.error ?? "Ban failed");
+      }
+      setDiscordUserId("");
+      setReason("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ban failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unban(id: string) {
+    if (!window.confirm("Lift the ban?")) return;
+    await apiFetch(`/forums/admin/bans/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await load();
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <IslandCard style={{ padding: 16 }}>
+        <SubsectionTitle>Ban a user</SubsectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr auto", gap: 8, alignItems: "end" }}>
+          <Field label="Discord user ID">
+            <input value={discordUserId} onChange={(e) => setDiscordUserId(e.target.value)} placeholder="123456789012345678" style={{ ...islandInputStyle, width: "100%" }} />
+          </Field>
+          <Field label="Reason">
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Spam, harassment, etc." style={{ ...islandInputStyle, width: "100%" }} />
+          </Field>
+          <IslandButton variant="danger" onClick={ban} disabled={busy || !discordUserId || !reason}>
+            {busy ? "Banning…" : "Ban"}
+          </IslandButton>
+        </div>
+        {error ? <p style={{ margin: "4px 0 0", fontSize: 12, color: islandTheme.color.dangerText }}>{error}</p> : null}
+      </IslandCard>
+      <IslandCard style={{ padding: 0, overflow: "hidden" }}>
+        <SubsectionTitle style={{ padding: "14px 16px 0" }}>Active bans · {bans?.length ?? 0}</SubsectionTitle>
+        {bans === null ? (
+          <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>Loading…</p>
+        ) : bans.length === 0 ? (
+          <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>No active bans.</p>
+        ) : (
+          bans.map((b, i) => (
+            <div
+              key={b.discordUserId}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "auto 1fr auto",
+                gap: 12,
+                padding: "12px 16px",
+                alignItems: "center",
+                borderTop: i === 0 ? "none" : `1px solid ${islandTheme.color.cardBorder}`
+              }}
+            >
+              {b.avatarUrl ? (
+                <img src={b.avatarUrl} alt={b.displayName} style={{ width: 36, height: 36, borderRadius: 999, border: `1px solid ${islandTheme.color.border}` }} />
+              ) : (
+                <div style={{ width: 36, height: 36, borderRadius: 999, background: islandTheme.color.panelMutedBg }} />
+              )}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{b.displayName}</div>
+                <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+                  {b.reason} · banned by {b.bannedByDisplayName} · {new Date(b.createdAt).toLocaleDateString()}
+                  {b.expiresAt ? ` · expires ${new Date(b.expiresAt).toLocaleDateString()}` : " · permanent"}
+                </div>
+              </div>
+              <button type="button" onClick={() => unban(b.discordUserId)} style={smallBtn(islandTheme.color.panelMutedBg, islandTheme.color.textSubtle, true)}>
+                Unban
+              </button>
+            </div>
+          ))
+        )}
+      </IslandCard>
+    </div>
+  );
+}
+
+function ForumModLogTab() {
+  const [log, setLog] = useState<ForumModLogEntry[] | null>(null);
+
+  useEffect(() => {
+    apiFetch("/forums/admin/mod-log")
+      .then((r) => r.json())
+      .then((d) => setLog(d.log ?? []))
+      .catch(() => setLog([]));
+  }, []);
+
+  return (
+    <IslandCard style={{ padding: 0, overflow: "hidden" }}>
+      <SubsectionTitle style={{ padding: "14px 16px 0" }}>Recent moderator actions</SubsectionTitle>
+      {log === null ? (
+        <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>Loading…</p>
+      ) : log.length === 0 ? (
+        <p style={{ margin: 0, padding: "10px 16px 16px", fontSize: 13, color: islandTheme.color.textMuted }}>No actions yet.</p>
+      ) : (
+        log.map((e, i) => (
+          <div
+            key={e.id}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr auto",
               gap: 12,
-              padding: "12px 16px",
+              padding: "10px 16px",
               alignItems: "center",
               borderTop: i === 0 ? "none" : `1px solid ${islandTheme.color.cardBorder}`
             }}
           >
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{r.target}</div>
-              <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
-                Reported by {r.who} · {r.reason} · {r.ago} ago
+              <div style={{ fontSize: 12, fontWeight: 700 }}>
+                <span style={{ color: islandTheme.color.primaryGlow }}>{e.moderatorDisplayName}</span>
+                {" "}
+                <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>{e.action}</span>
+                {e.targetThreadTitle ? <span> · {e.targetThreadTitle}</span> : null}
+                {e.targetUserDisplayName ? <span> · @{e.targetUserDisplayName}</span> : null}
               </div>
+              {e.notes ? (
+                <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2, fontStyle: "italic" }}>
+                  "{e.notes}"
+                </div>
+              ) : null}
             </div>
-            <button type="button" style={smallBtn(islandTheme.color.primary, "#fff")}>
-              Resolve
-            </button>
-            <button type="button" style={smallBtn("transparent", "#fca5a5", true, "#7f1d1d")}>
-              Remove
-            </button>
+            <div style={{ fontSize: 11, color: islandTheme.color.textMuted, whiteSpace: "nowrap" }}>
+              {new Date(e.createdAt).toLocaleString()}
+            </div>
           </div>
-        ))}
-      </IslandCard>
-      <IslandCard style={{ padding: 16 }}>
-        <SubsectionTitle>Word filter</SubsectionTitle>
-        <Field label="Banned terms (comma-separated)">
-          <input defaultValue="" placeholder="None" style={{ ...islandInputStyle, width: "100%" }} />
-        </Field>
-        <RuleRow label="Auto-flag mentions of new patches early" enabled />
-        <RuleRow label="Cooldown for new accounts (24h)" enabled />
-      </IslandCard>
-    </div>
+        ))
+      )}
+    </IslandCard>
   );
 }
 
@@ -2261,6 +2703,240 @@ function AISettingsSubpage({
               {testState === "ok" ? "✓ " : "✗ "}{testMsg}
             </span>
           ) : null}
+        </div>
+      </IslandCard>
+    </div>
+  );
+}
+
+// ── Economy subpage ───────────────────────────────────────────────────────────
+
+type EconomyOverview = {
+  totalSupply: number;
+  optedOutCount: number;
+  topHolders: { discordUserId: string; username: string; balance: number }[];
+};
+
+function EconomySubpage() {
+  const [overview, setOverview] = useState<EconomyOverview | null>(null);
+  const [shopItems, setShopItems] = useState<NuggiesShopItem[]>([]);
+  const [gameNights, setGameNights] = useState<GameNight[]>([]);
+
+  const [grantTarget, setGrantTarget] = useState("");
+  const [grantAmount, setGrantAmount] = useState("");
+  const [grantReason, setGrantReason] = useState("");
+  const [grantMsg, setGrantMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [granting, setGranting] = useState(false);
+
+  const [selectedNight, setSelectedNight] = useState<number | "">("");
+  const [awarding, setAwarding] = useState(false);
+  const [awardMsg, setAwardMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [newItem, setNewItem] = useState({
+    name: "", description: "", price: "",
+    itemType: "title" as "title" | "flair" | "badge",
+    emoji: "", label: "", color: "#f59e0b",
+  });
+  const [addingItem, setAddingItem] = useState(false);
+  const [itemMsg, setItemMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = async () => {
+    const [ovRes, shopRes, nightsRes] = await Promise.all([
+      apiFetch("/nuggies/admin/overview"),
+      apiFetch("/nuggies/shop"),
+      apiFetch("/game-nights"),
+    ]);
+    if (ovRes.ok) setOverview(await ovRes.json() as EconomyOverview);
+    if (shopRes.ok) {
+      const d = await shopRes.json() as { items: NuggiesShopItem[] };
+      setShopItems(d.items);
+    }
+    if (nightsRes.ok) {
+      const d = await nightsRes.json() as { gameNights: GameNight[] };
+      setGameNights((d.gameNights ?? []).filter((n) => n.selectedGameName != null));
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const accent = "#f59e0b";
+
+  const handleGrant = async () => {
+    const amount = parseInt(grantAmount, 10);
+    if (!grantTarget.trim() || !amount || !grantReason.trim()) return;
+    setGranting(true);
+    setGrantMsg(null);
+    const res = await apiFetch("/nuggies/admin/grant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toDiscordUserId: grantTarget.trim(), amount, reason: grantReason.trim() }),
+    });
+    const body = await res.json() as { newBalance?: number; error?: string };
+    if (res.ok) {
+      setGrantMsg({ ok: true, text: `Done. New balance: ${(body.newBalance ?? 0).toLocaleString()} Nuggies` });
+      setGrantTarget(""); setGrantAmount(""); setGrantReason("");
+      void load();
+    } else {
+      setGrantMsg({ ok: false, text: body.error ?? "Failed" });
+    }
+    setGranting(false);
+  };
+
+  const handleAwardAttendance = async () => {
+    if (!selectedNight) return;
+    setAwarding(true);
+    setAwardMsg(null);
+    const res = await apiFetch(`/nuggies/admin/award-attendance/${selectedNight}`, { method: "POST" });
+    const body = await res.json() as { awarded?: number; error?: string; message?: string };
+    if (res.ok) {
+      const n = body.awarded ?? 0;
+      setAwardMsg({ ok: true, text: `Awarded to ${n} islander${n === 1 ? "" : "s"}.${body.message ? " " + body.message : ""}` });
+    } else {
+      setAwardMsg({ ok: false, text: body.error ?? "Failed" });
+    }
+    setAwarding(false);
+  };
+
+  const handleAddItem = async () => {
+    if (!newItem.name || !newItem.description || !newItem.price || !newItem.emoji) return;
+    setAddingItem(true);
+    setItemMsg(null);
+    const itemData: Record<string, string> = { emoji: newItem.emoji, color: newItem.color };
+    if (newItem.itemType === "title" && newItem.label) itemData.label = newItem.label;
+    const res = await apiFetch("/nuggies/admin/shop-item", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newItem.name, description: newItem.description,
+        price: parseInt(newItem.price, 10), itemType: newItem.itemType,
+        itemData, isActive: true,
+      }),
+    });
+    const body = await res.json() as { ok?: boolean; error?: string };
+    if (res.ok && body.ok) {
+      setItemMsg({ ok: true, text: "Item created!" });
+      setNewItem({ name: "", description: "", price: "", itemType: "title", emoji: "", label: "", color: "#f59e0b" });
+      void load();
+    } else {
+      setItemMsg({ ok: false, text: body.error ?? "Failed" });
+    }
+    setAddingItem(false);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      {/* Overview banner */}
+      <IslandCard style={{ padding: "14px 18px", background: `linear-gradient(135deg, ${accent}22 0%, ${islandTheme.color.panelBg} 100%)`, border: `1px solid ${accent}44` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ fontSize: 28 }}>🍗</span>
+          <div>
+            <div className="island-mono" style={{ fontSize: 10, color: accent, textTransform: "uppercase", letterSpacing: "0.12em" }}>Economy Overview</div>
+            <div className="island-display" style={{ fontWeight: 800, fontSize: 18 }}>
+              {overview ? overview.totalSupply.toLocaleString() : "…"} Nuggies in circulation
+            </div>
+            <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+              {overview ? `${overview.optedOutCount} opted out` : "Loading…"}
+            </div>
+          </div>
+        </div>
+      </IslandCard>
+
+      {/* Top Holders */}
+      {overview && overview.topHolders.length > 0 && (
+        <IslandCard style={{ padding: "16px 18px" }}>
+          <SubsectionTitle>Top Holders</SubsectionTitle>
+          <div style={{ display: "grid", gap: 4 }}>
+            {overview.topHolders.map((h, i) => (
+              <div key={h.discordUserId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, background: islandTheme.color.panelMutedBg, fontSize: 13 }}>
+                <span style={{ fontFamily: islandTheme.font.mono, width: 24, color: islandTheme.color.textMuted, flexShrink: 0 }}>#{i + 1}</span>
+                <span style={{ flex: 1, fontWeight: 600 }}>{h.username}</span>
+                <span style={{ fontWeight: 700, color: accent }}>₦{h.balance.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </IslandCard>
+      )}
+
+      {/* Grant / Deduct */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Grant / Deduct</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Positive = grant, negative = deduct. Bypasses daily cap and opt-out checks.
+        </p>
+        <div style={{ display: "grid", gap: 8 }}>
+          <input placeholder="Discord User ID" value={grantTarget} onChange={(e) => setGrantTarget(e.target.value)} style={{ ...islandInputStyle }} />
+          <input placeholder="Amount (e.g. 200 or -50)" type="number" value={grantAmount} onChange={(e) => setGrantAmount(e.target.value)} style={{ ...islandInputStyle }} />
+          <input placeholder="Reason" value={grantReason} onChange={(e) => setGrantReason(e.target.value)} style={{ ...islandInputStyle }} />
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <IslandButton variant="primary" onClick={() => void handleGrant()} disabled={granting || !grantTarget || !grantAmount || !grantReason}>
+              {granting ? "Applying…" : "Apply"}
+            </IslandButton>
+            {grantMsg && <span style={{ fontSize: 13, color: grantMsg.ok ? "#4ade80" : islandTheme.color.danger }}>{grantMsg.text}</span>}
+          </div>
+        </div>
+      </IslandCard>
+
+      {/* Attendance Awards */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Attendance Awards</SubsectionTitle>
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Award Nuggies to all attendees of a finalized game night. Already-awarded attendees are skipped.
+        </p>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <select value={selectedNight} onChange={(e) => setSelectedNight(e.target.value ? parseInt(e.target.value, 10) : "")} style={{ ...islandInputStyle, flex: 1, minWidth: 200 }}>
+            <option value="">Select a game night…</option>
+            {gameNights.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.title} — {n.selectedGameName ?? "?"} ({new Date(n.scheduledFor).toLocaleDateString()})
+              </option>
+            ))}
+          </select>
+          <IslandButton variant="primary" onClick={() => void handleAwardAttendance()} disabled={awarding || !selectedNight}>
+            {awarding ? "Awarding…" : "Award 🍗 to Attendees"}
+          </IslandButton>
+          {awardMsg && <span style={{ fontSize: 13, color: awardMsg.ok ? "#4ade80" : islandTheme.color.danger }}>{awardMsg.text}</span>}
+        </div>
+      </IslandCard>
+
+      {/* Shop Items */}
+      <IslandCard style={{ padding: "16px 18px" }}>
+        <SubsectionTitle>Shop Items ({shopItems.length})</SubsectionTitle>
+        <div style={{ display: "grid", gap: 4, marginBottom: 16 }}>
+          {shopItems.map((item) => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 8, background: islandTheme.color.panelMutedBg, fontSize: 13 }}>
+              <span style={{ fontSize: 18 }}>{item.itemData.emoji}</span>
+              <span style={{ flex: 1, fontWeight: 600 }}>{item.name}</span>
+              <span style={{ fontSize: 11, color: islandTheme.color.textMuted, textTransform: "capitalize" }}>{item.itemType}</span>
+              <span style={{ fontWeight: 700, color: accent }}>₦{item.price.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+
+        <SubsectionTitle style={{ marginTop: 8 }}>Add Item</SubsectionTitle>
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder="Name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ ...islandInputStyle, flex: 2 }} />
+            <select value={newItem.itemType} onChange={(e) => setNewItem({ ...newItem, itemType: e.target.value as "title" | "flair" | "badge" })} style={{ ...islandInputStyle, flex: 1 }}>
+              <option value="title">Title</option>
+              <option value="flair">Flair</option>
+              <option value="badge">Badge</option>
+            </select>
+          </div>
+          <input placeholder="Description" value={newItem.description} onChange={(e) => setNewItem({ ...newItem, description: e.target.value })} style={{ ...islandInputStyle }} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input placeholder="Price" type="number" min={1} value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} style={{ ...islandInputStyle, width: 100 }} />
+            <input placeholder="Emoji" value={newItem.emoji} onChange={(e) => setNewItem({ ...newItem, emoji: e.target.value })} style={{ ...islandInputStyle, width: 72 }} />
+            {newItem.itemType === "title" && (
+              <input placeholder="Label (display text)" value={newItem.label} onChange={(e) => setNewItem({ ...newItem, label: e.target.value })} style={{ ...islandInputStyle, flex: 1, minWidth: 120 }} />
+            )}
+            <input type="color" value={newItem.color} onChange={(e) => setNewItem({ ...newItem, color: e.target.value })} style={{ width: 48, height: 38, borderRadius: 8, border: `1px solid ${islandTheme.color.border}`, padding: 2, background: islandTheme.color.panelMutedBg, cursor: "pointer" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <IslandButton variant="primary" onClick={() => void handleAddItem()} disabled={addingItem || !newItem.name || !newItem.description || !newItem.price || !newItem.emoji}>
+              {addingItem ? "Creating…" : "Create Item"}
+            </IslandButton>
+            {itemMsg && <span style={{ fontSize: 13, color: itemMsg.ok ? "#4ade80" : islandTheme.color.danger }}>{itemMsg.text}</span>}
+          </div>
         </div>
       </IslandCard>
     </div>

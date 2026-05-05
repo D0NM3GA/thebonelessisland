@@ -6,7 +6,8 @@ import { recordEvent } from "../lib/activityEvents.js";
 import { requireSession } from "../lib/auth.js";
 import { enrichGameMetadataFromSteam, enrichMissingGameImages } from "../lib/gameCatalogEnrichment.js";
 import { ingestNewsForApps } from "../lib/gameNewsIngestion.js";
-import { getGuildId } from "../lib/serverSettings.js";
+import { ensureSettingsLoaded, getAISetting, getGuildId } from "../lib/serverSettings.js";
+import { applyTransaction } from "../lib/nuggiesLedger.js";
 
 const linkSchema = z.object({
   steamId64: z.string().min(10)
@@ -156,16 +157,42 @@ async function syncWishlistForUser(userId: string, steamId64: string): Promise<S
 steamRouter.post("/link", async (req, res) => {
   const { steamId64 } = linkSchema.parse(req.body);
   const discordUserId = String(res.locals.userId);
-  await db.query(
+
+  const insertResult = await db.query<{ xmax: string }>(
     `
       INSERT INTO steam_links (user_id, steam_id64)
       SELECT id, $2 FROM users WHERE discord_user_id = $1
       ON CONFLICT (user_id)
       DO UPDATE SET steam_id64 = EXCLUDED.steam_id64, linked_at = NOW()
+      RETURNING (xmax = 0) AS is_new_link
     `,
     [discordUserId, steamId64]
   );
+
   void recordEvent({ eventType: "steam.linked", actorDiscordUserId: discordUserId });
+
+  // First-time Steam link bonus
+  const isNewLink = (insertResult.rows[0] as unknown as { is_new_link: boolean })?.is_new_link;
+  if (isNewLink) {
+    void (async () => {
+      try {
+        await ensureSettingsLoaded();
+        const raw = getAISetting("nuggies_first_link_amount");
+        const amount = raw ? parseInt(raw, 10) : 150;
+        await applyTransaction({
+          discordUserId,
+          amount,
+          type: "first_link",
+          reason: "First Steam account link bonus",
+          referenceId: "first_steam_link",
+          skipDailyCapCheck: true,
+        });
+      } catch {
+        // Best-effort: opted-out users or errors silently skipped
+      }
+    })();
+  }
+
   res.json({ ok: true });
 });
 

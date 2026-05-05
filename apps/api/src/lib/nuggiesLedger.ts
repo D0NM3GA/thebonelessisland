@@ -1,0 +1,420 @@
+import { db } from "../db/client.js";
+import { ensureSettingsLoaded, getAISetting } from "./serverSettings.js";
+
+// ── Error Types ───────────────────────────────────────────────────────────────
+
+export class InsufficientFundsError extends Error {
+  constructor() { super("Insufficient Nuggies"); }
+}
+
+export class AlreadyClaimedError extends Error {
+  constructor() { super("Daily already claimed today"); }
+}
+
+export class DailyCapError extends Error {
+  constructor() { super("Daily earn cap reached"); }
+}
+
+export class OptedOutError extends Error {
+  constructor() { super("User has opted out of Nuggies"); }
+}
+
+export class GameCooldownError extends Error {
+  constructor(public secondsLeft: number) { super(`Game cooldown: ${secondsLeft}s remaining`); }
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type Transaction = {
+  id: number;
+  amount: number;
+  type: string;
+  reason: string;
+  referenceId: string | null;
+  createdAt: string;
+};
+
+export type EquippedItem = {
+  id: number;
+  name: string;
+  itemType: string;
+  itemData: Record<string, unknown>;
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getCSTDateString(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+}
+
+function getSetting(key: string, fallback: number): number {
+  const raw = getAISetting(key);
+  if (!raw) return fallback;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+async function resolveUserId(discordUserId: string): Promise<bigint> {
+  const r = await db.query<{ id: string }>(
+    "SELECT id FROM users WHERE discord_user_id = $1",
+    [discordUserId]
+  );
+  if (!r.rows[0]) throw new Error(`User not found: ${discordUserId}`);
+  return BigInt(r.rows[0].id);
+}
+
+// ── Core: Apply Transaction ───────────────────────────────────────────────────
+
+export async function applyTransaction(opts: {
+  discordUserId: string;
+  amount: number;
+  type: string;
+  reason: string;
+  referenceId?: string;
+  createdByDiscordUserId?: string;
+  skipOptedOutCheck?: boolean;
+  skipDailyCapCheck?: boolean;
+}): Promise<{ newBalance: number }> {
+  await ensureSettingsLoaded();
+
+  const userId = await resolveUserId(opts.discordUserId);
+
+  // Opted-out check
+  if (!opts.skipOptedOutCheck) {
+    const optedOut = await db.query<{ nuggies_opted_out: boolean }>(
+      "SELECT nuggies_opted_out FROM users WHERE id = $1",
+      [userId]
+    );
+    if (optedOut.rows[0]?.nuggies_opted_out) throw new OptedOutError();
+  }
+
+  // Resolve creator user_id
+  let createdByUserId: bigint | null = null;
+  if (opts.createdByDiscordUserId) {
+    const cr = await db.query<{ id: string }>(
+      "SELECT id FROM users WHERE discord_user_id = $1",
+      [opts.createdByDiscordUserId]
+    );
+    createdByUserId = cr.rows[0] ? BigInt(cr.rows[0].id) : null;
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Upsert balance row
+    await client.query(
+      `INSERT INTO nuggies_balances (user_id, balance)
+       VALUES ($1, 0)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    );
+
+    // Lock row
+    const balRow = await client.query<{ balance: string }>(
+      "SELECT balance FROM nuggies_balances WHERE user_id = $1 FOR UPDATE",
+      [userId]
+    );
+    const currentBalance = parseInt(balRow.rows[0]?.balance ?? "0", 10);
+
+    // Daily cap check (positive earn transactions only, excluding admin grants)
+    if (opts.amount > 0 && !opts.skipDailyCapCheck && !["admin_grant"].includes(opts.type)) {
+      const cap = getSetting("nuggies_daily_cap", 600);
+      const earned = await getDailyEarnedToday(userId, client);
+      if (earned + opts.amount > cap) throw new DailyCapError();
+    }
+
+    // Insufficient funds check
+    if (currentBalance + opts.amount < 0) throw new InsufficientFundsError();
+
+    const newBalance = currentBalance + opts.amount;
+
+    await client.query(
+      "UPDATE nuggies_balances SET balance = $1, updated_at = NOW() WHERE user_id = $2",
+      [newBalance, userId]
+    );
+
+    await client.query(
+      `INSERT INTO nuggies_transactions
+         (user_id, amount, type, reason, reference_id, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [userId, opts.amount, opts.type, opts.reason, opts.referenceId ?? null, createdByUserId]
+    );
+
+    await client.query("COMMIT");
+    return { newBalance };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Daily Claim ───────────────────────────────────────────────────────────────
+
+export async function claimDaily(discordUserId: string): Promise<{ newBalance: number; amount: number }> {
+  await ensureSettingsLoaded();
+
+  const userId = await resolveUserId(discordUserId);
+  const todayCST = getCSTDateString();
+
+  // Check opted out
+  const userRow = await db.query<{ nuggies_opted_out: boolean }>(
+    "SELECT nuggies_opted_out FROM users WHERE id = $1",
+    [userId]
+  );
+  if (userRow.rows[0]?.nuggies_opted_out) throw new OptedOutError();
+
+  // Check if already claimed today (CST date comparison)
+  const lastClaim = await db.query<{ created_at: string }>(
+    `SELECT created_at FROM nuggies_transactions
+     WHERE user_id = $1 AND type = 'daily'
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId]
+  );
+  if (lastClaim.rows.length > 0) {
+    const lastCST = new Date(lastClaim.rows[0].created_at)
+      .toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    if (lastCST === todayCST) throw new AlreadyClaimedError();
+  }
+
+  const amount = getSetting("nuggies_daily_amount", 75);
+  const { newBalance } = await applyTransaction({
+    discordUserId,
+    amount,
+    type: "daily",
+    reason: "Daily claim",
+    skipOptedOutCheck: true, // already checked above
+    skipDailyCapCheck: true,  // daily claim is exempt from cap
+  });
+
+  return { newBalance, amount };
+}
+
+// ── Game Cooldown ─────────────────────────────────────────────────────────────
+
+export async function checkGameCooldown(userId: bigint): Promise<void> {
+  await ensureSettingsLoaded();
+  const cooldownSecs = getSetting("nuggies_game_cooldown_secs", 120);
+
+  const r = await db.query<{ created_at: string }>(
+    `SELECT created_at FROM nuggies_transactions
+     WHERE user_id = $1
+       AND type LIKE 'game_%'
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId]
+  );
+
+  if (r.rows.length > 0) {
+    const lastGame = new Date(r.rows[0].created_at).getTime();
+    const elapsed = Math.floor((Date.now() - lastGame) / 1000);
+    if (elapsed < cooldownSecs) {
+      throw new GameCooldownError(cooldownSecs - elapsed);
+    }
+  }
+}
+
+// ── Queries ───────────────────────────────────────────────────────────────────
+
+export async function getBalance(discordUserId: string): Promise<number> {
+  const userId = await resolveUserId(discordUserId);
+  const r = await db.query<{ balance: string }>(
+    "SELECT balance FROM nuggies_balances WHERE user_id = $1",
+    [userId]
+  );
+  return parseInt(r.rows[0]?.balance ?? "0", 10);
+}
+
+export async function getRecentTransactions(
+  discordUserId: string,
+  limit = 20
+): Promise<Transaction[]> {
+  const userId = await resolveUserId(discordUserId);
+  const r = await db.query<{
+    id: string; amount: string; type: string;
+    reason: string; reference_id: string | null; created_at: string;
+  }>(
+    `SELECT id, amount, type, reason, reference_id, created_at
+     FROM nuggies_transactions
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [userId, limit]
+  );
+  return r.rows.map((row) => ({
+    id: parseInt(row.id, 10),
+    amount: parseInt(row.amount, 10),
+    type: row.type,
+    reason: row.reason,
+    referenceId: row.reference_id,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function getDailyEarnedToday(
+  userId: bigint,
+  client?: { query: typeof db.query }
+): Promise<number> {
+  const q = client ?? db;
+  const todayCST = getCSTDateString();
+  // Convert CST midnight to UTC range
+  const startUTC = new Date(`${todayCST}T00:00:00-06:00`).toISOString();
+  const endUTC = new Date(`${todayCST}T23:59:59-05:00`).toISOString(); // handle DST edge
+
+  const r = await q.query<{ total: string }>(
+    `SELECT COALESCE(SUM(amount), 0) AS total
+     FROM nuggies_transactions
+     WHERE user_id = $1
+       AND amount > 0
+       AND type NOT IN ('admin_grant')
+       AND created_at >= $2
+       AND created_at <= $3`,
+    [userId, startUTC, endUTC]
+  );
+  return parseInt(r.rows[0]?.total ?? "0", 10);
+}
+
+export async function isOptedOut(discordUserId: string): Promise<boolean> {
+  const r = await db.query<{ nuggies_opted_out: boolean }>(
+    "SELECT nuggies_opted_out FROM users WHERE discord_user_id = $1",
+    [discordUserId]
+  );
+  return r.rows[0]?.nuggies_opted_out ?? false;
+}
+
+export async function getEquippedItems(discordUserId: string): Promise<EquippedItem[]> {
+  const userId = await resolveUserId(discordUserId);
+  const r = await db.query<{
+    id: string; name: string; item_type: string; item_data: Record<string, unknown>;
+  }>(
+    `SELECT s.id, s.name, s.item_type, s.item_data
+     FROM nuggies_inventory i
+     INNER JOIN nuggies_shop_items s ON s.id = i.item_id
+     WHERE i.user_id = $1 AND i.equipped = TRUE`,
+    [userId]
+  );
+  return r.rows.map((row) => ({
+    id: parseInt(row.id, 10),
+    name: row.name,
+    itemType: row.item_type,
+    itemData: row.item_data,
+  }));
+}
+
+// ── Atomic Trade (with fee) ───────────────────────────────────────────────────
+
+export async function executeTrade(opts: {
+  fromDiscordUserId: string;
+  toDiscordUserId: string;
+  amount: number;
+}): Promise<{ sent: number; received: number; fee: number }> {
+  await ensureSettingsLoaded();
+
+  const feePct = getSetting("nuggies_trade_fee_pct", 5);
+  const fee = Math.max(1, Math.round(opts.amount * feePct / 100));
+  const received = opts.amount - fee;
+
+  if (received <= 0) throw new Error("Amount too small after fee");
+
+  const fromId = await resolveUserId(opts.fromDiscordUserId);
+  const toId = await resolveUserId(opts.toDiscordUserId);
+
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Lock both rows in consistent order (lower id first to prevent deadlock)
+    const [firstId, secondId] = fromId < toId ? [fromId, toId] : [toId, fromId];
+    await client.query("SELECT balance FROM nuggies_balances WHERE user_id = $1 FOR UPDATE", [firstId]);
+    await client.query(
+      `INSERT INTO nuggies_balances (user_id, balance) VALUES ($1, 0)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [toId]
+    );
+    await client.query("SELECT balance FROM nuggies_balances WHERE user_id = $1 FOR UPDATE", [secondId]);
+
+    const fromBal = await client.query<{ balance: string }>(
+      "SELECT balance FROM nuggies_balances WHERE user_id = $1", [fromId]
+    );
+    const bal = parseInt(fromBal.rows[0]?.balance ?? "0", 10);
+    if (bal < opts.amount) throw new InsufficientFundsError();
+
+    await client.query(
+      "UPDATE nuggies_balances SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2",
+      [opts.amount, fromId]
+    );
+    await client.query(
+      "UPDATE nuggies_balances SET balance = balance + $1, updated_at = NOW() WHERE user_id = $2",
+      [received, toId]
+    );
+
+    const refId = `trade:${opts.toDiscordUserId}`;
+    const refIdIn = `trade:${opts.fromDiscordUserId}`;
+
+    await client.query(
+      `INSERT INTO nuggies_transactions (user_id, amount, type, reason, reference_id)
+       VALUES ($1, $2, 'trade_out', $3, $4)`,
+      [fromId, -opts.amount, `Sent to ${opts.toDiscordUserId} (${feePct}% fee)`, refId]
+    );
+    await client.query(
+      `INSERT INTO nuggies_transactions (user_id, amount, type, reason, reference_id)
+       VALUES ($1, $2, 'trade_in', $3, $4)`,
+      [toId, received, `Received from ${opts.fromDiscordUserId}`, refIdIn]
+    );
+
+    await client.query("COMMIT");
+    return { sent: opts.amount, received, fee };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Check Default Loans ───────────────────────────────────────────────────────
+
+export async function processDefaultedLoans(): Promise<void> {
+  const defaulted = await db.query<{
+    id: string; lender_user_id: string; borrower_user_id: string; collateral: string;
+  }>(
+    `SELECT id, lender_user_id, borrower_user_id, collateral
+     FROM nuggies_loans
+     WHERE status = 'active' AND due_at < NOW()`
+  );
+
+  for (const loan of defaulted.rows) {
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "UPDATE nuggies_loans SET status = 'defaulted', resolved_at = NOW() WHERE id = $1",
+        [loan.id]
+      );
+      const collateral = parseInt(loan.collateral, 10);
+      if (collateral > 0) {
+        // Collateral goes to lender
+        await client.query(
+          "UPDATE nuggies_balances SET balance = balance + $1, updated_at = NOW() WHERE user_id = $2",
+          [collateral, loan.lender_user_id]
+        );
+        await client.query(
+          `INSERT INTO nuggies_transactions (user_id, amount, type, reason, reference_id)
+           VALUES ($1, $2, 'loan_forfeit_in', 'Loan defaulted — collateral received', $3)`,
+          [loan.lender_user_id, collateral, `loan:${loan.id}`]
+        );
+        await client.query(
+          `INSERT INTO nuggies_transactions (user_id, amount, type, reason, reference_id)
+           VALUES ($1, $2, 'loan_forfeit_out', 'Loan defaulted — collateral forfeited', $3)`,
+          [loan.borrower_user_id, -collateral, `loan:${loan.id}`]
+        );
+      }
+      await client.query("COMMIT");
+    } catch {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+  }
+}

@@ -2,8 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { db } from "./client.js";
 
-async function main() {
-  // Create tracking table
+export async function runMigrations(): Promise<{ applied: number; skipped: number }> {
   await db.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       filename TEXT PRIMARY KEY,
@@ -21,7 +20,7 @@ async function main() {
     .filter((name) => name.endsWith(".sql"))
     .sort((a, b) => a.localeCompare(b));
 
-  // First run: schema_migrations is empty but DB may already be set up.
+  // First run: schema_migrations empty but DB may already be set up.
   // Detect by checking for a table from migration 017 (general_news).
   if (appliedSet.size === 0) {
     const { rows } = await db.query<{ exists: boolean }>(`
@@ -29,8 +28,7 @@ async function main() {
         SELECT 1 FROM information_schema.tables WHERE table_name = 'general_news'
       ) AS exists
     `);
-    if (rows[0].exists) {
-      // Seed tracker with all migrations prior to 018 that are already applied
+    if (rows[0]?.exists) {
       const seed = files.filter((f) => f < "018");
       for (const file of seed) {
         await db.query(
@@ -39,31 +37,41 @@ async function main() {
         );
         appliedSet.add(file);
       }
-      console.log(`Seeded migration tracker with ${seed.length} previously applied migrations.`);
+      console.log(`[migrations] Seeded tracker with ${seed.length} pre-018 migrations.`);
     }
   }
 
   let count = 0;
+  let skipped = 0;
   for (const file of files) {
     if (appliedSet.has(file)) {
-      console.log(`  skip  ${file}`);
+      skipped++;
       continue;
     }
     const sql = await readFile(resolve(migrationDir, file), "utf8");
     await db.query(sql);
     await db.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [file]);
-    console.log(`  apply ${file}`);
+    console.log(`[migrations] apply ${file}`);
     count++;
   }
 
-  if (count === 0) console.log("Nothing new to apply.");
-  else console.log(`\nApplied ${count} migration(s).`);
-
-  await db.end();
+  return { applied: count, skipped };
 }
 
-main().catch(async (err) => {
-  console.error(err);
-  await db.end();
-  process.exit(1);
-});
+// CLI entry: `tsx src/db/runMigrations.ts`
+const isMain = import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, "/") ?? "");
+
+if (isMain) {
+  runMigrations()
+    .then(async ({ applied, skipped }) => {
+      console.log(applied === 0 ? "Nothing new to apply." : `\nApplied ${applied} migration(s).`);
+      console.log(`(skipped ${skipped})`);
+      await db.end();
+    })
+    .catch(async (err) => {
+      console.error(err);
+      await db.end();
+      process.exit(1);
+    });
+}

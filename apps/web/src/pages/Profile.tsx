@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { IslandButton, IslandCard, islandInputStyle } from "../islandUi.js";
+import { NuggieBadge } from "../components/NuggieBadge.js";
 import { islandTheme } from "../theme.js";
 import type { MeProfile, OwnedGameLite } from "../types.js";
 
@@ -54,6 +55,25 @@ export function ProfilePage({
           <strong>Discord Username:</strong> @{profileData?.username ?? "unknown"}
         </p>
       </IslandCard>
+
+      {profileData && !profileData.nuggiesOptedOut && (
+        <IslandCard as="div" style={{ marginTop: 8 }}>
+          <h3 style={{ marginTop: 0, marginBottom: 8 }}>Nuggies</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 22, fontWeight: 800 }}>
+              ₦{profileData.nuggieBalance.toLocaleString()}
+              <span style={{ fontSize: 14, fontWeight: 400, color: islandTheme.color.textMuted, marginLeft: 6 }}>Nuggies</span>
+            </div>
+            {profileData.equippedItems.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {profileData.equippedItems.map((item) => (
+                  <NuggieBadge key={item.id} item={item} size="sm" />
+                ))}
+              </div>
+            )}
+          </div>
+        </IslandCard>
+      )}
 
       <IslandCard as="div" style={{ marginTop: 8 }}>
         <h3 style={{ marginTop: 0, marginBottom: 8 }}>Privacy & Library Preferences</h3>
