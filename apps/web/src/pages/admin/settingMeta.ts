@@ -184,7 +184,7 @@ const RAW: SettingMeta[] = [
   {
     key: "nuggies_daily_cap",
     label: "Daily earn cap",
-    description: "Maximum Nuggies a single user can earn from any source in one CST calendar day.",
+    description: "Maximum Nuggies a single user can earn from any source in one daily-reset window (rolls at 11pm ET).",
     whenToChange: "Lower to slow down high-volume earners; raise during events.",
     example: "600",
     tags: ["nuggies", "daily", "cap", "limit", "earn"],

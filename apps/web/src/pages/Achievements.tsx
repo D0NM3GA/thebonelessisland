@@ -48,10 +48,10 @@ function txIcon(type: string, amount: number) {
 }
 
 function hasDailyToday(txs: NuggieTransaction[]) {
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Halifax" });
   return txs.some((tx) => {
     if (tx.type !== "daily") return false;
-    const d = new Date(tx.createdAt).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const d = new Date(tx.createdAt).toLocaleDateString("en-CA", { timeZone: "America/Halifax" });
     return d === today;
   });
 }
@@ -186,7 +186,7 @@ export function AchievementsPage() {
             {claimedToday ? (
               <div style={{ fontSize: 13, color: islandTheme.color.textMuted, textAlign: "right" }}>
                 Daily claimed ✓<br />
-                <span style={{ fontSize: 11 }}>Resets at CST midnight</span>
+                <span style={{ fontSize: 11 }}>Resets at 11pm ET</span>
               </div>
             ) : (
               <IslandButton variant="primary" onClick={() => void claimDaily()} disabled={claiming}>

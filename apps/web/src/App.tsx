@@ -9,6 +9,7 @@ import { HomePage } from "./pages/Home.js";
 import { LibraryPage } from "./pages/Library.js";
 import { LoginScreen } from "./pages/LoginScreen.js";
 import { AchievementsPage } from "./pages/Achievements.js";
+import { CasinoPage } from "./pages/games/CasinoPage.js";
 import { ForumsPage } from "./pages/Forums.js";
 import { ProfilePage } from "./pages/Profile.js";
 import { SettingsPage } from "./pages/Settings.js";
@@ -1345,6 +1346,8 @@ export function App() {
       ) : null}
 
       {page === "nuggies" ? <AchievementsPage /> : null}
+
+      {page === "nuggies-casino" ? <CasinoPage /> : null}
 
       {page === "nuggies-history" ? (
         <ComingSoonPage title="Nuggies History" description="Your full transaction log. Coming soon." />

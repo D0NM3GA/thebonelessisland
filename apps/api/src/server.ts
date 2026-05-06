@@ -12,6 +12,9 @@ import { gameNightRouter } from "./routes/gameNights.js";
 import { membersRouter } from "./routes/members.js";
 import { newsCardsRouter } from "./routes/newsCards.js";
 import { nuggiesRouter } from "./routes/nuggies.js";
+import { nuggiesGamesRouter } from "./routes/nuggiesGames.js";
+import { registerAllGames } from "./lib/games/index.js";
+import { sweepExpiredGames } from "./lib/nuggiesGames.js";
 import { forumsRouter } from "./routes/forums.js";
 import { taglinesRouter } from "./routes/taglines.js";
 import { profileRouter } from "./routes/profile.js";
@@ -56,6 +59,7 @@ app.use("/activity", activityRouter);
 app.use("/news-cards", newsCardsRouter);
 app.use("/members", membersRouter);
 app.use("/settings", settingsRouter);
+app.use("/nuggies/games", nuggiesGamesRouter);
 app.use("/nuggies", nuggiesRouter);
 app.use("/forums", forumsRouter);
 app.use("/taglines", taglinesRouter);
@@ -103,6 +107,14 @@ async function bootstrap() {
       }
     });
   }, 24 * 60 * 60 * 1000);
+
+  // Register Nuggies game handlers + sweep expired sessions every 30s
+  registerAllGames();
+  setInterval(() => {
+    sweepExpiredGames().catch((err) => {
+      console.error("[nuggies-games] sweep failed:", err);
+    });
+  }, 30_000);
 
   app.listen(Number(env.API_PORT), () => {
     console.log(`API listening on ${env.API_PORT}`);

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import dotenv from "dotenv";
 import {
   ActionRowBuilder,
@@ -15,17 +16,6 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from "discord.js";
-import {
-  BlackjackGame,
-  calculatePayout,
-  dealerPlay,
-  formatHand,
-  handTotal,
-  hitPlayer,
-  resolveGame,
-  resultEmoji,
-  startBlackjack,
-} from "./blackjack.js";
 
 dotenv.config({ path: "../../.env" });
 
@@ -35,29 +25,100 @@ const guildId = process.env.DISCORD_GUILD_ID ?? "";
 const apiBase = process.env.API_BASE_URL ?? "http://localhost:3000";
 const botApiSharedSecret = process.env.BOT_API_SHARED_SECRET ?? "";
 
-// ── Active game state (in-memory) ─────────────────────────────────────────────
-
-const activeBlackjackGames = new Map<string, BlackjackGame>();
-
 // ── API Helper ────────────────────────────────────────────────────────────────
 
 async function api(
   method: string,
   path: string,
   discordUserId: string,
-  body?: unknown
+  body?: unknown,
+  idempotencyKey?: string
 ): Promise<{ ok: boolean; status: number; data: unknown }> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    "x-island-bot-secret": botApiSharedSecret,
+    "x-discord-user-id": discordUserId,
+  };
+  if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
   const res = await fetch(`${apiBase}${path}`, {
     method,
-    headers: {
-      "content-type": "application/json",
-      "x-island-bot-secret": botApiSharedSecret,
-      "x-discord-user-id": discordUserId,
-    },
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => null);
   return { ok: res.ok, status: res.status, data };
+}
+
+// ── Game-state rendering helpers (data comes from server) ───────────────────
+
+type Card = { rank: string; suit: string };
+
+function formatCard(c: Card): string {
+  return `\`${c.rank}${c.suit}\``;
+}
+
+function formatHand(cards: Card[]): string {
+  if (!cards || cards.length === 0) return "—";
+  return cards.map(formatCard).join(" ");
+}
+
+function formatHandWithHidden(visible: Card[], hidden: number): string {
+  const parts = (visible ?? []).map(formatCard);
+  for (let i = 0; i < hidden; i++) parts.push("`??`");
+  return parts.length > 0 ? parts.join(" ") : "—";
+}
+
+function blackjackResultText(r: "win" | "lose" | "push" | "blackjack"): string {
+  switch (r) {
+    case "blackjack": return "🃏✨ BLACKJACK!";
+    case "win":      return "🏆 You win!";
+    case "push":     return "🤝 Push — bet refunded";
+    case "lose":     return "💀 You lose";
+  }
+}
+
+type GameStateResponse = {
+  sessionId: number;
+  gameType: string;
+  bet: number;
+  status: "active" | "resolved";
+  data: {
+    playerHand?: Card[];
+    dealerHand?: Card[];
+    dealerHidden?: number;
+    playerTotal?: number;
+    dealerVisibleTotal?: number;
+    dealerTotal?: number;
+  };
+  result?:
+    | { type: "coinflip"; call: "heads" | "tails"; outcome: "heads" | "tails"; won: boolean }
+    | { type: "guessnumber"; guess: number; secret: number; won: boolean }
+    | { type: "blackjack"; playerHand: Card[]; dealerHand: Card[]; result: "win" | "lose" | "push" | "blackjack" };
+  payout?: number;
+  newBalance?: number;
+  expiresAt: string;
+};
+
+function gameErrorMessage(status: number, body: { error?: string; secondsLeft?: number; code?: string } | null): string {
+  if (status === 409 && body?.code === "cooldown") {
+    return `⏱️ Cooldown — try again in ${body.secondsLeft ?? "?"}s.`;
+  }
+  if (status === 409 && body?.code === "game_active") {
+    return `🃏 You already have a game in progress. Finish that one first.`;
+  }
+  if (status === 410) {
+    return `⏰ That game session expired.`;
+  }
+  if (status === 422) {
+    return `❌ Insufficient Nuggies for that bet.`;
+  }
+  if (status === 403) {
+    return `🚫 You're opted out of Nuggies. Use /nuggies-opt-in to rejoin.`;
+  }
+  if (status === 503) {
+    return `⏸️ Nuggies games are paused.`;
+  }
+  return `❌ ${body?.error ?? "Game request failed"}`;
 }
 
 function nuggie(n: number): string {
@@ -303,7 +364,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const d = data as { newBalance?: number; amount?: number; error?: string } | null;
         if (!ok) {
           if (status === 409) {
-            await interaction.editReply("⏰ Already claimed today. Resets at CST midnight.");
+            await interaction.editReply("⏰ Already claimed today. Resets at 11pm ET.");
           } else if (status === 403) {
             await interaction.editReply("You're opted out of Nuggies. Use `/nuggies-opt-in` to rejoin.");
           } else {
@@ -449,37 +510,34 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.deferReply();
         const bet = interaction.options.getInteger("bet", true);
         const call = interaction.options.getString("call", true) as "heads" | "tails";
-        const result = Math.random() < 0.5 ? "heads" : "tails";
-        const won = result === call;
-        const payout = won ? Math.floor(bet * 1.9) : 0;
-        const delta = payout - bet;
 
-        const { ok, data } = await api("POST", "/nuggies/trade", userId, {
-          // Use the admin grant endpoint internally via applyTransaction
-          // Actually hit the game endpoint — but we don't have a /coinflip endpoint
-          // Use a workaround: call /nuggies/admin/grant with bot secret won't work for player
-          // Better: we need a /nuggies/game endpoint. For now, handle this via a dedicated game route.
-          // Fallback: use the generic approach below
-        });
-
-        // Apply result via API — call a game endpoint
-        // Since we don't have /coinflip on the API (keeping API simple), bot handles payout
-        // by calling grant (bot has shared secret but not admin role — can't use admin/grant)
-        // Solution: add /nuggies/game/result endpoint for bot use only
-
-        // For now: use applyTransaction pattern via a bot-only game endpoint
-        // We'll call a simplified path: POST /nuggies/game/coinflip
-        const gameRes = await api("POST", "/nuggies/game/coinflip", userId, { bet, won });
-        const gd = gameRes.data as { newBalance?: number; error?: string } | null;
+        const idempotencyKey = `bot-cf-${interaction.id}-${randomUUID()}`;
+        const gameRes = await api(
+          "POST",
+          "/nuggies/games/coinflip/start",
+          userId,
+          { bet, input: { call } },
+          idempotencyKey
+        );
 
         if (!gameRes.ok) {
-          await interaction.editReply(`❌ ${gd?.error ?? "Game failed"}`);
+          await interaction.editReply(gameErrorMessage(gameRes.status, gameRes.data as { error?: string; secondsLeft?: number; code?: string } | null));
           return;
         }
 
-        const emoji = result === "heads" ? "🪙" : "🥏";
-        const outcome = won ? `✅ **${call.toUpperCase()}** — you win ${nuggie(payout)}! (net +${delta})` : `❌ **${result.toUpperCase()}** — you lose ${nuggie(bet)}`;
-        await interaction.editReply(`${emoji} **${username}** flipped **${result}** (called ${call})\n${outcome}\nBalance: ${nuggie(gd?.newBalance ?? 0)}`);
+        const state = gameRes.data as GameStateResponse;
+        if (state.result?.type !== "coinflip") {
+          await interaction.editReply("❌ Unexpected response from game server.");
+          return;
+        }
+        const r = state.result;
+        const emoji = r.outcome === "heads" ? "🪙" : "🥏";
+        const outcome = r.won
+          ? `✅ **${r.call.toUpperCase()}** — you win ${nuggie(state.payout ?? 0)}! (net +${(state.payout ?? 0) - bet})`
+          : `❌ **${r.outcome.toUpperCase()}** — you lose ${nuggie(bet)}`;
+        await interaction.editReply(
+          `${emoji} **${username}** flipped **${r.outcome}** (called ${r.call})\n${outcome}\nBalance: ${nuggie(state.newBalance ?? 0)}`
+        );
         break;
       }
 
@@ -488,140 +546,130 @@ client.on(Events.InteractionCreate, async (interaction) => {
       case "blackjack": {
         const bet = interaction.options.getInteger("bet", true);
 
-        if (activeBlackjackGames.has(userId)) {
-          await interaction.reply({ content: "You already have an active blackjack game.", flags: MessageFlags.Ephemeral });
-          return;
-        }
-
         await interaction.deferReply();
 
-        // Check bet limit
-        const maxBetRes = await api("GET", "/nuggies/me", userId);
-        const meData = maxBetRes.data as { balance?: number } | null;
-        if ((meData?.balance ?? 0) < bet) {
-          await interaction.editReply(`❌ Insufficient Nuggies. Balance: ${nuggie(meData?.balance ?? 0)}`);
+        const startKey = `bot-bj-start-${interaction.id}-${randomUUID()}`;
+        const startRes = await api(
+          "POST",
+          "/nuggies/games/blackjack/start",
+          userId,
+          { bet, input: {} },
+          startKey
+        );
+
+        if (!startRes.ok) {
+          await interaction.editReply(gameErrorMessage(startRes.status, startRes.data as { error?: string; secondsLeft?: number; code?: string } | null));
           return;
         }
 
-        // Check game cooldown via dedicated endpoint
-        const cooldownRes = await api("POST", "/nuggies/game/cooldown-check", userId, {});
-        if (!cooldownRes.ok) {
-          const cd = cooldownRes.data as { error?: string; secondsLeft?: number } | null;
-          await interaction.editReply(`⏱️ ${cd?.error ?? "Game cooldown active"}`);
-          return;
-        }
+        let state = startRes.data as GameStateResponse;
 
-        const game = startBlackjack(bet);
-        activeBlackjackGames.set(userId, game);
-
-        const playerTotal = handTotal(game.playerHand);
-        const isBlackjack = playerTotal === 21;
-
-        if (isBlackjack) {
-          // Auto-resolve blackjack
-          const payout = Math.floor(bet * 2.5);
-          activeBlackjackGames.delete(userId);
-          const gameRes = await api("POST", "/nuggies/game/blackjack", userId, { bet, payout, result: "blackjack" });
-          const gd = gameRes.data as { newBalance?: number } | null;
+        // Auto-resolved on start (natural blackjack)?
+        if (state.status === "resolved" && state.result?.type === "blackjack") {
+          const r = state.result;
           await interaction.editReply(
             `🃏✨ **BLACKJACK!** **${username}** hits 21!\n` +
-            `Your hand: ${formatHand(game.playerHand)}\n` +
-            `Payout: ${nuggie(payout)} | Balance: ${nuggie(gd?.newBalance ?? 0)}`
+            `Your hand: ${formatHand(r.playerHand)}\n` +
+            `Payout: ${nuggie(state.payout ?? 0)} | Balance: ${nuggie(state.newBalance ?? 0)}`
           );
           return;
         }
 
-        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setCustomId(`bj_hit_${userId}`).setLabel("Hit").setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`bj_stand_${userId}`).setLabel("Stand").setStyle(ButtonStyle.Danger)
-        );
+        const sessionId = state.sessionId;
+
+        const renderActive = (s: GameStateResponse): string =>
+          `🃏 **${username}**'s Blackjack — Bet: ${nuggie(bet)}\n` +
+          `Your hand: ${formatHand(s.data.playerHand ?? [])} (${s.data.playerTotal ?? 0})\n` +
+          `Dealer: ${formatHandWithHidden(s.data.dealerHand ?? [], s.data.dealerHidden ?? 0)}\n\n` +
+          `Hit or Stand?`;
+
+        const buttons = () =>
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`bj_hit_${userId}`).setLabel("Hit").setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`bj_stand_${userId}`).setLabel("Stand").setStyle(ButtonStyle.Danger)
+          );
 
         const msg = await interaction.editReply({
-          content:
-            `🃏 **${username}**'s Blackjack — Bet: ${nuggie(bet)}\n` +
-            `Your hand: ${formatHand(game.playerHand)} (${playerTotal})\n` +
-            `Dealer: ${formatHand(game.dealerHand, true)}\n\n` +
-            `Hit or Stand?`,
-          components: [row],
+          content: renderActive(state),
+          components: [buttons()],
         });
 
         const collector = msg.createMessageComponentCollector({
           componentType: ComponentType.Button,
           filter: (i) => i.user.id === userId && (i.customId === `bj_hit_${userId}` || i.customId === `bj_stand_${userId}`),
-          time: 30_000,
+          time: 60_000,
         });
 
         collector.on("collect", async (btnInteraction) => {
-          let current = activeBlackjackGames.get(userId);
-          if (!current) return;
+          const action = btnInteraction.customId === `bj_hit_${userId}` ? "hit" : "stand";
+          const stepKey = `bot-bj-step-${interaction.id}-${btnInteraction.id}-${randomUUID()}`;
+          const stepRes = await api(
+            "POST",
+            `/nuggies/games/${sessionId}/step`,
+            userId,
+            { action },
+            stepKey
+          );
 
-          if (btnInteraction.customId === `bj_hit_${userId}`) {
-            current = hitPlayer(current);
-            activeBlackjackGames.set(userId, current);
-            const total = handTotal(current.playerHand);
+          if (!stepRes.ok) {
+            collector.stop("error");
+            await btnInteraction.update({
+              content: gameErrorMessage(stepRes.status, stepRes.data as { error?: string; secondsLeft?: number; code?: string } | null),
+              components: [],
+            });
+            return;
+          }
 
-            if (total > 21) {
-              // Bust
-              collector.stop("bust");
-              activeBlackjackGames.delete(userId);
-              const gameRes = await api("POST", "/nuggies/game/blackjack", userId, { bet, payout: 0, result: "lose" });
-              const gd = gameRes.data as { newBalance?: number } | null;
-              await btnInteraction.update({
-                content:
-                  `🃏 **${username}**'s Blackjack — BUST!\n` +
-                  `Your hand: ${formatHand(current.playerHand)} (${total}) — BUST!\n` +
-                  `Dealer: ${formatHand(current.dealerHand, true)}\n` +
-                  `💀 Lost ${nuggie(bet)} | Balance: ${nuggie(gd?.newBalance ?? 0)}`,
-                components: [],
-              });
-              return;
-            }
+          state = stepRes.data as GameStateResponse;
 
-            const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-              new ButtonBuilder().setCustomId(`bj_hit_${userId}`).setLabel("Hit").setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId(`bj_stand_${userId}`).setLabel("Stand").setStyle(ButtonStyle.Danger)
-            );
+          if (state.status === "resolved" && state.result?.type === "blackjack") {
+            collector.stop("resolved");
+            const r = state.result;
+            const playerTotal = state.data.playerTotal ?? 0;
+            const dealerTotal = state.data.dealerTotal ?? 0;
             await btnInteraction.update({
               content:
-                `🃏 **${username}**'s Blackjack — Bet: ${nuggie(bet)}\n` +
-                `Your hand: ${formatHand(current.playerHand)} (${total})\n` +
-                `Dealer: ${formatHand(current.dealerHand, true)}\n\n` +
-                `Hit or Stand?`,
-              components: [disabledRow],
+                `🃏 **${username}**'s Blackjack — ${blackjackResultText(r.result)}\n` +
+                `Your hand: ${formatHand(r.playerHand)} (**${playerTotal}**)\n` +
+                `Dealer: ${formatHand(r.dealerHand)} (**${dealerTotal}**)\n` +
+                `Payout: ${nuggie(state.payout ?? 0)} | Balance: ${nuggie(state.newBalance ?? 0)}`,
+              components: [],
             });
-          } else {
-            // Stand
-            collector.stop("stand");
+            return;
           }
+
+          // Still active — update the message with new hand state
+          await btnInteraction.update({
+            content: renderActive(state),
+            components: [buttons()],
+          });
         });
 
         collector.on("end", async (_, reason) => {
-          const current = activeBlackjackGames.get(userId);
-          if (!current) return;
-          activeBlackjackGames.delete(userId);
-
-          if (reason === "bust") return; // already handled
-
-          const finished = dealerPlay(current);
-          const result = resolveGame(finished);
-          const payout = calculatePayout(bet, result);
-
-          const gameRes = await api("POST", "/nuggies/game/blackjack", userId, { bet, payout, result });
-          const gd = gameRes.data as { newBalance?: number } | null;
-
-          const playerT = handTotal(finished.playerHand);
-          const dealerT = handTotal(finished.dealerHand);
-          const content =
-            `🃏 **${username}**'s Blackjack — ${resultEmoji(result)}\n` +
-            `Your hand: ${formatHand(finished.playerHand)} (**${playerT}**)\n` +
-            `Dealer: ${formatHand(finished.dealerHand)} (**${dealerT}**)\n` +
-            `Payout: ${nuggie(payout)} | Balance: ${nuggie(gd?.newBalance ?? 0)}`;
-
-          try {
-            const m = await interaction.fetchReply();
-            await m.edit({ content, components: [] });
-          } catch {
-            await interaction.editReply({ content, components: [] }).catch(() => {});
+          if (reason === "resolved" || reason === "error") return;
+          // Timeout — server will auto-stand on its own. Force a stand call to
+          // surface the result to the user.
+          const standKey = `bot-bj-timeout-${interaction.id}-${randomUUID()}`;
+          const standRes = await api(
+            "POST",
+            `/nuggies/games/${sessionId}/step`,
+            userId,
+            { action: "stand" },
+            standKey
+          );
+          if (standRes.ok) {
+            const finalState = standRes.data as GameStateResponse;
+            if (finalState.result?.type === "blackjack") {
+              const r = finalState.result;
+              await interaction.editReply({
+                content:
+                  `🃏 **${username}**'s Blackjack — ⏰ auto-stand · ${blackjackResultText(r.result)}\n` +
+                  `Your hand: ${formatHand(r.playerHand)} (**${finalState.data.playerTotal ?? 0}**)\n` +
+                  `Dealer: ${formatHand(r.dealerHand)} (**${finalState.data.dealerTotal ?? 0}**)\n` +
+                  `Payout: ${nuggie(finalState.payout ?? 0)} | Balance: ${nuggie(finalState.newBalance ?? 0)}`,
+                components: [],
+              }).catch(() => {});
+            }
           }
         });
 
@@ -633,24 +681,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       case "guessnumber": {
         const bet = interaction.options.getInteger("bet", true);
         await interaction.deferReply();
-
-        // Check balance
-        const meRes = await api("GET", "/nuggies/me", userId);
-        const meData = meRes.data as { balance?: number } | null;
-        if ((meData?.balance ?? 0) < bet) {
-          await interaction.editReply(`❌ Not enough Nuggies. Balance: ${nuggie(meData?.balance ?? 0)}`);
-          return;
-        }
-
-        // Cooldown check
-        const cdRes = await api("POST", "/nuggies/game/cooldown-check", userId, {});
-        if (!cdRes.ok) {
-          const cd = cdRes.data as { error?: string } | null;
-          await interaction.editReply(`⏱️ ${cd?.error ?? "Cooldown active"}`);
-          return;
-        }
-
-        const secretNumber = Math.floor(Math.random() * 10) + 1;
 
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId(`guess_${userId}`)
@@ -677,27 +707,44 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         collector.on("collect", async (selectInteraction) => {
           const guess = parseInt(selectInteraction.values[0], 10);
-          const won = guess === secretNumber;
-          const payout = won ? bet * 8 : 0;
+          const idempotencyKey = `bot-gn-${interaction.id}-${randomUUID()}`;
+          const gameRes = await api(
+            "POST",
+            "/nuggies/games/guessnumber/start",
+            userId,
+            { bet, input: { guess } },
+            idempotencyKey
+          );
 
-          const gameRes = await api("POST", "/nuggies/game/guessnumber", userId, { bet, payout, won });
-          const gd = gameRes.data as { newBalance?: number } | null;
+          if (!gameRes.ok) {
+            await selectInteraction.update({
+              content: gameErrorMessage(gameRes.status, gameRes.data as { error?: string; secondsLeft?: number; code?: string } | null),
+              components: [],
+            });
+            return;
+          }
 
-          const outcomeText = won
-            ? `✅ **CORRECT!** It was ${secretNumber}! Payout: ${nuggie(payout)}`
-            : `❌ **WRONG!** It was **${secretNumber}**. Lost ${nuggie(bet)}`;
+          const state = gameRes.data as GameStateResponse;
+          if (state.result?.type !== "guessnumber") {
+            await selectInteraction.update({ content: "❌ Unexpected response.", components: [] });
+            return;
+          }
+          const r = state.result;
+          const outcomeText = r.won
+            ? `✅ **CORRECT!** It was ${r.secret}! Payout: ${nuggie(state.payout ?? 0)}`
+            : `❌ **WRONG!** It was **${r.secret}**. Lost ${nuggie(bet)}`;
 
           await selectInteraction.update({
             content:
-              `🎯 **${username}** guessed **${guess}**\n` +
-              `${outcomeText}\nBalance: ${nuggie(gd?.newBalance ?? 0)}`,
+              `🎯 **${username}** guessed **${r.guess}**\n` +
+              `${outcomeText}\nBalance: ${nuggie(state.newBalance ?? 0)}`,
             components: [],
           });
         });
 
         collector.on("end", async (collected) => {
           if (collected.size === 0) {
-            await interaction.editReply({ content: "⏰ Timed out — no guess made, bet returned.", components: [] }).catch(() => {});
+            await interaction.editReply({ content: "⏰ Timed out — no guess made, bet not placed.", components: [] }).catch(() => {});
           }
         });
 

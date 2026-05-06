@@ -43,8 +43,12 @@ export type EquippedItem = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getCSTDateString(): string {
-  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+// Daily-reset boundary: midnight in America/Halifax = 23:00 (11pm) ET year-round
+// (Halifax is always 1h ahead of ET; both observe DST identically).
+const RESET_TZ = "America/Halifax";
+
+function getResetDateString(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: RESET_TZ });
 }
 
 function getSetting(key: string, fallback: number): number {
@@ -157,7 +161,7 @@ export async function claimDaily(discordUserId: string): Promise<{ newBalance: n
   await ensureSettingsLoaded();
 
   const userId = await resolveUserId(discordUserId);
-  const todayCST = getCSTDateString();
+  const todayKey = getResetDateString();
 
   // Check opted out
   const userRow = await db.query<{ nuggies_opted_out: boolean }>(
@@ -166,7 +170,7 @@ export async function claimDaily(discordUserId: string): Promise<{ newBalance: n
   );
   if (userRow.rows[0]?.nuggies_opted_out) throw new OptedOutError();
 
-  // Check if already claimed today (CST date comparison)
+  // Check if already claimed in current reset window
   const lastClaim = await db.query<{ created_at: string }>(
     `SELECT created_at FROM nuggies_transactions
      WHERE user_id = $1 AND type = 'daily'
@@ -174,9 +178,9 @@ export async function claimDaily(discordUserId: string): Promise<{ newBalance: n
     [userId]
   );
   if (lastClaim.rows.length > 0) {
-    const lastCST = new Date(lastClaim.rows[0].created_at)
-      .toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
-    if (lastCST === todayCST) throw new AlreadyClaimedError();
+    const lastKey = new Date(lastClaim.rows[0].created_at)
+      .toLocaleDateString("en-CA", { timeZone: RESET_TZ });
+    if (lastKey === todayKey) throw new AlreadyClaimedError();
   }
 
   const amount = getSetting("nuggies_daily_amount", 75);
@@ -257,10 +261,11 @@ export async function getDailyEarnedToday(
   client?: { query: typeof db.query }
 ): Promise<number> {
   const q = client ?? db;
-  const todayCST = getCSTDateString();
-  // Convert CST midnight to UTC range
-  const startUTC = new Date(`${todayCST}T00:00:00-06:00`).toISOString();
-  const endUTC = new Date(`${todayCST}T23:59:59-05:00`).toISOString(); // handle DST edge
+  const todayKey = getResetDateString();
+  // Convert Halifax midnight to UTC range. AST=-04:00 (winter), ADT=-03:00 (summer).
+  // Widen by one hour each side to absorb DST transitions safely.
+  const startUTC = new Date(`${todayKey}T00:00:00-04:00`).toISOString();
+  const endUTC = new Date(`${todayKey}T23:59:59-03:00`).toISOString();
 
   const r = await q.query<{ total: string }>(
     `SELECT COALESCE(SUM(amount), 0) AS total

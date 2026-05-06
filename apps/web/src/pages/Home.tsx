@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { apiFetch } from "../api/client.js";
+import { LOGO_BG_URL } from "../assets.js";
 import { IslandCard, IslandTag } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
 import { islandTheme } from "../theme.js";
@@ -82,7 +83,7 @@ export function HomePage({
           }}
         >
           <NuggiesSnapshot profile={profile} onNavigate={onNavigate} />
-          <div aria-hidden="true" />
+          <HomeLogoMark />
           <FriendsOnline
             activeMembers={activeMembers}
             totalMemberCount={totalMemberCount}
@@ -327,18 +328,21 @@ const NUGGIE_SLOTS: Array<{ type: "title" | "flair" | "badge"; emoji: string; la
 
 type DailyTx = { type: string; createdAt: string };
 
-function isClaimedTodayCST(txs: DailyTx[]): boolean {
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+// Daily reset boundary: midnight in America/Halifax (= 11pm ET year-round).
+const RESET_TZ = "America/Halifax";
+
+function isClaimedToday(txs: DailyTx[]): boolean {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: RESET_TZ });
   return txs.some((tx) => {
     if (tx.type !== "daily") return false;
-    const d = new Date(tx.createdAt).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const d = new Date(tx.createdAt).toLocaleDateString("en-CA", { timeZone: RESET_TZ });
     return d === today;
   });
 }
 
-function msUntilNextCSTMidnight(): number {
+function msUntilNextDailyReset(): number {
   const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Chicago",
+    timeZone: RESET_TZ,
     hourCycle: "h23",
     hour: "2-digit",
     minute: "2-digit",
@@ -350,8 +354,8 @@ function msUntilNextCSTMidnight(): number {
   const h = Number(map.hour) || 0;
   const m = Number(map.minute) || 0;
   const s = Number(map.second) || 0;
-  const cstMsOfDay = h * 3_600_000 + m * 60_000 + s * 1000;
-  return Math.max(0, 86_400_000 - cstMsOfDay);
+  const msOfDay = h * 3_600_000 + m * 60_000 + s * 1000;
+  return Math.max(0, 86_400_000 - msOfDay);
 }
 
 function formatCountdown(ms: number): string {
@@ -360,6 +364,55 @@ function formatCountdown(ms: number): string {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function HomeLogoMark() {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "relative",
+        alignSelf: "stretch",
+        minHeight: 320,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "visible"
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: "-10% -8%",
+          background:
+            "radial-gradient(closest-side, rgba(251,191,119,0.22) 0%, rgba(56,189,248,0.10) 38%, transparent 72%)",
+          filter: "blur(6px)",
+          pointerEvents: "none"
+        }}
+      />
+      <img
+        src={LOGO_BG_URL}
+        alt=""
+        style={{
+          position: "relative",
+          width: 275,
+          height: 275,
+          display: "block",
+          clipPath: "circle(40%)",
+          WebkitClipPath: "circle(40%)",
+          filter:
+            "drop-shadow(0 0 18px rgba(251,191,119,0.35)) drop-shadow(0 14px 24px rgba(0,0,0,0.45))",
+          animation: "homeLogoFloat 6s ease-in-out infinite"
+        }}
+      />
+      <style>{`
+        @keyframes homeLogoFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-4px); }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; onNavigate: (page: PageId) => void }) {
@@ -373,7 +426,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
   const [claiming, setClaiming] = useState(false);
   const [claimFlash, setClaimFlash] = useState<{ amount: number } | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
-  const [msLeft, setMsLeft] = useState(() => msUntilNextCSTMidnight());
+  const [msLeft, setMsLeft] = useState(() => msUntilNextDailyReset());
 
   useEffect(() => {
     if (optedOut) return;
@@ -381,16 +434,16 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
     void apiFetch("/nuggies/me").then(async (r) => {
       if (!r.ok || cancelled) return;
       const d = (await r.json()) as { transactions?: DailyTx[] };
-      if (!cancelled) setClaimedToday(isClaimedTodayCST(d.transactions ?? []));
+      if (!cancelled) setClaimedToday(isClaimedToday(d.transactions ?? []));
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [optedOut]);
 
   useEffect(() => {
     if (claimedToday !== true) return;
-    setMsLeft(msUntilNextCSTMidnight());
+    setMsLeft(msUntilNextDailyReset());
     const id = setInterval(() => {
-      const next = msUntilNextCSTMidnight();
+      const next = msUntilNextDailyReset();
       setMsLeft(next);
       if (next === 0) setClaimedToday(false);
     }, 1000);

@@ -6,11 +6,9 @@ import { ensureSettingsLoaded, getAISetting } from "../lib/serverSettings.js";
 import {
   AlreadyClaimedError,
   DailyCapError,
-  GameCooldownError,
   InsufficientFundsError,
   OptedOutError,
   applyTransaction,
-  checkGameCooldown,
   claimDaily,
   executeTrade,
   getBalance,
@@ -1016,143 +1014,20 @@ const shopItemSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-// ── POST /nuggies/game/cooldown-check ────────────────────────────────────────
+// ── Deprecated /nuggies/game/* endpoints ────────────────────────────────────
+// These were the old client-authoritative game endpoints (bot-only, computed
+// outcomes locally). Replaced by the server-authoritative /nuggies/games/*
+// router. Left here as 410-Gone shims so any stale deployment fails loud.
 
-nuggiesRouter.post("/game/cooldown-check", requireBotOrSession, async (_req, res) => {
-  const userId = await resolveInternalId(String(res.locals.userId));
-  if (!userId) { res.status(404).json({ error: "User not found" }); return; }
-
-  try {
-    await checkGameCooldown(userId);
-    res.json({ ok: true });
-  } catch (err) {
-    if (err instanceof GameCooldownError) {
-      res.status(429).json({ error: err.message, secondsLeft: err.secondsLeft });
-      return;
-    }
-    throw err;
-  }
-});
-
-// ── POST /nuggies/game/coinflip ───────────────────────────────────────────────
-
-const coinflipSchema = z.object({
-  bet: z.number().int().positive(),
-  won: z.boolean(),
-});
-
-nuggiesRouter.post("/game/coinflip", requireBotOrSession, async (req, res) => {
-  if (!isEnabled()) { res.status(503).json({ error: "Nuggies disabled" }); return; }
-
-  const parsed = coinflipSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid request" }); return; }
-
-  const { bet, won } = parsed.data;
-  const discordUserId = String(res.locals.userId);
-
-  await ensureSettingsLoaded();
-  const maxBet = getSetting("nuggies_max_bet", 500);
-  if (bet > maxBet) { res.status(400).json({ error: `Max bet is ${maxBet}` }); return; }
-
-  const userId = await resolveInternalId(discordUserId);
-  if (!userId) { res.status(404).json({ error: "User not found" }); return; }
-
-  try {
-    await checkGameCooldown(userId);
-  } catch (err) {
-    if (err instanceof GameCooldownError) {
-      res.status(429).json({ error: err.message, secondsLeft: err.secondsLeft });
-      return;
-    }
-    throw err;
-  }
-
-  const payout = won ? Math.floor(bet * 1.9) : 0;
-  const net = payout - bet;
-
-  try {
-    const { newBalance } = await applyTransaction({
-      discordUserId,
-      amount: net,
-      type: "game_coinflip",
-      reason: won ? `Coinflip win (bet ${bet}, payout ${payout})` : `Coinflip loss (bet ${bet})`,
-      skipDailyCapCheck: true,
+const DEPRECATED_GAME_PATHS = ["/game/cooldown-check", "/game/coinflip", "/game/blackjack", "/game/guessnumber"];
+for (const p of DEPRECATED_GAME_PATHS) {
+  nuggiesRouter.post(p, (_req, res) => {
+    res.status(410).json({
+      error: "Endpoint removed. Use the server-authoritative /nuggies/games/* routes instead.",
+      replacement: "/nuggies/games/:gameType/start"
     });
-    res.json({ ok: true, newBalance, won, payout });
-  } catch (err) {
-    if (err instanceof InsufficientFundsError) { res.status(400).json({ error: "Insufficient Nuggies" }); return; }
-    if (err instanceof OptedOutError) { res.status(403).json({ error: err.message }); return; }
-    throw err;
-  }
-});
-
-// ── POST /nuggies/game/blackjack ──────────────────────────────────────────────
-
-const blackjackResultSchema = z.object({
-  bet: z.number().int().positive(),
-  payout: z.number().int().min(0),
-  result: z.enum(["win", "lose", "push", "blackjack"]),
-});
-
-nuggiesRouter.post("/game/blackjack", requireBotOrSession, async (req, res) => {
-  if (!isEnabled()) { res.status(503).json({ error: "Nuggies disabled" }); return; }
-
-  const parsed = blackjackResultSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid request" }); return; }
-
-  const { bet, payout, result } = parsed.data;
-  const discordUserId = String(res.locals.userId);
-  const net = payout - bet;
-
-  try {
-    const { newBalance } = await applyTransaction({
-      discordUserId,
-      amount: net,
-      type: "game_blackjack",
-      reason: `Blackjack ${result} (bet ${bet}, payout ${payout})`,
-      skipDailyCapCheck: true,
-    });
-    res.json({ ok: true, newBalance, result, payout });
-  } catch (err) {
-    if (err instanceof InsufficientFundsError) { res.status(400).json({ error: "Insufficient Nuggies" }); return; }
-    if (err instanceof OptedOutError) { res.status(403).json({ error: err.message }); return; }
-    throw err;
-  }
-});
-
-// ── POST /nuggies/game/guessnumber ────────────────────────────────────────────
-
-const guessNumberResultSchema = z.object({
-  bet: z.number().int().positive(),
-  payout: z.number().int().min(0),
-  won: z.boolean(),
-});
-
-nuggiesRouter.post("/game/guessnumber", requireBotOrSession, async (req, res) => {
-  if (!isEnabled()) { res.status(503).json({ error: "Nuggies disabled" }); return; }
-
-  const parsed = guessNumberResultSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: "Invalid request" }); return; }
-
-  const { bet, payout, won } = parsed.data;
-  const discordUserId = String(res.locals.userId);
-  const net = payout - bet;
-
-  try {
-    const { newBalance } = await applyTransaction({
-      discordUserId,
-      amount: net,
-      type: "game_guessnumber",
-      reason: won ? `Guess the number win (bet ${bet}, payout ${payout})` : `Guess the number loss (bet ${bet})`,
-      skipDailyCapCheck: true,
-    });
-    res.json({ ok: true, newBalance, won, payout });
-  } catch (err) {
-    if (err instanceof InsufficientFundsError) { res.status(400).json({ error: "Insufficient Nuggies" }); return; }
-    if (err instanceof OptedOutError) { res.status(403).json({ error: err.message }); return; }
-    throw err;
-  }
-});
+  });
+}
 
 // ── POST /nuggies/admin/shop-item ─────────────────────────────────────────────
 
