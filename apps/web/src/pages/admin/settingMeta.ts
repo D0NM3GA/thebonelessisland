@@ -5,7 +5,7 @@
 
 export type SettingDomain = "people" | "content" | "engagement" | "system";
 export type DangerLevel = "low" | "high";
-export type SettingInputType = "string" | "number" | "boolean" | "password" | "select" | "csv";
+export type SettingInputType = "string" | "number" | "boolean" | "password" | "select" | "csv" | "textarea";
 
 export type SettingMeta = {
   key: string;
@@ -349,6 +349,53 @@ const RAW: SettingMeta[] = [
     dangerLevel: "low",
     domain: "engagement",
     type: "number"
+  },
+
+  // ── System · Nuggie persona ──────────────────────────────────────────────
+  {
+    key: "nuggie_system_prompt",
+    label: "Nuggie system prompt",
+    description: "Core personality definition for Nuggie. Used as the system message for web chat, Discord /nuggie ask, and announcement generation.",
+    whenToChange: "When you want to shift Nuggie's voice, tone, or backstory. Test edits via the web chat before relying on them in Discord.",
+    example: "You are Nuggie, a chicken nugget mascot for The Boneless Island…",
+    ifWrong: "Nuggie may speak out of character or contradict the Boneless Island branding. Behavior changes within ~30 seconds of save.",
+    tags: ["nuggie", "persona", "ai", "prompt", "voice", "mascot", "personality"],
+    dangerLevel: "low",
+    domain: "system",
+    type: "textarea"
+  },
+  {
+    key: "nuggie_tone_rules",
+    label: "Nuggie tone rules",
+    description: "Behavioral rules appended after the system prompt. One rule per line, dash-prefixed. Shapes default speech style across all surfaces.",
+    whenToChange: "When you want to adjust message length, profanity tolerance, pun frequency, or other consistent style knobs.",
+    example: "- Keep messages short.\\n- Use crew names.\\n- No NSFW.",
+    tags: ["nuggie", "persona", "tone", "rules", "style", "behavior"],
+    dangerLevel: "low",
+    domain: "system",
+    type: "textarea"
+  },
+  {
+    key: "nuggie_emoji_palette",
+    label: "Nuggie emoji palette",
+    description: "Space-separated emoji set Nuggie may pull from when reacting. Kept narrow to maintain visual identity.",
+    whenToChange: "When adding or removing brand emojis (e.g. new event mascot, seasonal swap).",
+    example: "🍗 🥚 🌴 🏝️ 🔥",
+    tags: ["nuggie", "persona", "emoji", "branding"],
+    dangerLevel: "low",
+    domain: "system",
+    type: "string"
+  },
+  {
+    key: "achievement_announcements_enabled",
+    label: "Small achievement Discord announcements",
+    description: "When ON, Nuggie posts a short variant line in the milestone channel each time a non-milestone achievement unlocks (FIRST BLOOD, POG MOMENT, THE GRIND, etc.). Reuses milestone_channel_id. Milestones have their own announcer toggle.",
+    whenToChange: "After you've set the milestone channel ID. Default is OFF until you've judged the chatter volume.",
+    ifWrong: "Channel may get noisy if your crew earns a lot of small badges in a session. Toggle OFF anytime to silence.",
+    tags: ["nuggie", "achievement", "announcement", "discord", "channel", "first_blood", "pog"],
+    dangerLevel: "low",
+    domain: "system",
+    type: "boolean"
   }
 ];
 

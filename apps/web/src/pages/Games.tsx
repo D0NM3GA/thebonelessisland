@@ -1632,9 +1632,9 @@ function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]
           gap: 8
         }}
       >
-        <span style={{ fontSize: 18 }}>🤖</span>
+        <span style={{ fontSize: 18 }}>🍗</span>
         <h3 className="island-display" style={{ margin: 0, fontSize: 15 }}>
-          Island AI
+          Nuggie
         </h3>
         <span style={{ fontSize: 12, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
           Ask what to play, get crew recs, check news
@@ -1724,7 +1724,7 @@ function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]
         <input
           style={{ ...islandInputStyle, flex: 1, fontSize: 13 }}
           type="text"
-          placeholder='Ask the Island AI — "What should we play tonight?" or "Any big patches this week?"'
+          placeholder='Ask Nuggie — "What should we play tonight?" or "Any big patches this week?"'
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {

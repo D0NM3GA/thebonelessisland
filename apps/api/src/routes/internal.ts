@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { db } from "../db/client.js";
 import { requireBotSecret } from "../lib/auth.js";
+import { getAIProvider, PROVIDER_DEFAULTS } from "../lib/ai/index.js";
+import { getNuggiePersona, buildSystemPrompt } from "../lib/persona/nuggie.js";
+import { getAISetting } from "../lib/serverSettings.js";
 
 export const internalRouter = Router();
 
@@ -82,6 +85,133 @@ internalRouter.get(
     } catch (err) {
       console.error("[internal] GET /settings/:key error:", err);
       res.status(500).json({ error: "Failed to load setting" });
+    }
+  }
+);
+
+/**
+ * POST /internal/bot/nuggie-chat
+ * Bot-only. Single-turn Nuggie chat for the /nuggie ask Discord slash command.
+ * Uses the persona from server_settings + buildSystemPrompt(..., 'discord-slash').
+ * Forces the cheapest model for the configured provider regardless of the
+ * admin's web-chat default, to keep Discord usage cheap.
+ * Per-user sliding-window rate limit: max 10 calls per 60 min.
+ */
+const nuggieAskRateLimit = new Map<string, number[]>();
+const NUGGIE_ASK_WINDOW_MS = 60 * 60 * 1000;
+const NUGGIE_ASK_MAX = 10;
+
+function checkNuggieAskRate(discordUserId: string): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const recent = (nuggieAskRateLimit.get(discordUserId) ?? []).filter(
+    (t) => now - t < NUGGIE_ASK_WINDOW_MS
+  );
+  if (recent.length >= NUGGIE_ASK_MAX) {
+    const oldest = recent[0];
+    const retryAfterSec = Math.ceil((NUGGIE_ASK_WINDOW_MS - (now - oldest)) / 1000);
+    return { allowed: false, retryAfterSec };
+  }
+  recent.push(now);
+  nuggieAskRateLimit.set(discordUserId, recent);
+  return { allowed: true, retryAfterSec: 0 };
+}
+
+internalRouter.post(
+  "/bot/nuggie-chat",
+  requireBotSecret,
+  async (req, res) => {
+    try {
+      const body = req.body ?? {};
+      const question = typeof body.question === "string" ? body.question.trim() : "";
+      const discordUserId = typeof body.discordUserId === "string" ? body.discordUserId : "";
+      const discordDisplayName =
+        typeof body.discordDisplayName === "string" ? body.discordDisplayName : "";
+      if (!question || !discordUserId) {
+        res.status(400).json({ error: "Missing question or discordUserId" });
+        return;
+      }
+      if (question.length > 500) {
+        res.status(400).json({ error: "Question too long (500 char max)" });
+        return;
+      }
+
+      const rate = checkNuggieAskRate(discordUserId);
+      if (!rate.allowed) {
+        res.status(429).json({
+          error: `Rate limit: ${NUGGIE_ASK_MAX}/hour. Try again in ${Math.ceil(rate.retryAfterSec / 60)} min.`,
+        });
+        return;
+      }
+
+      // Pick cheapest model for whichever provider the admin chose. Override
+      // only the model so the API key + provider come from the admin's
+      // configured AI settings (don't bypass ai_enabled gate).
+      const providerName = (getAISetting("ai_provider") ?? "").toLowerCase();
+      const cheapModel = PROVIDER_DEFAULTS[providerName as keyof typeof PROVIDER_DEFAULTS];
+
+      let ai;
+      try {
+        ai = getAIProvider(cheapModel ? { model: cheapModel } : undefined);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "AI not configured";
+        res.status(503).json({ error: msg });
+        return;
+      }
+
+      const persona = getNuggiePersona();
+      const systemPrompt = buildSystemPrompt(persona, "discord-slash");
+      const userBlock = discordDisplayName
+        ? `Crew member: ${discordDisplayName}\nQuestion: ${question}`
+        : `Question: ${question}`;
+
+      const result = await ai.complete(
+        [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userBlock },
+        ],
+        { maxTokens: 256 }
+      );
+
+      res.json({ text: result.text, provider: result.provider, model: result.model });
+    } catch (err) {
+      console.error("[internal] POST /bot/nuggie-chat error:", err);
+      res.status(502).json({ error: err instanceof Error ? err.message : "Nuggie chat failed" });
+    }
+  }
+);
+
+/**
+ * GET /internal/achievement-variants/:key
+ * Bot-only. Returns one weighted-random variant_text from
+ * achievement_message_variants for the given key. Bot substitutes the
+ * `{{user}}` token at announce time. Returns 404 if no variants exist for
+ * the key — bot falls back to a generic line in that case.
+ */
+internalRouter.get(
+  "/achievement-variants/:key",
+  requireBotSecret,
+  async (req, res) => {
+    try {
+      const key = String(req.params.key);
+      // Weighted random: rows with higher weight are likelier picks.
+      // -LN(1 - random()) / weight is the standard weighted-reservoir trick.
+      const r = await db.query<{ variant_text: string }>(
+        `SELECT variant_text
+         FROM achievement_message_variants
+         WHERE achievement_key = $1
+         ORDER BY -LN(1.0 - random()) / GREATEST(weight, 1)
+         LIMIT 1`,
+        [key]
+      );
+      const row = r.rows[0];
+      if (!row) {
+        res.status(404).json({ error: "No variants for key", key });
+        return;
+      }
+      res.json({ key, text: row.variant_text });
+    } catch (err) {
+      console.error("[internal] GET /achievement-variants/:key error:", err);
+      res.status(500).json({ error: "Failed to load variant" });
     }
   }
 );

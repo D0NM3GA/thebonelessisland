@@ -1,0 +1,35 @@
+# Keep build context small + prevent secrets/local state from sneaking into images.
+.git
+.github
+.cursor
+.claude
+
+# Local environment + secrets — NEVER include in image. Inject at deploy time.
+.env
+.env.*
+!.env.example
+
+# Node + build artifacts (re-created in the builder stage)
+node_modules
+**/node_modules
+**/dist
+**/.tsbuildinfo
+**/coverage
+
+# Editor / OS junk
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docs + assets that don't need to be in the container
+*.md
+README*
+.design-handoff
+
+# Web app — not deployed via the API/bot Dockerfiles
+apps/web/dist
+apps/web/public
+
+# Infra files (compose, terraform, etc. — used externally)
+infra

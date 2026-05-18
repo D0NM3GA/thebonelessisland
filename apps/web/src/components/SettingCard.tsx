@@ -277,6 +277,19 @@ function SettingInput({
   const placeholder = setting.envDefault || meta.example || `Enter ${meta.label.toLowerCase()}…`;
   const isPasswordSet = meta.type === "password" && setting.value === "••••••••";
 
+  if (meta.type === "textarea") {
+    return (
+      <textarea
+        value={draft}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={6}
+        style={{ ...islandInputStyle, width: "100%", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, minHeight: 120 }}
+        spellCheck={false}
+      />
+    );
+  }
+
   return (
     <input
       type={meta.type === "password" ? "password" : meta.type === "number" ? "number" : "text"}

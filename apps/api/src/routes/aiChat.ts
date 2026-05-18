@@ -5,6 +5,7 @@ import { requireSession } from "../lib/auth.js";
 import { getAIProvider } from "../lib/ai/index.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { whatCanWePlay } from "../lib/recommend.js";
+import { getNuggiePersona, buildSystemPrompt } from "../lib/persona/nuggie.js";
 
 export const aiChatRouter = express.Router();
 aiChatRouter.use(requireSession);
@@ -139,15 +140,13 @@ aiChatRouter.post("/chat", async (req, res) => {
     console.error("[aiChat] buildCrewContext failed:", err);
   }
 
-  // System prompt is intentionally compact. Prompt caching kicks in once the
-  // cached prefix exceeds the provider threshold (1024 tok Sonnet 4.5/3.7,
-  // 2048 tok Sonnet 4.6, 4096 tok Opus 4.x and Haiku 4.5). For multi-turn
-  // chat, the provider also caches the prior conversation so long sessions
-  // benefit even when the system block alone is small.
+  // Persona-driven system prompt — single source of truth across web chat,
+  // /nuggie ask, and announcement generation (see lib/persona/nuggie.ts +
+  // server_settings nuggie_*). Crew context is appended after the persona
+  // block so the cached prefix stays stable per session.
+  const persona = getNuggiePersona();
   const systemPrompt = [
-    "You are the Island AI — sharp assistant for The Boneless Island, a Discord gaming community of adult gamers in their 30s.",
-    "Help the crew decide what to play, give game recs, answer gaming questions.",
-    "Tone: casual, direct, island-flavored but not overdone. 1-3 paragraphs max unless asked for detail.",
+    buildSystemPrompt(persona, "web"),
     crewContext ? `\nCrew context:\n${crewContext}` : ""
   ]
     .filter(Boolean)

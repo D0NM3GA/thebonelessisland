@@ -121,6 +121,27 @@ export async function grantEarned(discordUserId: string, key: EarnedKey): Promis
           emoji: itemMeta.emoji,
         },
       });
+      // Bridge to Discord via the bot outbox — but only for non-milestone
+      // unlocks. Tier badges (milestone_rank_*) ride the milestone.reached
+      // path in checkMilestones, which includes role assignment + LLM-flavored
+      // celebration; double-announcing would be noise.
+      if (!key.startsWith("milestone_rank_")) {
+        try {
+          await db.query(
+            `INSERT INTO bot_announcements (kind, payload) VALUES ('achievement.unlocked', $1::jsonb)`,
+            [
+              JSON.stringify({
+                discordUserId,
+                key,
+                name: itemMeta.name,
+                emoji: itemMeta.emoji,
+              }),
+            ]
+          );
+        } catch (err) {
+          console.error(`[achievements] outbox insert ${key} for ${discordUserId} failed`, err);
+        }
+      }
     }
     return fresh;
   } catch (err) {

@@ -16,8 +16,13 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from "discord.js";
+import { loadSecrets } from "./lib/secrets.js";
 
 dotenv.config({ path: "../../.env" });
+
+// In prod with SECRETS_SOURCE=ssm, fetch secrets before any env-dependent
+// const is initialized below. No-op in dev.
+await loadSecrets();
 
 const token = process.env.DISCORD_BOT_TOKEN ?? "";
 const clientId = process.env.DISCORD_BOT_CLIENT_ID ?? "";
@@ -52,7 +57,8 @@ async function api(
 /** Internal endpoints don't require x-discord-user-id; just the bot secret. */
 async function internalApi(
   method: string,
-  path: string
+  path: string,
+  body?: unknown
 ): Promise<{ ok: boolean; status: number; data: unknown }> {
   const res = await fetch(`${apiBase}${path}`, {
     method,
@@ -60,6 +66,7 @@ async function internalApi(
       "content-type": "application/json",
       "x-island-bot-secret": botApiSharedSecret,
     },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => null);
   return { ok: res.ok, status: res.status, data };
@@ -472,6 +479,23 @@ const commands = [
   new SlashCommandBuilder()
     .setName("nuggies-opt-in")
     .setDescription("Opt back in to the Nuggies economy"),
+
+  // ── Nuggie persona chat ────────────────────────────────────────────────────
+  new SlashCommandBuilder()
+    .setName("nuggie")
+    .setDescription("Ask Nuggie anything")
+    .addSubcommand((s) =>
+      s
+        .setName("ask")
+        .setDescription("Ask Nuggie a question")
+        .addStringOption((o) =>
+          o
+            .setName("question")
+            .setDescription("What do you want to ask?")
+            .setRequired(true)
+            .setMaxLength(500)
+        )
+    ),
 ];
 
 // ── Register Commands ─────────────────────────────────────────────────────────
@@ -584,6 +608,46 @@ type MilestonePayload = {
   roleSettingKey: string;
 };
 
+type AchievementUnlockedPayload = {
+  discordUserId: string;
+  key: string;
+  name: string;
+  emoji: string;
+};
+
+async function processAchievementUnlocked(payload: AchievementUnlockedPayload): Promise<void> {
+  const enabled = await getCachedSetting("achievement_announcements_enabled");
+  if (enabled !== "true") return;
+  // Reuse the milestone channel for small unlocks until/unless a separate
+  // channel setting is introduced. Achievements are smaller-stakes than
+  // milestones but live in the same celebration stream.
+  const channelId = await getCachedSetting("milestone_channel_id");
+  if (!channelId) return;
+
+  const { ok, data } = await internalApi("GET", `/internal/achievement-variants/${encodeURIComponent(payload.key)}`);
+  let text: string;
+  if (ok && data && typeof data === "object" && "text" in data) {
+    text = String((data as { text: string }).text);
+  } else {
+    // Fallback for keys without seeded variants — keeps the channel alive
+    // even if a new achievement is added without variant data yet.
+    text = `{{user}} unlocked ${payload.emoji} ${payload.name}`;
+  }
+  const rendered = text.replace(/\{\{user\}\}/g, `<@${payload.discordUserId}>`);
+
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (channel && channel.isSendable()) {
+      await channel.send({
+        content: rendered,
+        allowedMentions: { users: [payload.discordUserId] },
+      });
+    }
+  } catch (err) {
+    console.error(`[achievements] channel post failed for ${payload.discordUserId}@${payload.key}`, err);
+  }
+}
+
 async function processMilestoneAnnouncement(payload: MilestonePayload): Promise<void> {
   const enabled = await getCachedSetting("milestone_announcements_enabled");
   const channelId = await getCachedSetting("milestone_channel_id");
@@ -649,6 +713,8 @@ async function processPendingAnnouncements(): Promise<void> {
       try {
         if (row.kind === "milestone.reached") {
           await processMilestoneAnnouncement(row.payload as MilestonePayload);
+        } else if (row.kind === "achievement.unlocked") {
+          await processAchievementUnlocked(row.payload as AchievementUnlockedPayload);
         }
       } catch (err) {
         console.error(`[announcements] handler failed for row ${row.id}`, err);
@@ -1522,6 +1588,40 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const { ok } = await api("POST", "/nuggies/opt-in", userId);
         await interaction.editReply(ok ? "✅ Welcome back to Nuggies 🍗!" : "❌ Failed.");
+        break;
+      }
+
+      // ── /nuggie ask <question> ───────────────────────────────────────────
+      case "nuggie": {
+        const sub = interaction.options.getSubcommand(false);
+        if (sub !== "ask") {
+          await interaction.reply({ content: "Unknown subcommand.", flags: MessageFlags.Ephemeral });
+          break;
+        }
+        await interaction.deferReply();
+        const question = interaction.options.getString("question", true);
+        const displayName =
+          (interaction.member && "displayName" in interaction.member
+            ? (interaction.member as { displayName?: string }).displayName
+            : null) ?? username;
+
+        const { ok, status, data } = await internalApi("POST", "/internal/bot/nuggie-chat", {
+          question,
+          discordUserId: userId,
+          discordDisplayName: displayName,
+        });
+
+        if (!ok) {
+          const err = data && typeof data === "object" && "error" in data ? String((data as { error: string }).error) : `HTTP ${status}`;
+          await interaction.editReply(`🍗 ${err}`);
+          break;
+        }
+        const text = data && typeof data === "object" && "text" in data
+          ? String((data as { text: string }).text)
+          : "(no response)";
+        // Discord 2000-char hard limit on message content. Persona prompt caps
+        // at ~280 chars so this only trips on a misconfigured maxTokens.
+        await interaction.editReply(text.slice(0, 1900));
         break;
       }
     }

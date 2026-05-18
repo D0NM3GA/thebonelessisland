@@ -10,7 +10,11 @@ services:
     environment:
       POSTGRES_DB: boneless
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # Read from .env at compose-run time. First-time volume init pins the
+      # password; subsequent runs must match the value the volume was created
+      # with. To rotate: `docker compose down -v`, change POSTGRES_PASSWORD in
+      # .env, `docker compose up -d`, re-run migrations.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:

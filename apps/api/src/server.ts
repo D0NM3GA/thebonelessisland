@@ -3,6 +3,12 @@ import cors from "cors";
 import express from "express";
 import { ZodError } from "zod";
 import { env } from "./config.js";
+import { installRedactor } from "./lib/logger.js";
+
+// Install console redactor immediately after env is parsed. Every log call
+// from this point on (including third-party libraries that use console)
+// will have any matching secret value replaced with [REDACTED].
+installRedactor();
 import { activityRouter } from "./routes/activity.js";
 import { aiChatRouter } from "./routes/aiChat.js";
 import { authRouter } from "./routes/auth.js";
@@ -30,6 +36,7 @@ import { isTaglineStale, refreshTaglines } from "./lib/taglineGenerator.js";
 import { runMigrations } from "./db/runMigrations.js";
 import { recommendationRouter } from "./routes/recommendations.js";
 import { steamRouter } from "./routes/steam.js";
+import { authLimiter, aiLimiter, steamLimiter, defaultLimiter } from "./middleware/rateLimit.js";
 
 const app = express();
 
@@ -40,12 +47,31 @@ app.use(
   })
 );
 app.use(express.json());
+
+// Session cookie hardening:
+//   keys[]     — first signs new cookies, all verify existing ones. Lets
+//                you set SESSION_SECRET_PREVIOUS during rotation so users
+//                stay logged in across a secret change.
+//   secure     — HTTPS-only in prod. Auto-off in dev so localhost works.
+//   sameSite   — 'lax' blocks CSRF on state-changing requests while still
+//                allowing OAuth redirects from Discord.
+//   httpOnly   — JS can't read the cookie → XSS can't exfiltrate session.
+//   maxAge     — explicit 30-day expiry caps session theft window.
+const sessionKeys = [env.SESSION_SECRET];
+if (process.env.SESSION_SECRET_PREVIOUS) {
+  sessionKeys.push(process.env.SESSION_SECRET_PREVIOUS);
+}
+if (env.SESSION_SECRET.length < 32) {
+  console.warn("[security] SESSION_SECRET shorter than 32 chars — rotate to a strong random value before prod.");
+}
 app.use(
   cookieSession({
     name: "island_session",
-    secret: env.SESSION_SECRET,
+    keys: sessionKeys,
     sameSite: "lax",
-    httpOnly: true
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   })
 );
 
@@ -53,24 +79,28 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/auth", authRouter);
-app.use("/ai", aiChatRouter);
-app.use("/profile", profileRouter);
-app.use("/steam", steamRouter);
-app.use("/recommendations", recommendationRouter);
-app.use("/game-nights", gameNightRouter);
-app.use("/games", gameNewsRouter);
-app.use("/game-news-sources", gameNewsSourcesRouter);
-app.use("/news-sources", newsSourcesRouter);
-app.use("/news", generalNewsRouter);
-app.use("/activity", activityRouter);
-app.use("/news-cards", newsCardsRouter);
-app.use("/members", membersRouter);
-app.use("/settings", settingsRouter);
-app.use("/nuggies/games", nuggiesGamesRouter);
-app.use("/nuggies", nuggiesRouter);
-app.use("/forums", forumsRouter);
-app.use("/taglines", taglinesRouter);
+// Rate limits are scoped to specific risk classes; everything else gets the
+// generous defaultLimiter. The /internal router stays unlimited because the
+// bot is trusted and uses a shared-secret auth header — caller is us.
+app.use("/auth", authLimiter, authRouter);
+app.use("/ai", aiLimiter, aiChatRouter);
+app.use("/steam", steamLimiter, steamRouter);
+
+app.use("/profile", defaultLimiter, profileRouter);
+app.use("/recommendations", defaultLimiter, recommendationRouter);
+app.use("/game-nights", defaultLimiter, gameNightRouter);
+app.use("/games", defaultLimiter, gameNewsRouter);
+app.use("/game-news-sources", defaultLimiter, gameNewsSourcesRouter);
+app.use("/news-sources", defaultLimiter, newsSourcesRouter);
+app.use("/news", defaultLimiter, generalNewsRouter);
+app.use("/activity", defaultLimiter, activityRouter);
+app.use("/news-cards", defaultLimiter, newsCardsRouter);
+app.use("/members", defaultLimiter, membersRouter);
+app.use("/settings", defaultLimiter, settingsRouter);
+app.use("/nuggies/games", defaultLimiter, nuggiesGamesRouter);
+app.use("/nuggies", defaultLimiter, nuggiesRouter);
+app.use("/forums", defaultLimiter, forumsRouter);
+app.use("/taglines", defaultLimiter, taglinesRouter);
 app.use("/internal", internalRouter);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
