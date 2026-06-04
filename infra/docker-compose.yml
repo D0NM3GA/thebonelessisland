@@ -29,14 +29,20 @@ services:
     image: pgvector/pgvector:pg16
     container_name: boneless-postgres
     restart: unless-stopped
+    # POSTGRES_PASSWORD comes from the same .env as the app services. The path
+    # is relative to THIS compose file (→ repo root), so it resolves no matter
+    # which directory `docker compose` is invoked from. Using env_file instead
+    # of `${POSTGRES_PASSWORD}` interpolation avoids the footgun where compose
+    # looks for `.env` in the compose file's directory (infra/) rather than the
+    # repo root and silently falls back to a default password — which mismatches
+    # the app's DATABASE_URL. Requires a .env at the repo root (dev: copy from
+    # .env.example; prod: see DEPLOY.md). First-time volume init pins the
+    # password; to rotate: `docker compose down -v`, change it, up, re-migrate.
+    env_file:
+      - ../.env
     environment:
       POSTGRES_DB: boneless
       POSTGRES_USER: postgres
-      # Read from .env at compose-run time. First-time volume init pins the
-      # password; subsequent runs must match the value the volume was created
-      # with. To rotate: `docker compose down -v`, change POSTGRES_PASSWORD in
-      # .env, `docker compose up -d`, re-run migrations.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       # Bind to loopback only. Dev (host app) reaches it at localhost:5432.
       # In prod the app containers use the internal network, not this mapping,
