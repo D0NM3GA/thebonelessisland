@@ -35,7 +35,7 @@ export default function CommunityLeaderboardPage({ onNavigate }: CommunityLeader
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted

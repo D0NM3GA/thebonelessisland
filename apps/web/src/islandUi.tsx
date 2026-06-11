@@ -326,7 +326,7 @@ export function IslandGameBlade({
             zIndex: 3,
             borderRadius: 999,
             padding: "0.2rem 0.46rem",
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 700,
             border:
               voteFlashTone === "up"
@@ -397,7 +397,7 @@ export function IslandGameBlade({
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
           <div style={{ fontSize: 12, opacity: 0.95 }}>{subtitle}</div>
-          {meta ? <div style={{ fontSize: 11, opacity: 0.84 }}>{meta}</div> : null}
+          {meta ? <div style={{ fontSize: 12, opacity: 0.84 }}>{meta}</div> : null}
           <div style={{ marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap" }}>
             {tags.slice(0, 2).map((tag) => (
               <span key={tag} className="island-mono" style={islandTagStyle({ color: getTagColor(tag) })}>
@@ -406,7 +406,7 @@ export function IslandGameBlade({
             ))}
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 borderRadius: 999,
                 border: `1px solid ${selected ? islandTheme.color.primaryGlow : "rgba(203,213,225,0.42)"}`,
                 padding: "0.12rem 0.42rem",
@@ -418,7 +418,7 @@ export function IslandGameBlade({
             </span>
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 borderRadius: 999,
                 border: "1px solid rgba(203,213,225,0.42)",
                 padding: "0.12rem 0.42rem",
@@ -439,7 +439,7 @@ export function IslandGameBlade({
               onVote?.(1);
             }}
             disabled={isVoting}
-            style={{ ...islandButtonStyle("primary"), padding: "0.26rem 0.58rem", marginRight: 0, fontSize: 11 }}
+            style={{ ...islandButtonStyle("primary"), padding: "0.26rem 0.58rem", marginRight: 0, fontSize: 12 }}
           >
             Hype +1
           </button>
@@ -451,7 +451,7 @@ export function IslandGameBlade({
               onVote?.(0);
             }}
             disabled={isVoting}
-            style={{ ...islandButtonStyle("secondary"), padding: "0.24rem 0.58rem", marginRight: 0, fontSize: 11 }}
+            style={{ ...islandButtonStyle("secondary"), padding: "0.24rem 0.58rem", marginRight: 0, fontSize: 12 }}
           >
             Maybe 0
           </button>
@@ -463,7 +463,7 @@ export function IslandGameBlade({
               onVote?.(-1);
             }}
             disabled={isVoting}
-            style={{ ...islandButtonStyle("danger"), padding: "0.24rem 0.58rem", marginRight: 0, fontSize: 11 }}
+            style={{ ...islandButtonStyle("danger"), padding: "0.24rem 0.58rem", marginRight: 0, fontSize: 12 }}
           >
             Skip -1
           </button>
@@ -674,7 +674,7 @@ export function getTagColor(tag: string): string {
 export function islandTagStyle(opts: { color: string; active?: boolean }): CSSProperties {
   const { color, active = false } = opts;
   return {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.06em",

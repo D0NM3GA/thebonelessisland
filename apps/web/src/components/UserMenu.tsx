@@ -120,7 +120,7 @@ export function UserMenu({
               className="island-mono"
               style={{
                 color: islandTheme.color.textMuted,
-                fontSize: 11,
+                fontSize: 12,
                 marginTop: 1
               }}
             >
@@ -141,11 +141,11 @@ export function UserMenu({
               borderRadius: 6,
               background: islandTheme.color.panelMutedBg,
               border: `1px solid ${islandTheme.color.cardBorder}`,
-              fontSize: 11,
+              fontSize: 12,
               color: islandTheme.color.textMuted
             }}
           >
-            <span style={{ fontSize: 11, flexShrink: 0 }}>🎮</span>
+            <span style={{ fontSize: 12, flexShrink: 0 }}>🎮</span>
             <span
               style={{
                 flex: 1,
@@ -328,7 +328,7 @@ function NavItem({ icon, children, active, danger, badge, badgeColor, onClick, r
             borderRadius: 999,
             background: `${badgeColor ?? islandTheme.color.primaryGlow}22`,
             color: badgeColor ?? islandTheme.color.primaryGlow,
-            fontSize: 9,
+            fontSize: 12,
             fontWeight: 800,
             letterSpacing: "0.06em",
             flexShrink: 0
@@ -476,7 +476,7 @@ function ThemeNavItem({
         <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span
             className="island-mono"
-            style={{ fontSize: 10, color: islandTheme.color.textMuted }}
+            style={{ fontSize: 12, color: islandTheme.color.textMuted }}
           >
             {label}
           </span>

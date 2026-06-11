@@ -21,7 +21,7 @@ export function GamingNewsPage({ generalNews }: GamingNewsPageProps) {
           className="island-mono"
           style={{
             marginTop: 4,
-            fontSize: 11,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             textTransform: "uppercase",
             letterSpacing: "0.06em"
@@ -91,7 +91,7 @@ function FilterPillRow({ label, options, activeTags, onTagClick }: FilterPillRow
       <span
         className="island-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.07em",
           color: islandTheme.color.textMuted,
@@ -120,6 +120,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
   const [tab, setTab] = useState<NewsTab>("all");
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [sortMode, setSortMode] = useState<"latest" | "top">("latest");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [revealedSpoilers, setRevealedSpoilers] = useState<Set<string>>(new Set());
   const [activeArticle, setActiveArticle] = useState<GeneralNewsItem | null>(null);
@@ -250,7 +251,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
                 {count > 0 && (
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 12,
                       background: active ? "rgba(37, 99, 235, 0.35)" : islandTheme.color.panelMutedBg,
                       color: islandTheme.color.textMuted,
                       borderRadius: 999,
@@ -265,6 +266,30 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
             );
           })}
           <div style={{ flex: 1 }} />
+          {(availableGenres.length > 0 || availablePlatforms.length > 0) && (
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+              className="island-mono"
+              style={{
+                border: `1px solid ${filtersOpen || activeTags.size > 0 ? islandTheme.color.primary : islandTheme.color.border}`,
+                background: filtersOpen || activeTags.size > 0 ? "rgba(37, 99, 235, 0.15)" : "transparent",
+                color: filtersOpen || activeTags.size > 0 ? islandTheme.color.textPrimary : islandTheme.color.textSubtle,
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "3px 10px",
+                borderRadius: 999,
+                cursor: "pointer",
+                font: "inherit",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginRight: 6
+              }}
+            >
+              Filters{activeTags.size > 0 ? ` · ${activeTags.size}` : ""} {filtersOpen ? "▴" : "▾"}
+            </button>
+          )}
           <div style={{ display: "flex", gap: 2 }}>
             {(["latest", "top"] as const).map((mode) => {
               const active = sortMode === mode;
@@ -278,7 +303,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
                     border: `1px solid ${active ? islandTheme.color.primary : islandTheme.color.border}`,
                     background: active ? "rgba(37, 99, 235, 0.15)" : "transparent",
                     color: active ? islandTheme.color.textPrimary : islandTheme.color.textSubtle,
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: 600,
                     padding: "3px 10px",
                     borderRadius: 999,
@@ -295,27 +320,30 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
           </div>
         </div>
 
-        {availableGenres.length > 0 && (
-          <FilterPillRow
-            label="Genre"
-            options={availableGenres}
-            activeTags={activeTags}
-            onTagClick={handleTagClick}
-          />
-        )}
-
-        {availablePlatforms.length > 0 && (
-          <FilterPillRow
-            label="Platform"
-            options={availablePlatforms}
-            activeTags={activeTags}
-            onTagClick={handleTagClick}
-          />
+        {filtersOpen && (
+          <div style={{ display: "grid", gap: 8 }}>
+            {availableGenres.length > 0 && (
+              <FilterPillRow
+                label="Genre"
+                options={availableGenres}
+                activeTags={activeTags}
+                onTagClick={handleTagClick}
+              />
+            )}
+            {availablePlatforms.length > 0 && (
+              <FilterPillRow
+                label="Platform"
+                options={availablePlatforms}
+                activeTags={activeTags}
+                onTagClick={handleTagClick}
+              />
+            )}
+          </div>
         )}
 
         {activeTags.size > 0 && (
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.07em" }}>
               Active filters
             </span>
             {[...activeTags].map((tag) => (
@@ -333,7 +361,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
               onClick={resetFilters}
               className="island-mono"
               style={{
-                fontSize: 10, color: islandTheme.color.textMuted, background: "transparent",
+                fontSize: 12, color: islandTheme.color.textMuted, background: "transparent",
                 border: "none", cursor: "pointer", font: "inherit", padding: "2px 4px"
               }}
             >
@@ -562,7 +590,7 @@ function NewsHeroCard({
     >
       <div style={{ padding: "18px 20px 12px", display: "grid", gap: 8, flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {item.sourceName}
           </span>
           {labelText && (
@@ -580,7 +608,7 @@ function NewsHeroCard({
         </h3>
 
         {item.aiSubtitle && (
-          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.4, color: islandTheme.color.textSubtle, opacity: 0.85 }}>
+          <p style={{ margin: 0, fontSize: 12, lineHeight: 1.4, color: islandTheme.color.textSubtle, maxWidth: "68ch" }}>
             {item.aiSubtitle}
           </p>
         )}
@@ -635,7 +663,7 @@ function NewsHeroCard({
         <div
           className="island-mono"
           style={{
-            fontSize: 10,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             lineHeight: 1.4,
             letterSpacing: "0.02em"
@@ -765,7 +793,7 @@ function NewsCard({
           {item.aiSubtitle && (
             <div
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: islandTheme.color.textSubtle,
                 lineHeight: 1.4,
                 overflow: "hidden",
@@ -790,7 +818,7 @@ function NewsCard({
               border: "1px solid rgba(245, 158, 11, 0.3)",
               borderRadius: 6,
               color: "#f59e0b",
-              fontSize: 10,
+              fontSize: 12,
               padding: "2px 7px",
               cursor: "pointer",
               font: "inherit",
@@ -802,7 +830,7 @@ function NewsCard({
         ) : summary ? (
           <div
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: islandTheme.color.textSubtle,
               lineHeight: 1.5,
               overflow: "hidden",
@@ -964,7 +992,7 @@ function NewsListRow({
             display: "flex",
             alignItems: "center",
             gap: 6,
-            fontSize: 10,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
@@ -1213,17 +1241,17 @@ function NewsArticleModal({
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {item.sourceName}
           </span>
           {item.author && (
             <>
-              <span style={{ fontSize: 11, color: islandTheme.color.textMuted, opacity: 0.5 }}>·</span>
-              <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>{item.author}</span>
+              <span style={{ fontSize: 12, color: islandTheme.color.textMuted, opacity: 0.5 }}>·</span>
+              <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>{item.author}</span>
             </>
           )}
-          <span style={{ fontSize: 11, color: islandTheme.color.textMuted, opacity: 0.5 }}>·</span>
-          <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>{ago}</span>
+          <span style={{ fontSize: 12, color: islandTheme.color.textMuted, opacity: 0.5 }}>·</span>
+          <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>{ago}</span>
           {labelText && (
             <span className="island-mono" style={islandTagStyle({ color: labelColor })}>
               {labelText}
@@ -1269,7 +1297,7 @@ function NewsArticleModal({
             >
               <span
                 className="island-mono"
-                style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.primaryGlow }}
+                style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.primaryGlow }}
               >
                 AI Summary
               </span>
@@ -1356,7 +1384,7 @@ function NewsArticleModal({
               userSelect: "none"
             }}
           >
-            <span style={{ fontSize: 10 }}>▶</span>
+            <span style={{ fontSize: 12 }}>▶</span>
             Source attribution
           </summary>
           <div
@@ -1370,7 +1398,7 @@ function NewsArticleModal({
             }}
           >
             <div>
-              <div className="island-mono" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted, marginBottom: 2 }}>
+              <div className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted, marginBottom: 2 }}>
                 Source
               </div>
               <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>{item.sourceName}</div>

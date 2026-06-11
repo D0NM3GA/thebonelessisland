@@ -89,7 +89,7 @@ function CrewAchievementsPageImpl({ onNavigate }: CrewAchievementsPageProps) {
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted
@@ -174,7 +174,7 @@ function SummaryStat({ label, value, accent }: { label: string; value: string; a
       <span
         className="island-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: islandTheme.color.textMuted
@@ -249,7 +249,7 @@ function GameCard({ game }: { game: CrewAchievementGame }) {
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                fontSize: 11,
+                fontSize: 12,
                 color: islandTheme.color.textMuted,
                 marginBottom: 4
               }}
@@ -272,7 +272,7 @@ function GameCard({ game }: { game: CrewAchievementGame }) {
             color: islandTheme.color.textSubtle,
             padding: "5px 10px",
             borderRadius: 999,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
             font: "inherit",
@@ -293,7 +293,7 @@ function GameCard({ game }: { game: CrewAchievementGame }) {
         }}
       >
         {hundredClub.length > 0 && (
-          <div style={{ fontSize: 11, color: islandTheme.color.successAccent, fontWeight: 700 }}>
+          <div style={{ fontSize: 12, color: islandTheme.color.successAccent, fontWeight: 700 }}>
             {hundredClub.length === 1
               ? `${hundredClub[0].displayName} cleared every achievement 🏆`
               : `${hundredClub.length} crew members at 100% 🏆`}
@@ -335,7 +335,7 @@ function MemberRow({ member }: { member: CrewAchievementMember }) {
             justifyContent: "center",
             fontWeight: 800,
             color: islandTheme.color.textDark,
-            fontSize: 9
+            fontSize: 12
           }}
         >
           {memberInitials(member.displayName)}
@@ -365,7 +365,7 @@ function MemberRow({ member }: { member: CrewAchievementMember }) {
           flexShrink: 0,
           width: 78,
           textAlign: "right",
-          fontSize: 11,
+          fontSize: 12,
           color: maxed ? islandTheme.color.successAccent : islandTheme.color.textMuted
         }}
       >

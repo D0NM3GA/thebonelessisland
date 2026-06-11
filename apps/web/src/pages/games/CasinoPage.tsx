@@ -177,7 +177,7 @@ export function CasinoPage() {
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted,
@@ -248,7 +248,7 @@ function BalanceStrip({ balance, maxBet, cooldownSecs }: { balance: number | nul
       }}
     >
       <div>
-        <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Balance
         </div>
         <div className="island-display" style={{ fontSize: 22, fontWeight: 800, color: "#fbbf77" }}>
@@ -281,7 +281,7 @@ function ResumeBanner({ active, onResume }: { active: GameStateResponse; onResum
         <div style={{ fontSize: 13, fontWeight: 700, color: islandTheme.color.textPrimary }}>
           You have a {active.gameType} game in progress
         </div>
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
           Bet ₦{active.bet} · auto-resolves at {new Date(active.expiresAt).toLocaleTimeString()}
         </div>
       </div>
@@ -292,7 +292,7 @@ function ResumeBanner({ active, onResume }: { active: GameStateResponse; onResum
         style={{
           ...islandTagStyle({ color: "#38bdf8", active: true }),
           padding: "6px 14px",
-          fontSize: 11,
+          fontSize: 12,
           cursor: "pointer"
         }}
       >
@@ -352,7 +352,7 @@ function GameTile({ card, onClick, disabled }: { card: typeof GAME_CARDS[number]
       <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.45 }}>
         {card.blurb}
       </div>
-      <div className="island-mono" style={{ fontSize: 10, color: card.accent, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+      <div className="island-mono" style={{ fontSize: 12, color: card.accent, textTransform: "uppercase", letterSpacing: "0.08em" }}>
         {card.payoutBlurb} →
       </div>
     </button>

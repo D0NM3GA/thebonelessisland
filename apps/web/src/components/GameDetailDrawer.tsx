@@ -270,7 +270,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                 </span>
                 {discount ? <IslandTag tone="success">-{discount}%</IslandTag> : null}
                 {detail.store.releaseDateText ? (
-                  <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+                  <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
                     {detail.store.releaseDateText}
                   </span>
                 ) : null}
@@ -284,7 +284,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                     key={pill}
                     className="island-mono"
                     style={{
-                      fontSize: 9,
+                      fontSize: 12,
                       fontWeight: 700,
                       textTransform: "uppercase",
                       letterSpacing: "0.04em",
@@ -341,7 +341,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                             justifyContent: "center",
                             fontWeight: 800,
                             color: islandTheme.color.textDark,
-                            fontSize: 9
+                            fontSize: 12
                           }}
                         >
                           {memberInitials(owner.displayName)}
@@ -361,7 +361,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                       >
                         {owner.displayName}
                       </span>
-                      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, flexShrink: 0 }}>
+                      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, flexShrink: 0 }}>
                         {formatHours(owner.playtimeForever)}
                         {owner.playtime2Weeks > 0 ? ` · ${formatHours(owner.playtime2Weeks)}/2wk` : ""}
                       </span>
@@ -397,7 +397,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                             className="island-mono"
                             style={{
                               flexShrink: 0,
-                              fontSize: 11,
+                              fontSize: 12,
                               color: maxed ? islandTheme.color.successAccent : islandTheme.color.textMuted
                             }}
                           >
@@ -454,7 +454,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                       <span style={{ fontSize: 13, fontWeight: 600, color: islandTheme.color.primaryGlow, lineHeight: 1.35 }}>
                         {item.title}
                       </span>
-                      <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted }}>
+                      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
                         {formatNewsDate(item.publishedAt)}
                       </span>
                     </a>
@@ -495,7 +495,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <div
         className="island-mono"
         style={{
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: islandTheme.color.textMuted

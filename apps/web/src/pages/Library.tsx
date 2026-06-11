@@ -179,7 +179,7 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted
@@ -292,7 +292,7 @@ function HeaderRow() {
         gridTemplateColumns: COLUMNS,
         gap: 14,
         padding: "10px 16px",
-        fontSize: 10,
+        fontSize: 12,
         textTransform: "uppercase",
         letterSpacing: "0.08em",
         color: islandTheme.color.textMuted,
@@ -364,12 +364,12 @@ function LibRow({
           {game.name}
           {mine ? <IslandTag tone="primary" style={{ marginLeft: 6 }}>★ MINE</IslandTag> : null}
         </div>
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
           {tagLabel(game, category)}
         </div>
       </div>
       <OwnerStack owners={game.owners} />
-      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {game.ownerCount} own
       </span>
       <CapabilityPills game={game} />
@@ -384,7 +384,7 @@ function LibRow({
             color: islandTheme.color.primaryText,
             padding: "5px 10px",
             borderRadius: 999,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 800,
             cursor: "pointer",
             font: "inherit"
@@ -402,7 +402,7 @@ function LibRow({
             color: islandTheme.color.textSubtle,
             padding: "5px 10px",
             borderRadius: 999,
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
             font: "inherit"
@@ -419,7 +419,7 @@ function CapabilityPills({ game }: { game: CrewOwnedGame }) {
   const pills = capabilityPills(game);
   if (pills.length === 0) {
     return (
-      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         —
       </span>
     );
@@ -431,7 +431,7 @@ function CapabilityPills({ game }: { game: CrewOwnedGame }) {
           key={pill}
           className="island-mono"
           style={{
-            fontSize: 9,
+            fontSize: 12,
             fontWeight: 700,
             textTransform: "uppercase",
             letterSpacing: "0.04em",
@@ -461,7 +461,7 @@ function OwnerStack({ owners }: { owners: CrewOwner[] }) {
           className="island-mono"
           style={{
             marginLeft: 4,
-            fontSize: 10,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             alignSelf: "center"
           }}
@@ -502,7 +502,7 @@ function OwnerBadge({ owner }: { owner: CrewOwner }) {
         justifyContent: "center",
         fontWeight: 800,
         color: islandTheme.color.textDark,
-        fontSize: 9
+        fontSize: 12
       }}
     >
       {ownerInitials(owner.displayName)}

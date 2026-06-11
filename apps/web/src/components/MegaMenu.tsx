@@ -239,7 +239,7 @@ function DesktopGroupItem({
                     <span
                       className="island-mono"
                       style={{
-                        fontSize: 9,
+                        fontSize: 12,
                         fontWeight: 700,
                         textTransform: "uppercase",
                         letterSpacing: "0.06em",
@@ -255,7 +255,7 @@ function DesktopGroupItem({
                     </span>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2, lineHeight: 1.4 }}>
+                <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2, lineHeight: 1.4 }}>
                   {child.description}
                 </div>
               </button>
@@ -436,7 +436,7 @@ function MobileOverlay({
                             >
                               {child.label}
                             </div>
-                            <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 1 }}>
+                            <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 1 }}>
                               {child.description}
                             </div>
                           </div>
@@ -444,7 +444,7 @@ function MobileOverlay({
                             <span
                               className="island-mono"
                               style={{
-                                fontSize: 9,
+                                fontSize: 12,
                                 fontWeight: 700,
                                 textTransform: "uppercase",
                                 letterSpacing: "0.06em",

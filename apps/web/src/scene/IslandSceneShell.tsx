@@ -709,6 +709,16 @@ function SceneGlobalStyles() {
           border-color: var(--bi-primary-glow) !important;
         }
 
+        /* ── Universal keyboard focus ring ──
+           Most interactive elements are styled inline without the .island-btn
+           class; default UA outlines are nearly invisible on glass panels.
+           One rule makes every focusable element keyboard-discoverable. */
+        :focus-visible {
+          outline: 2px solid var(--bi-primary-glow);
+          outline-offset: 2px;
+          border-radius: 6px;
+        }
+
         /* ── Responsive layout utilities ── */
 
         /* Home page top row: Nuggies | Logo | Friends Online
@@ -778,10 +788,11 @@ function SceneGlobalStyles() {
         @media (prefers-reduced-motion: reduce) {
           .island-palm-canopy-l,
           .island-palm-canopy-r,
-          .island-frond,
+          [class^="island-frond"],
           .island-cloud-a,
           .island-cloud-b,
-          .island-cloud-c {
+          .island-cloud-c,
+          .bi-anchor-flash {
             animation: none !important;
           }
           .island-shooting-star {

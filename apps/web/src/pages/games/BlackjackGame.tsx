@@ -189,7 +189,7 @@ export function BlackjackGame({ startBalance, maxBet, initialState, onResolved, 
                 Deal
               </IslandButton>
             </div>
-            <div style={{ fontSize: 11, color: islandTheme.color.textMuted, textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: islandTheme.color.textMuted, textAlign: "center" }}>
               Balance: ₦{balanceAvail.toLocaleString()}
             </div>
           </div>
@@ -249,7 +249,7 @@ function SeatLabel({ children }: { children: React.ReactNode }) {
     <div
       className="island-mono"
       style={{
-        fontSize: 10,
+        fontSize: 12,
         color: islandTheme.color.textMuted,
         textTransform: "uppercase",
         letterSpacing: "0.16em",
@@ -349,7 +349,7 @@ function BackBtn({ onBack }: { onBack: () => void }) {
         background: "transparent",
         border: "none",
         color: islandTheme.color.textMuted,
-        fontSize: 11,
+        fontSize: 12,
         textTransform: "uppercase",
         letterSpacing: "0.06em",
         cursor: "pointer",
@@ -432,7 +432,7 @@ const chipPresetStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   fontWeight: 700,
   color: islandTheme.color.textMuted,
   textTransform: "uppercase",

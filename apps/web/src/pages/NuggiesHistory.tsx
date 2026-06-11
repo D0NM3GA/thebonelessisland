@@ -82,7 +82,7 @@ export default function NuggiesHistoryPage({ onNavigate }: NuggiesHistoryPagePro
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted
@@ -154,7 +154,7 @@ function SummaryStat({ label, value, tone }: { label: string; value: string; ton
     <IslandCard as="div" style={{ display: "grid", gap: 4 }}>
       <div
         className="island-mono"
-        style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}
+        style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}
       >
         {label}
       </div>
@@ -183,7 +183,7 @@ function TransactionRow({ tx, firstRow }: { tx: NuggieTransaction; firstRow: boo
         <div style={{ fontWeight: 700, fontSize: 14 }}>{tx.reason}</div>
         <div
           className="island-mono"
-          style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}
+          style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}
         >
           {tx.type} · {relativeAgo(tx.createdAt)}
         </div>

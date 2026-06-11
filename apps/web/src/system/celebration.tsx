@@ -228,7 +228,7 @@ export function AchievementCelebration({
               right: 12,
               padding: "3px 9px",
               borderRadius: 999,
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 700,
               letterSpacing: "0.08em",
               color: accentSoft,
@@ -244,7 +244,7 @@ export function AchievementCelebration({
         <div
           className="island-mono"
           style={{
-            fontSize: 10,
+            fontSize: 12,
             letterSpacing: "0.24em",
             textTransform: "uppercase",
             fontWeight: 800,
@@ -310,7 +310,7 @@ export function AchievementCelebration({
               display: "inline-block",
               padding: "3px 10px",
               borderRadius: 999,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -362,7 +362,7 @@ export function AchievementCelebration({
         <div
           className="island-mono"
           style={{
-            fontSize: 10,
+            fontSize: 12,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: islandTheme.color.textMuted,

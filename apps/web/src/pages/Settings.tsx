@@ -86,7 +86,7 @@ export function SettingsPage({
             <div style={{ flex: 1 }}>
               <div
                 className="island-mono"
-                style={{ fontSize: 10, letterSpacing: "0.14em", color: steamColors.blue, fontWeight: 700, textTransform: "uppercase" }}
+                style={{ fontSize: 12, letterSpacing: "0.14em", color: steamColors.blue, fontWeight: 700, textTransform: "uppercase" }}
               >
                 Steam
               </div>
@@ -133,7 +133,7 @@ export function SettingsPage({
             <div style={{ flex: 1 }}>
               <div
                 className="island-mono"
-                style={{ fontSize: 10, letterSpacing: "0.14em", color: islandTheme.color.textMuted, fontWeight: 700, textTransform: "uppercase" }}
+                style={{ fontSize: 12, letterSpacing: "0.14em", color: islandTheme.color.textMuted, fontWeight: 700, textTransform: "uppercase" }}
               >
                 Steam
               </div>

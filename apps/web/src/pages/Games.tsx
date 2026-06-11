@@ -81,7 +81,7 @@ function GamesHero() {
       <span
         className="island-mono"
         style={{
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           color: islandTheme.color.textMuted
@@ -237,7 +237,7 @@ function SessionComposer(props: GamesPageProps) {
             alignItems: "flex-end",
             padding: 6,
             color: islandTheme.color.textInverted,
-            fontSize: 10,
+            fontSize: 12,
             textShadow: "0 1px 2px rgba(0,0,0,0.6)",
             fontWeight: 700,
             overflow: "hidden",
@@ -335,7 +335,7 @@ function StatStrip({ stats }: { stats: Array<{ k: string; v: string }> }) {
           <div
             className="island-mono"
             style={{
-              fontSize: 9,
+              fontSize: 12,
               textTransform: "uppercase",
               letterSpacing: "0.06em",
               color: islandTheme.color.textMuted
@@ -368,7 +368,7 @@ function RosterPicker({
         <span
           className="island-mono"
           style={{
-            fontSize: 10,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.08em",
             color: islandTheme.color.textMuted
@@ -379,7 +379,7 @@ function RosterPicker({
         <span style={{ fontSize: 12, color: islandTheme.color.textPrimary, fontWeight: 700 }}>
           {ready} ready
         </span>
-        <span style={{ fontSize: 11, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
           tap to add to invite
         </span>
       </div>
@@ -437,7 +437,7 @@ function RosterPicker({
                 <span
                   className="island-mono"
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     textTransform: "uppercase",
                     letterSpacing: "0.06em",
                     color: dotColor,
@@ -597,7 +597,7 @@ function PatchesRolodex({ gameNews }: { gameNews: GameNewsItem[] }) {
         <h3 className="island-display" style={{ margin: 0, fontSize: 15 }}>
           Patches & Updates
         </h3>
-        <span style={{ fontSize: 11, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted, marginLeft: "auto" }}>
           live from Steam
         </span>
       </div>
@@ -705,7 +705,7 @@ function PatchFeatured({ item, kind, ago }: { item: GameNewsItem; kind: PatchKin
           <span
             className="island-mono"
             style={{
-              fontSize: 10,
+              fontSize: 12,
               textTransform: "uppercase",
               letterSpacing: "0.08em",
               color: islandTheme.color.primaryGlow
@@ -730,7 +730,7 @@ function PatchFeatured({ item, kind, ago }: { item: GameNewsItem; kind: PatchKin
             marginTop: 6,
             display: "flex",
             gap: 10,
-            fontSize: 11,
+            fontSize: 12,
             color: islandTheme.color.textMuted
           }}
         >
@@ -819,11 +819,11 @@ function PatchRow({
             <span className="island-mono" style={{ ...islandTagStyle({ color: "#ef4444" }), flexShrink: 0 }}>⚠ Spoilers</span>
           ) : null}
         </div>
-        <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
+        <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
           {kind} · {formatSourceAttribution(item)} · {ago}
         </div>
         {item.aiSummary ? (
-          <div style={{ fontSize: 11, color: islandTheme.color.textSubtle, marginTop: 3, lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, marginTop: 3, lineHeight: 1.4 }}>
             {item.aiSummary}
           </div>
         ) : null}
@@ -920,7 +920,7 @@ function CreateNightStrip({
       <span
         className="island-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: islandTheme.color.textMuted
@@ -991,7 +991,7 @@ function NightCard({
       }}
     >
       <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{night.title}</div>
-      <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {formatNightDate(night.scheduledFor)}
       </div>
       <div
@@ -1043,7 +1043,7 @@ function SelectedNightDetail({
         <h3 className="island-display" style={{ margin: 0, fontSize: 18 }}>
           {night.title}
         </h3>
-        <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+        <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
           {formatNightDate(night.scheduledFor)}
         </span>
         <button
@@ -1072,7 +1072,7 @@ function SelectedNightDetail({
           <span style={{ color: islandTheme.color.textMuted }}>Host hasn't locked a game yet.</span>
         )}
       </div>
-      <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {night.attendeeCount} attending
       </div>
     </IslandCard>
@@ -1289,7 +1289,7 @@ function HypeBar({ count, scale }: { count: number; scale: number }) {
           }}
         />
       </div>
-      <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 3 }}>
+      <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 3 }}>
         {count} crew {count === 1 ? "wants" : "want"} this
       </div>
     </div>
@@ -1325,7 +1325,7 @@ function LibrarySnapshot({ onNavigate }: { onNavigate: (page: PageId) => void })
         <div className="island-display" style={{ fontSize: 17, fontWeight: 800 }}>
           Steam library
         </div>
-        <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 3 }}>
+        <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 3 }}>
           Filterable list of all crew-owned games with co-ownership badges. Quick PLAN shortcut on every row.
         </div>
       </div>
@@ -1378,7 +1378,7 @@ function StreamDrawer({ members }: { members: GuildMember[] }) {
           border: "none",
           borderTopLeftRadius: 12,
           borderBottomLeftRadius: 12,
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 700,
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -1462,7 +1462,7 @@ function StreamDrawer({ members }: { members: GuildMember[] }) {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 800
                   }}
                 >
@@ -1482,7 +1482,7 @@ function StreamDrawer({ members }: { members: GuildMember[] }) {
                   </div>
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       color: islandTheme.color.textSubtle,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
@@ -1511,7 +1511,7 @@ function SectionHead({ title, meta }: { title: string; meta: string }) {
         className="island-mono"
         style={{
           marginTop: 4,
-          fontSize: 11,
+          fontSize: 12,
           color: islandTheme.color.textMuted,
           textTransform: "uppercase",
           letterSpacing: "0.06em"

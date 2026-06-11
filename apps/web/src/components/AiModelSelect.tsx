@@ -98,10 +98,10 @@ export function AiModelSelect({
       )}
 
       {loading && (
-        <span style={{ fontSize: 11, color: islandTheme.color.textMuted }}>loading models…</span>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>loading models…</span>
       )}
       {!loading && fetchError && (
-        <span style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
           Couldn't load model list ({fetchError}) — enter a model id manually.
         </span>
       )}

@@ -73,7 +73,7 @@ function ForumHeader() {
       <span
         className="island-mono"
         style={{
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           color: islandTheme.color.textMuted
@@ -323,7 +323,7 @@ function CategoryPickerCard({
   return (
     <IslandCard style={{ padding: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span className="island-mono" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted }}>
+        <span className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted }}>
           Pick a category for your post
         </span>
         <button
@@ -467,7 +467,7 @@ function CategoryChipStrip({
             <span style={{
               marginLeft: 6,
               opacity: 0.7,
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 500
             }}>
               {c.threadCount}
@@ -591,7 +591,7 @@ function FeedRow({
             {thread.isLocked ? <LockGlyph /> : null}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.title}</span>
           </div>
-          <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
             <span style={{ color: thread.categoryAccent }}>{thread.categoryIcon} {thread.categoryName}</span>
             {" · "}
             by {thread.author.displayName}
@@ -602,7 +602,7 @@ function FeedRow({
           </div>
         </div>
       </div>
-      <div style={{ fontSize: 11, color: islandTheme.color.textMuted, whiteSpace: "nowrap", textAlign: "right" }}>
+      <div style={{ fontSize: 12, color: islandTheme.color.textMuted, whiteSpace: "nowrap", textAlign: "right" }}>
         <div>{formatRelative(thread.lastReplyAt ?? thread.createdAt)}</div>
         {thread.lastReplyUser ? (
           <div style={{ marginTop: 2, opacity: 0.85 }}>{thread.lastReplyUser.displayName}</div>
@@ -642,7 +642,7 @@ function BrowseCategoriesCollapsible({
           justifyContent: "space-between"
         }}
       >
-        <span className="island-mono" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted }}>
+        <span className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted }}>
           Browse all {categories.length} categories
         </span>
         <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
@@ -684,7 +684,7 @@ function TopAuthorsCard({ stats }: { stats: ForumStats }) {
               <div style={{ width: 24, height: 24, borderRadius: 999, background: islandTheme.color.panelBg }} />
             )}
             <span style={{ fontSize: 13, fontWeight: 700 }}>{a.displayName}</span>
-            <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted }}>
+            <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
               {a.postCount} post{a.postCount === 1 ? "" : "s"}
             </span>
           </div>
@@ -700,7 +700,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
       className="island-mono"
       style={{
         padding: "12px 16px",
-        fontSize: 11,
+        fontSize: 12,
         textTransform: "uppercase",
         letterSpacing: "0.1em",
         color: islandTheme.color.textMuted,
@@ -760,7 +760,7 @@ function CategoryTile({ category, onClick }: { category: ForumCategory; onClick:
             {category.name}
             {category.isLocked ? <LockGlyph /> : null}
           </div>
-          <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
+          <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
             {category.threadCount} thread{category.threadCount === 1 ? "" : "s"}
           </div>
         </div>
@@ -769,14 +769,14 @@ function CategoryTile({ category, onClick }: { category: ForumCategory; onClick:
         {category.description}
       </div>
       {category.lastActivity ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: islandTheme.color.textMuted }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: islandTheme.color.textMuted }}>
           <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             ↳ {category.lastActivity.threadTitle}
           </span>
           <span>{formatRelative(category.lastActivity.at)}</span>
         </div>
       ) : (
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted, fontStyle: "italic" }}>
+        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, fontStyle: "italic" }}>
           No threads yet — be first.
         </div>
       )}
@@ -822,7 +822,7 @@ function RecentRow({
           {thread.isLocked ? <LockGlyph /> : null}
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.title}</span>
         </div>
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
           <span style={{ color: thread.categoryAccent ?? islandTheme.color.textSubtle }}>
             {thread.categoryIcon} {thread.categoryName}
           </span>
@@ -832,7 +832,7 @@ function RecentRow({
           {thread.replyCount} repl{thread.replyCount === 1 ? "y" : "ies"}
         </div>
       </div>
-      <div style={{ fontSize: 11, color: islandTheme.color.textMuted, whiteSpace: "nowrap" }}>
+      <div style={{ fontSize: 12, color: islandTheme.color.textMuted, whiteSpace: "nowrap" }}>
         {formatRelative(thread.lastReplyAt ?? thread.createdAt)}
       </div>
     </button>
@@ -954,7 +954,7 @@ function ThreadListBlock({
         className="island-mono"
         style={{
           padding: "12px 16px",
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           color: islandTheme.color.textMuted,
@@ -1022,14 +1022,14 @@ function ThreadRow({
             {thread.isLocked ? <LockGlyph /> : null}
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{thread.title}</span>
           </div>
-          <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
             by {thread.author.displayName}
           </div>
         </div>
       </div>
       <ColumnStat value={thread.replyCount} label="replies" />
       <ColumnStat value={thread.viewCount} label="views" />
-      <div style={{ fontSize: 11, color: islandTheme.color.textMuted, textAlign: "right" }}>
+      <div style={{ fontSize: 12, color: islandTheme.color.textMuted, textAlign: "right" }}>
         <div>{formatRelative(thread.lastReplyAt ?? thread.createdAt)}</div>
         {thread.lastReplyUser ? (
           <div style={{ marginTop: 2, opacity: 0.85 }}>{thread.lastReplyUser.displayName}</div>
@@ -1043,7 +1043,7 @@ function ColumnStat({ value, label }: { value: number; label: string }) {
   return (
     <div style={{ textAlign: "center" }}>
       <div className="island-display" style={{ fontSize: 14, fontWeight: 800 }}>{value.toLocaleString()}</div>
-      <div className="island-mono" style={{ fontSize: 9, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+      <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>
         {label}
       </div>
     </div>
@@ -1067,9 +1067,16 @@ function ThreadView({
 }) {
   const [thread, setThread] = useState<ForumThreadDetail | null>(null);
   const [posts, setPosts] = useState<ForumPost[] | null>(null);
-  const [reply, setReply] = useState("");
+  // Reply drafts survive accidental navigation within the session.
+  const replyDraftKey = `bi:forum-reply:${threadId}`;
+  const [reply, setReply] = useState(() => sessionStorage.getItem(replyDraftKey) ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (reply) sessionStorage.setItem(replyDraftKey, reply);
+    else sessionStorage.removeItem(replyDraftKey);
+  }, [reply, replyDraftKey]);
   const load = useCallback(async () => {
     const r = await apiFetch(`/forums/threads/${threadId}`).then((r) => r.json()).catch(() => null);
     if (!r || !r.thread) {
@@ -1095,6 +1102,7 @@ function ThreadView({
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error(data?.error ?? "Reply failed");
       setReply("");
+      sessionStorage.removeItem(replyDraftKey);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reply failed");
@@ -1269,7 +1277,7 @@ function ThreadView({
             <p style={{ margin: "8px 0 0", fontSize: 12, color: islandTheme.color.dangerText }}>{error}</p>
           ) : null}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-            <span style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+            <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
               {reply.length} char{reply.length === 1 ? "" : "s"} · earns ₦1
             </span>
             <IslandButton variant="primary" onClick={postReply} disabled={busy || reply.trim().length < 2}>
@@ -1339,14 +1347,14 @@ function PostCard({
           <div style={{ fontSize: 13, fontWeight: 800, textAlign: "center", lineHeight: 1.2 }}>
             {post.author.displayName}
           </div>
-          <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted }}>
+          <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
             @{post.author.username}
           </div>
           {post.isOp ? <IslandTag tone="primary">Op</IslandTag> : null}
         </div>
 
         <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 11, color: islandTheme.color.textMuted, gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 12, color: islandTheme.color.textMuted, gap: 12, flexWrap: "wrap" }}>
             <span>#{idx} · {formatAbsolute(post.createdAt)}</span>
             {post.editedAt ? <span style={{ fontStyle: "italic" }}>edited {formatRelative(post.editedAt)}</span> : null}
           </div>
@@ -1356,6 +1364,7 @@ function PostCard({
               lineHeight: 1.6,
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
+              maxWidth: islandTheme.prose.readable.maxWidth,
               color: post.isDeleted ? islandTheme.color.textMuted : islandTheme.color.textPrimary,
               fontStyle: post.isDeleted ? "italic" : "normal"
             }}
@@ -1421,7 +1430,7 @@ function ModButton({ children, onClick, danger }: { children: React.ReactNode; o
         border: `1px solid ${danger ? islandTheme.color.danger : islandTheme.color.cardBorder}`,
         borderRadius: 999,
         padding: "5px 12px",
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 700,
         cursor: "pointer",
         font: "inherit"
@@ -1443,10 +1452,29 @@ function ComposeView({
   onCancel: () => void;
   onCreated: (threadId: number) => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  // Compose drafts survive accidental navigation within the session.
+  const draftKey = `bi:forum-compose:${categorySlug}`;
+  const [title, setTitle] = useState(() => {
+    try {
+      return (JSON.parse(sessionStorage.getItem(draftKey) ?? "null") as { title?: string } | null)?.title ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [body, setBody] = useState(() => {
+    try {
+      return (JSON.parse(sessionStorage.getItem(draftKey) ?? "null") as { body?: string } | null)?.body ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (title || body) sessionStorage.setItem(draftKey, JSON.stringify({ title, body }));
+    else sessionStorage.removeItem(draftKey);
+  }, [title, body, draftKey]);
 
   async function submit() {
     if (busy) return;
@@ -1460,6 +1488,7 @@ function ComposeView({
       });
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error(data?.error ?? "Post failed");
+      sessionStorage.removeItem(draftKey);
       onCreated(data.threadId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Post failed");
@@ -1476,7 +1505,7 @@ function ComposeView({
           New thread
         </h2>
         <label style={{ display: "grid", gap: 6, marginBottom: 12 }}>
-          <span className="island-mono" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}>
+          <span className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}>
             Title
           </span>
           <input
@@ -1488,7 +1517,7 @@ function ComposeView({
           />
         </label>
         <label style={{ display: "grid", gap: 6, marginBottom: 12 }}>
-          <span className="island-mono" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}>
+          <span className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}>
             Body
           </span>
           <textarea
@@ -1503,7 +1532,7 @@ function ComposeView({
           <p style={{ margin: "0 0 10px", fontSize: 12, color: islandTheme.color.dangerText }}>{error}</p>
         ) : null}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+          <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
             Posting earns ₦5 · {body.length} chars
           </span>
           <div style={{ display: "flex", gap: 8 }}>

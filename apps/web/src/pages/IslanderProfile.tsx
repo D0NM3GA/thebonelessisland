@@ -220,7 +220,7 @@ function IslanderProfilePageImpl({ targetDiscordUserId, onNavigate }: IslanderPr
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted
@@ -398,7 +398,7 @@ function IslanderProfilePageImpl({ targetDiscordUserId, onNavigate }: IslanderPr
                           className="island-mono"
                           style={{
                             flexShrink: 0,
-                            fontSize: 11,
+                            fontSize: 12,
                             color: maxed ? islandTheme.color.successAccent : islandTheme.color.textMuted
                           }}
                         >
@@ -466,7 +466,7 @@ function IslanderProfilePageImpl({ targetDiscordUserId, onNavigate }: IslanderPr
                     {event.summary}
                   </div>
                 </div>
-                <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted, flexShrink: 0 }}>
+                <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, flexShrink: 0 }}>
                   {relTime(event.createdAt)}
                 </span>
               </div>
@@ -484,7 +484,7 @@ function SummaryStat({ label, value, accent }: { label: string; value: string; a
       <span
         className="island-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: islandTheme.color.textMuted

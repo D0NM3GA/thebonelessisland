@@ -299,7 +299,7 @@ function FeaturedNewsCard({
             {item.title}
           </h3>
           {item.aiSubtitle && (
-            <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textSubtle, opacity: 0.8, lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.35, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {item.aiSubtitle}
             </p>
           )}
@@ -397,6 +397,7 @@ function TrendingRow({ game }: { game: TrendingGame }) {
       }}
     >
       <div
+        aria-hidden="true"
         style={{
           width: 92,
           height: 43,
@@ -414,7 +415,7 @@ function TrendingRow({ game }: { game: TrendingGame }) {
         {game.topPlayer ? (
           <div
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: islandTheme.color.textMuted,
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -429,7 +430,7 @@ function TrendingRow({ game }: { game: TrendingGame }) {
         <span className="island-display" style={{ fontSize: 16, fontWeight: 800, color: "#fbbf77" }}>
           {hours}h
         </span>
-        <span className="island-mono" style={{ fontSize: 9, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           {game.players === 1 ? "1 player" : `${game.players} players`}
         </span>
       </div>
@@ -624,7 +625,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
         >
           {balance !== undefined && !optedOut ? `₦${balance.toLocaleString()}` : "—"}
         </span>
-        <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           available
         </span>
       </div>
@@ -636,7 +637,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
             style={{
               display: "flex",
               gap: 6,
-              fontSize: 10,
+              fontSize: 12,
               color: islandTheme.color.textMuted,
               textTransform: "uppercase",
               letterSpacing: "0.06em"
@@ -664,13 +665,13 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
                     padding: "4px 6px",
                     borderRadius: 8,
                     border: `1px dashed ${islandTheme.color.cardBorder}`,
-                    fontSize: 10,
+                    fontSize: 12,
                     color: islandTheme.color.textMuted
                   }}
                   title={`No ${slot.label.toLowerCase()} equipped`}
                 >
                   <span style={{ opacity: 0.5 }}>{slot.emoji}</span>
-                  <span className="island-mono" style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 9 }}>
+                  <span className="island-mono" style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 12 }}>
                     {slot.label}
                   </span>
                 </div>
@@ -699,7 +700,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
           </div>
         ) : !optedOut && claimedToday === true ? (
           <div style={{ ...nuggieFooterBtnStyle("#fbbf77"), cursor: "default", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, lineHeight: 1.1, padding: "4px 10px" }}>
-            <span className="island-mono" style={{ fontSize: 9, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Next claim
             </span>
             <span className="island-mono" style={{ fontSize: 12, color: "#fbbf77", fontWeight: 700 }}>
@@ -741,7 +742,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
         </button>
       </div>
       {claimError && (
-        <div style={{ fontSize: 11, color: islandTheme.color.dangerAccent, marginTop: 4 }}>
+        <div style={{ fontSize: 12, color: islandTheme.color.dangerAccent, marginTop: 4 }}>
           {claimError}
         </div>
       )}
@@ -866,7 +867,7 @@ function FriendsOnline({
         </h3>
         <span
           className="island-mono"
-          style={{ fontSize: 11, color: islandTheme.color.textMuted }}
+          style={{ fontSize: 12, color: islandTheme.color.textMuted }}
         >
           {activeMembers.length} / {totalMemberCount || '—'}
         </span>
@@ -950,7 +951,7 @@ function CrewRow({ member }: { member: GuildMember }) {
         </div>
         <div
           style={{
-            fontSize: 11,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             whiteSpace: "nowrap",
             overflow: "hidden",
@@ -963,7 +964,7 @@ function CrewRow({ member }: { member: GuildMember }) {
       <span
         className="island-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.06em",
           color: badgeColor
@@ -996,7 +997,7 @@ function CrewAvatar({ member }: { member: GuildMember }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: 10,
+        fontSize: 12,
         fontWeight: 800,
         color: islandTheme.color.textDark
       }}
@@ -1377,7 +1378,7 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
                 <span
                   aria-hidden="true"
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: 700,
                     padding: "1px 7px",
                     borderRadius: 999,
@@ -1456,7 +1457,7 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
             className="island-mono"
             style={{
               marginLeft: "auto",
-              fontSize: 11,
+              fontSize: 12,
               color: islandTheme.color.textMuted,
               whiteSpace: "nowrap"
             }}
@@ -1550,7 +1551,7 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
             <div
               style={{
                 padding: "10px 14px",
-                fontSize: 11,
+                fontSize: 12,
                 color: islandTheme.color.textMuted,
                 textAlign: "center",
                 fontFamily: islandTheme.font.mono
@@ -1658,7 +1659,7 @@ function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: bool
           className="island-mono"
           style={{
             marginTop: 6,
-            fontSize: 11,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             display: "flex",
             alignItems: "center",
@@ -1701,7 +1702,7 @@ function DriftLog({ cards, onNavigate }: { cards: NewsCardData[]; onNavigate: (p
       {cards.length === 0 ? (
         <IslandCard style={{ padding: "16px 18px" }}>
           <div style={{ fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.55 }}>
-            The drift log is quiet right now. Parents can post news cards from the Admin → News Curation page.
+            The drift log is quiet right now. Parents can post news cards from the Admin → Drift Log page.
           </div>
         </IslandCard>
       ) : (
@@ -1768,7 +1769,7 @@ function NewsCardTile({ card }: { card: NewsCardData }) {
         <div style={{ marginTop: 4, fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
           {card.body}
         </div>
-        <div className="island-mono" style={{ marginTop: 6, fontSize: 11, color: islandTheme.color.textMuted }}>
+        <div className="island-mono" style={{ marginTop: 6, fontSize: 12, color: islandTheme.color.textMuted }}>
           {meta}
         </div>
       </div>
@@ -1853,7 +1854,7 @@ function CtaCard({ accent, eyebrow, title, body, ctaLabel, primary, onCta }: Cta
       <div
         className="island-mono"
         style={{
-          fontSize: 11,
+          fontSize: 12,
           color: accent,
           textTransform: "uppercase",
           letterSpacing: "0.1em",
@@ -1937,23 +1938,27 @@ function SectionHead({
         </h2>
         <div
           className="island-mono"
-          style={{ marginTop: 4, fontSize: 11, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}
+          style={{ marginTop: 4, fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}
         >
           {meta}
         </div>
       </div>
-      <a
-        href="#"
-        onClick={(e) => { e.preventDefault(); onAction?.(); }}
+      <button
+        type="button"
+        onClick={() => onAction?.()}
         style={{
+          background: "transparent",
+          border: "none",
+          padding: 0,
           color: islandTheme.color.primaryGlow,
           fontSize: 13,
           fontWeight: 600,
-          textDecoration: "none"
+          cursor: "pointer",
+          font: "inherit"
         }}
       >
         {action}
-      </a>
+      </button>
     </div>
   );
 }

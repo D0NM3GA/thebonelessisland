@@ -227,14 +227,14 @@ export function SettingCard({ setting, meta, onSave, aiProvider }: SettingCardPr
           style={dangerHeaderStyle(dangerExpanded)}
         >
           <span style={{ fontSize: 14 }}>{dangerExpanded ? "▼" : "▶"}</span>
-          <span className="island-mono" style={{ ...islandTagStyle({ color: "#ef4444" }), fontSize: 9 }}>
+          <span className="island-mono" style={{ ...islandTagStyle({ color: "#ef4444" }), fontSize: 12 }}>
             Sensitive
           </span>
           <span style={{ fontWeight: 700, fontSize: 14, color: islandTheme.color.textPrimary, flex: 1, textAlign: "left" }}>
             {meta.label}
           </span>
           {!dangerExpanded && setting.value && (
-            <span style={{ fontSize: 11, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
+            <span style={{ fontSize: 12, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
               {summarize(meta, setting.value)}
             </span>
           )}
@@ -350,7 +350,7 @@ function UndoBanner({ from, onUndo, onDismiss }: { from: string; onUndo: () => v
         Saved. <span style={{ color: islandTheme.color.textMuted }}>Undo to restore previous value</span>
       </span>
       <span style={{ flex: 1 }} />
-      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {secondsLeft}s
       </span>
       <button
@@ -382,7 +382,7 @@ function FooterRow({ setting }: { setting: ServerSetting }) {
         display: "flex",
         gap: 10,
         flexWrap: "wrap",
-        fontSize: 10,
+        fontSize: 12,
         color: islandTheme.color.textMuted,
         paddingTop: 6,
         borderTop: `1px solid ${islandTheme.color.cardBorder}`
@@ -420,7 +420,7 @@ function relativeAgo(iso: string): string {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const fallbackStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   color: islandTheme.color.textMuted,
   padding: "6px 10px",
   borderRadius: 7,
@@ -471,7 +471,7 @@ const dismissButtonStyle: CSSProperties = {
 };
 
 const confirmLabelStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 12,
   color: islandTheme.color.textMuted,
   textTransform: "uppercase",
   letterSpacing: "0.06em"

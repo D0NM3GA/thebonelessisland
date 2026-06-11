@@ -55,8 +55,8 @@ function CommunityPageInner({ isAdmin, activityEvents, guildMembers, gameNights,
       <Hero />
       <CrewCarousel members={guildMembers} isAdmin={isAdmin} onNavigate={onNavigate} openProfile={openProfile} />
       <ActivitySection events={activityEvents} />
-      <ForumsRow forums={forums} />
-      <EventsAndLeaderboardsRow gameNights={gameNights} nuggiesLeaderboard={nuggiesLeaderboard} />
+      <ForumsRow forums={forums} onNavigate={onNavigate} />
+      <EventsAndLeaderboardsRow gameNights={gameNights} nuggiesLeaderboard={nuggiesLeaderboard} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -69,7 +69,7 @@ function Hero() {
       <span
         className="island-mono"
         style={{
-          fontSize: 11,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           color: islandTheme.color.textMuted
@@ -224,10 +224,10 @@ function CrewCard({
           </div>
         )}
         <div style={{ fontWeight: 700, marginTop: 8 }}>{member.displayName}</div>
-        <div style={{ fontSize: 11, color: islandTheme.color.textMuted }}>@{member.username}</div>
+        <div style={{ fontSize: 12, color: islandTheme.color.textMuted }}>@{member.username}</div>
         <div
           className="island-mono"
-          style={{ fontSize: 11, color: islandTheme.color.primaryGlow, marginTop: 4 }}
+          style={{ fontSize: 12, color: islandTheme.color.primaryGlow, marginTop: 4 }}
         >
           {memberPresenceText(member)}
         </div>
@@ -244,7 +244,7 @@ function CrewCard({
                 color: islandTheme.color.textSubtle,
                 padding: "5px 8px",
                 borderRadius: 999,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
@@ -261,7 +261,7 @@ function CrewCard({
                   borderRadius: 999,
                   background: "linear-gradient(135deg,#f59e0b,#d97706)",
                   color: islandTheme.color.textDark,
-                  fontSize: 9,
+                  fontSize: 12,
                   fontWeight: 900,
                   display: "inline-flex",
                   alignItems: "center",
@@ -284,7 +284,7 @@ function CrewCard({
               color: islandTheme.color.textSubtle,
               padding: "5px 8px",
               borderRadius: 999,
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 700,
               cursor: "pointer",
               font: "inherit"
@@ -436,14 +436,14 @@ function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: bool
         </div>
         <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>{copy.detail}</div>
       </div>
-      <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {ago}
       </div>
     </div>
   );
 }
 
-function ForumsRow({ forums }: { forums: ForumCategory[] | null }) {
+function ForumsRow({ forums, onNavigate }: { forums: ForumCategory[] | null; onNavigate: (page: PageId) => void }) {
   const threadTotal = forums ? forums.reduce((sum, f) => sum + f.threadCount, 0) : 0;
   const meta =
     forums === null
@@ -451,7 +451,7 @@ function ForumsRow({ forums }: { forums: ForumCategory[] | null }) {
       : `${forums.length} channel${forums.length === 1 ? "" : "s"}, ${threadTotal} thread${threadTotal === 1 ? "" : "s"} on the island.`;
   return (
     <section>
-      <SectionHead title="Forums · ~ island chatter" meta={meta} action="Open all →" />
+      <SectionHead title="Forums · ~ island chatter" meta={meta} action="Open all →" onAction={() => onNavigate("community-forums")} />
       <IslandCard style={{ padding: 0, overflow: "hidden", marginTop: 12 }}>
         {forums === null ? (
           <div style={{ padding: "16px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
@@ -462,14 +462,16 @@ function ForumsRow({ forums }: { forums: ForumCategory[] | null }) {
             No forum channels yet.
           </div>
         ) : (
-          forums.map((f, i) => <ForumRow key={f.id} entry={f} firstRow={i === 0} />)
+          forums.map((f, i) => (
+            <ForumRow key={f.id} entry={f} firstRow={i === 0} onOpen={() => onNavigate("community-forums")} />
+          ))
         )}
       </IslandCard>
     </section>
   );
 }
 
-function ForumRow({ entry, firstRow }: { entry: ForumCategory; firstRow: boolean }) {
+function ForumRow({ entry, firstRow, onOpen }: { entry: ForumCategory; firstRow: boolean; onOpen: () => void }) {
   const accent = entry.accentColor || islandTheme.color.primaryGlow;
   const lastBits = entry.lastActivity
     ? [entry.lastActivity.userDisplayName, entry.lastActivity.at ? communityRelativeAgo(entry.lastActivity.at) : null]
@@ -480,6 +482,7 @@ function ForumRow({ entry, firstRow }: { entry: ForumCategory; firstRow: boolean
     <button
       type="button"
       className="island-btn"
+      onClick={onOpen}
       style={{
         display: "grid",
         gridTemplateColumns: "36px 1fr auto",
@@ -518,12 +521,12 @@ function ForumRow({ entry, firstRow }: { entry: ForumCategory; firstRow: boolean
           {entry.lastActivity?.threadTitle ?? entry.description ?? "No threads yet"}
         </div>
         {lastBits ? (
-          <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
+          <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
             {lastBits}
           </div>
         ) : null}
       </div>
-      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {entry.threadCount} thread{entry.threadCount === 1 ? "" : "s"}
       </span>
     </button>
@@ -532,10 +535,12 @@ function ForumRow({ entry, firstRow }: { entry: ForumCategory; firstRow: boolean
 
 function EventsAndLeaderboardsRow({
   gameNights,
-  nuggiesLeaderboard
+  nuggiesLeaderboard,
+  onNavigate
 }: {
   gameNights: GameNight[];
   nuggiesLeaderboard: NuggiesLeaderboardEntry[];
+  onNavigate: (page: PageId) => void;
 }) {
   const upcoming = [...gameNights]
     .filter((n) => {
@@ -553,7 +558,7 @@ function EventsAndLeaderboardsRow({
       }}
     >
       <div>
-        <SectionHead title="Upcoming game nights" meta="Sessions on the calendar." action="Games →" />
+        <SectionHead title="Upcoming game nights" meta="Sessions on the calendar." action="Games →" onAction={() => onNavigate("games")} />
         <IslandCard style={{ padding: 0, overflow: "hidden", marginTop: 12 }}>
           {upcoming.length === 0 ? (
             <div style={{ padding: "16px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
@@ -565,7 +570,7 @@ function EventsAndLeaderboardsRow({
         </IslandCard>
       </div>
       <div>
-        <SectionHead title="Nuggies · top islanders" meta="Most Nuggies earned on the island." action="Full leaderboard →" />
+        <SectionHead title="Nuggies · top islanders" meta="Most Nuggies earned on the island." action="Full leaderboard →" onAction={() => onNavigate("community-leaderboard")} />
         <IslandCard style={{ padding: 0, overflow: "hidden", marginTop: 12 }}>
           {nuggiesLeaderboard.length === 0 ? (
             <div style={{ padding: "16px 14px", fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
@@ -626,7 +631,7 @@ function EventRow({ night, firstRow }: { night: GameNight; firstRow: boolean }) 
         <div
           className="island-mono"
           style={{
-            fontSize: 9,
+            fontSize: 12,
             color: islandTheme.palette.sandWarmAccent,
             letterSpacing: "0.1em"
           }}
@@ -640,7 +645,7 @@ function EventRow({ night, firstRow }: { night: GameNight; firstRow: boolean }) 
       <div>
         <div style={{ fontWeight: 700, fontSize: 14 }}>{night.title}</div>
         <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>{detail}</div>
-        <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.primaryGlow, marginTop: 4 }}>
+        <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.primaryGlow, marginTop: 4 }}>
           {night.attendeeCount} crew {night.attendeeCount === 1 ? "is" : "are"} in
         </div>
       </div>
@@ -648,7 +653,7 @@ function EventRow({ night, firstRow }: { night: GameNight; firstRow: boolean }) 
         className="island-mono"
         style={{
           ...islandTagStyle({ color: attending ? islandTheme.color.successAccent : islandTheme.color.textMuted }),
-          fontSize: 10
+          fontSize: 12
         }}
       >
         {attending ? "You're in" : "Not joined"}
@@ -719,7 +724,7 @@ function NuggiesLeaderRow({ entry, firstRow }: { entry: NuggiesLeaderboardEntry;
   );
 }
 
-function SectionHead({ title, meta, action }: { title: string; meta: string; action?: string }) {
+function SectionHead({ title, meta, action, onAction }: { title: string; meta: string; action?: string; onAction?: () => void }) {
   return (
     <div
       style={{
@@ -738,7 +743,7 @@ function SectionHead({ title, meta, action }: { title: string; meta: string; act
           className="island-mono"
           style={{
             marginTop: 4,
-            fontSize: 11,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             textTransform: "uppercase",
             letterSpacing: "0.06em"
@@ -748,18 +753,22 @@ function SectionHead({ title, meta, action }: { title: string; meta: string; act
         </div>
       </div>
       {action ? (
-        <a
-          href="#"
-          onClick={(e) => e.preventDefault()}
+        <button
+          type="button"
+          onClick={() => onAction?.()}
           style={{
+            background: "transparent",
+            border: "none",
+            padding: 0,
             color: islandTheme.color.primaryGlow,
             fontSize: 13,
             fontWeight: 600,
-            textDecoration: "none"
+            cursor: onAction ? "pointer" : "default",
+            font: "inherit"
           }}
         >
           {action}
-        </a>
+        </button>
       ) : null}
     </div>
   );

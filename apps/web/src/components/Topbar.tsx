@@ -148,7 +148,7 @@ function Brand({ onNavigate, tagline }: { onNavigate: (page: PageId) => void; ta
         <div
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             color: islandTheme.color.textMuted,
             marginTop: -2,
             whiteSpace: "nowrap",
@@ -195,7 +195,7 @@ function UserTrigger({ buttonRef, profile, open, onToggle }: UserTriggerProps) {
     >
       <UserAvatar profile={profile} initials={initials} size={30} />
       <span style={{ fontSize: 13, fontWeight: 600 }}>{handle}</span>
-      <span style={{ color: islandTheme.color.textMuted, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
+      <span style={{ color: islandTheme.color.textMuted, fontSize: 12 }}>{open ? "▲" : "▼"}</span>
     </button>
   );
 }

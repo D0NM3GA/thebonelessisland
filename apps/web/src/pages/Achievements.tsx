@@ -244,7 +244,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                 <div style={{ fontWeight: 600, color: islandTheme.color.textSecondary }}>
                   {role} ₦{fmt(loan.principal)} · due ₦{fmt(loan.amountDue)}
                 </div>
-                <div style={{ fontSize: 11, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
+                <div style={{ fontSize: 12, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
                   #{loan.id} · {loan.status} · {overdue ? "OVERDUE · " : ""}due {dueLabel}
                   {loan.collateral > 0 ? ` · collateral ₦${fmt(loan.collateral)}` : ""}
                 </div>
@@ -285,7 +285,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
           );
         })}
       </div>
-      <div style={{ fontSize: 11, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
+      <div style={{ fontSize: 12, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
         Use /loan in Discord to make new offers.
       </div>
     </IslandCard>
@@ -320,7 +320,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
               <span style={{ fontWeight: 700, flexShrink: 0, color: tx.amount >= 0 ? islandTheme.color.successAccent : islandTheme.color.dangerAccent }}>
                 {tx.amount >= 0 ? "+" : ""}{fmt(tx.amount)}
               </span>
-              <span style={{ fontSize: 11, color: islandTheme.color.textMuted, flexShrink: 0 }}>
+              <span style={{ fontSize: 12, color: islandTheme.color.textMuted, flexShrink: 0 }}>
                 {relTime(tx.createdAt)}
               </span>
             </div>
@@ -339,7 +339,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
         <ConfettiBurst trigger={claimConfetti} />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontSize: 11, fontFamily: islandTheme.font.mono, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted, marginBottom: 4, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: 12, fontFamily: islandTheme.font.mono, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted, marginBottom: 4, display: "inline-flex", alignItems: "center", gap: 6 }}>
               <NuggieCoin size={16} /> Nuggies Balance
             </div>
             <div style={{ fontSize: "clamp(2rem, 5vw, 3rem)", fontWeight: 800, lineHeight: 1, color: islandTheme.color.textPrimary }}>
@@ -357,7 +357,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
             {claimedToday ? (
               <div style={{ fontSize: 13, color: islandTheme.color.textMuted, textAlign: "right" }}>
                 Daily claimed ✓<br />
-                <span style={{ fontSize: 11 }}>Resets at 11pm ET</span>
+                <span style={{ fontSize: 12 }}>Resets at 11pm ET</span>
               </div>
             ) : (
               <IslandButton variant="primary" onClick={() => void claimDaily()} disabled={claiming}>
@@ -437,7 +437,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                 </div>
                 <div
                   style={{
-                    fontSize: 9,
+                    fontSize: 12,
                     color: reached ? tier.reachedTextColor : islandTheme.color.textMuted,
                     fontFamily: islandTheme.font.mono,
                     letterSpacing: "0.08em",
@@ -516,13 +516,13 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                     <span style={{ fontSize: 22 }}>{item.itemData.emoji}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
-                      <div style={{ fontSize: 11, color: islandTheme.color.textMuted, textTransform: "capitalize", display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "capitalize", display: "flex", alignItems: "center", gap: 6 }}>
                         <span>{item.itemType}</span>
                         {earned && (
                           <span
                             className="island-mono"
                             style={{
-                              fontSize: 9,
+                              fontSize: 12,
                               padding: "1px 6px",
                               borderRadius: 999,
                               background: "rgba(163, 230, 53, 0.18)",
@@ -574,7 +574,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                   <span style={{ fontSize: 22, lineHeight: 1 }}>{item.itemData.emoji}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</div>
-                    <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2, lineHeight: 1.3 }}>{item.description}</div>
+                    <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2, lineHeight: 1.3 }}>{item.description}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8, gap: 8 }}>
@@ -660,7 +660,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
             : "Hide my balance from the ladder"}
         </button>
         {me.optedOut && (
-          <div style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 4 }}>
             Unranked. You won't appear on the ladder and can't earn or spend Nuggies.
           </div>
         )}
@@ -732,7 +732,7 @@ function ItemCard({ children, tooltip }: { children: React.ReactNode; tooltip?: 
             border: `1px solid ${islandTheme.color.cardBorder}`,
             borderRadius: 8,
             boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
-            fontSize: 11,
+            fontSize: 12,
             lineHeight: 1.45,
             color: islandTheme.color.textPrimary,
             pointerEvents: "none",

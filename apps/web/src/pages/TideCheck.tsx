@@ -118,7 +118,7 @@ function TideCheckPageImpl({ onNavigate }: TideCheckPageProps) {
         <span
           className="island-mono"
           style={{
-            fontSize: 11,
+            fontSize: 12,
             textTransform: "uppercase",
             letterSpacing: "0.1em",
             color: islandTheme.color.textMuted
@@ -184,7 +184,7 @@ function TideCheckPageImpl({ onNavigate }: TideCheckPageProps) {
             <SummaryStat label="On the queue" value={digest.queued.length.toLocaleString()} />
             <span
               className="island-mono"
-              style={{ marginLeft: "auto", fontSize: 10, color: islandTheme.color.textMuted }}
+              style={{ marginLeft: "auto", fontSize: 12, color: islandTheme.color.textMuted }}
             >
               Generated {formatDateTime(digest.generatedAt)}
             </span>
@@ -213,7 +213,7 @@ function TideCheckPageImpl({ onNavigate }: TideCheckPageProps) {
                       <div style={{ fontWeight: 700, color: islandTheme.color.textSecondary }}>{night.title}</div>
                       <div
                         className="island-mono"
-                        style={{ fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2 }}
+                        style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}
                       >
                         {formatDateTime(night.scheduledFor)}
                       </div>
@@ -304,7 +304,7 @@ function SummaryStat({ label, value, accent }: { label: string; value: string; a
       <span
         className="island-mono"
         style={{
-          fontSize: 10,
+          fontSize: 12,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
           color: islandTheme.color.textMuted
@@ -339,7 +339,7 @@ function Section({
       <div style={{ display: "grid", gap: 2 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: islandTheme.color.textPrimary }}>{title}</div>
         {subtitle ? (
-          <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+          <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
             {subtitle}
           </div>
         ) : null}
@@ -404,7 +404,7 @@ function GameRow({
         {name}
       </span>
       <IslandTag tone={metaTone}>{metaLabel}</IslandTag>
-      <span className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted }}>
+      <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         #{appId}
       </span>
     </div>
