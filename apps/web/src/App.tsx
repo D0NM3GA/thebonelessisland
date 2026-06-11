@@ -1701,6 +1701,7 @@ export function App() {
       {page === "library" ? (
         <LibraryPage
           crewGames={crewGames}
+          guildMembers={guildMembers}
           currentDiscordUserId={profileData?.discordUserId ?? null}
           onNavigate={setPage}
           onPlan={onPlan}

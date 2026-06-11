@@ -96,6 +96,13 @@ export function AchievementCelebration({
   const [progress, setProgress] = useState(1);
   const pausedRef = useRef(false);
 
+  // Let the island scene join in: one-shot flourish (shooting star) per
+  // celebration. Decoupled via window event — the scene shell listens.
+  useEffect(() => {
+    if (!current) return;
+    window.dispatchEvent(new CustomEvent("bi:scene-flourish", { detail: { kind: current.kind } }));
+  }, [current?.id]);
+
   // Countdown that drives the dismiss + the visible progress bar. Pauses while
   // the pointer is over the card so a fast reader is never cut off mid-sentence.
   useEffect(() => {

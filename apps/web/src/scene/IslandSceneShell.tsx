@@ -47,7 +47,52 @@ function SceneBackdrop() {
       <BeachBand mode={mode} />
       <BeachProps mode={mode} />
       <Fireflies active={mode === "night"} />
+      <CelebrationFlourish />
       <SceneVignette mode={mode} />
+    </div>
+  );
+}
+
+// ── Celebration flourish ─────────────────────────────────────────────────────
+// One-shot shooting star when a celebration fires anywhere in the app
+// (milestone rank-up, achievement). Listens for the "bi:scene-flourish"
+// window event dispatched by the celebration system — no prop threading.
+
+function CelebrationFlourish() {
+  const [burst, setBurst] = useState(0);
+  useEffect(() => {
+    const onFlourish = () => {
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+      setBurst((n) => n + 1);
+    };
+    window.addEventListener("bi:scene-flourish", onFlourish);
+    return () => window.removeEventListener("bi:scene-flourish", onFlourish);
+  }, []);
+  if (burst === 0) return null;
+  return (
+    <div key={burst} aria-hidden="true" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: "12%",
+          left: "-12%",
+          width: 180,
+          height: 2,
+          borderRadius: 999,
+          background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.95))",
+          boxShadow: "0 0 12px rgba(255,255,255,0.8), 0 0 28px rgba(96,165,250,0.6)",
+          transform: "rotate(16deg)",
+          animation: "biShootingStar 1700ms ease-in forwards"
+        }}
+      />
+      <style>{`
+        @keyframes biShootingStar {
+          0%   { opacity: 0; translate: 0 0; }
+          8%   { opacity: 1; }
+          70%  { opacity: 1; }
+          100% { opacity: 0; translate: 130vw 36vh; }
+        }
+      `}</style>
     </div>
   );
 }

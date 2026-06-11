@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "../api/client.js";
-import { IslandButton, IslandCard, IslandTag, islandInputStyle, islandTagStyle } from "../islandUi.js";
+import { IslandButton, IslandCard, IslandEmptyState, IslandTag, islandInputStyle, islandTagStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type {
   ForumCategory,
@@ -406,15 +406,13 @@ function CategoryPickerCard({
 
 function ForumsErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <IslandCard style={{ padding: 18, textAlign: "center", borderColor: islandTheme.color.danger }}>
-      <div style={{ fontSize: 30, marginBottom: 8 }}>🌊</div>
-      <h3 className="island-display" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
-        Forums hit rough surf
-      </h3>
-      <p style={{ margin: "6px 0 10px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
-        {message}
-      </p>
-      <IslandButton onClick={onRetry}>Try again</IslandButton>
+    <IslandCard style={{ borderColor: islandTheme.color.danger }}>
+      <IslandEmptyState
+        pose="diver"
+        title="Forums hit rough surf"
+        body={message}
+        action={<IslandButton onClick={onRetry}>Try again</IslandButton>}
+      />
     </IslandCard>
   );
 }
@@ -487,15 +485,17 @@ function ForumOnboardingCard({ onStart, onDismiss }: { onStart: () => void; onDi
 
 function ForumsEmptyState() {
   return (
-    <IslandCard style={{ padding: 18, textAlign: "center" }}>
-      <div style={{ fontSize: 30, marginBottom: 8 }}>🏝️</div>
-      <h3 className="island-display" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
-        No categories yet
-      </h3>
-      <p style={{ margin: "6px 0 0", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
-        Forums backend is wired up but no categories were found.<br />
-        Run <code style={{ background: islandTheme.color.panelMutedBg, padding: "2px 6px", borderRadius: 4 }}>npm run db:migrate</code> from <code style={{ background: islandTheme.color.panelMutedBg, padding: "2px 6px", borderRadius: 4 }}>apps/api</code> to create the schema and seed defaults, or have a Parent admin create categories from <strong>Admin → Forum Moderation → Categories</strong>.
-      </p>
+    <IslandCard>
+      <IslandEmptyState
+        pose="shrug"
+        title="No categories yet"
+        body={
+          <>
+            Forums backend is wired up but no categories were found.<br />
+            Run <code style={{ background: islandTheme.color.panelMutedBg, padding: "2px 6px", borderRadius: 4 }}>npm run db:migrate</code> from <code style={{ background: islandTheme.color.panelMutedBg, padding: "2px 6px", borderRadius: 4 }}>apps/api</code> to create the schema and seed defaults, or have a Parent admin create categories from <strong>Admin → Forum Moderation → Categories</strong>.
+          </>
+        }
+      />
     </IslandCard>
   );
 }

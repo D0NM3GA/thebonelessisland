@@ -1,13 +1,14 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { IslandCard, IslandTag, islandInputStyle, memberColor } from "../islandUi.js";
+import { IslandButton, IslandCard, IslandEmptyState, IslandTag, islandInputStyle, memberColor } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
-import type { CrewOwnedGame, CrewOwner, PageId } from "../types.js";
+import type { CrewOwnedGame, CrewOwner, GuildMember, PageId } from "../types.js";
 import GameDetailDrawer from "../components/GameDetailDrawer.js";
 import { GameCover } from "../steamArt.js";
 import { formatCents } from "../gameModes.js";
 
 type LibraryPageProps = {
   crewGames: CrewOwnedGame[];
+  guildMembers: GuildMember[];
   currentDiscordUserId: string | null;
   onNavigate: (page: PageId) => void;
   onPlan: (appId: number) => void;
@@ -15,7 +16,7 @@ type LibraryPageProps = {
 
 type LibCategory = "co-op" | "horror" | "puzzle" | "party" | "solo";
 type LibFilter = "all" | "mine" | LibCategory;
-type SortMode = "owned" | "title";
+type SortMode = "owned" | "title" | "tonight";
 
 const CATEGORY_TAG_HINTS: Array<{ category: LibCategory; tokens: string[] }> = [
   { category: "co-op", tokens: ["co-op", "coop", "co op", "online co-op", "multiplayer"] },
@@ -89,7 +90,7 @@ function readLibHashParams(): URLSearchParams {
 
 const LIB_FILTERS: LibFilter[] = ["all", "mine", "co-op", "horror", "puzzle", "party", "solo"];
 
-function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }: LibraryPageProps) {
+function LibraryPageImpl({ crewGames, guildMembers, currentDiscordUserId, onNavigate, onPlan }: LibraryPageProps) {
   // Filter/sort/search live in the URL hash so refreshes and shared links
   // land on the same view (#/library?f=co-op&s=title&q=…).
   const initialParams = readLibHashParams();
@@ -98,7 +99,10 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
     const f = initialParams.get("f") as LibFilter | null;
     return f && LIB_FILTERS.includes(f) ? f : "all";
   });
-  const [sort, setSort] = useState<SortMode>(() => (initialParams.get("s") === "title" ? "title" : "owned"));
+  const [sort, setSort] = useState<SortMode>(() => {
+    const s = initialParams.get("s");
+    return s === "title" || s === "tonight" ? s : "owned";
+  });
   const [openAppId, setOpenAppId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -117,6 +121,23 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
     }
   }, []);
 
+  // Crew members reachable right now — online-ish presence or in voice.
+  const onlineIds = useMemo(
+    () =>
+      new Set(
+        guildMembers
+          .filter(
+            (m) =>
+              m.inVoice ||
+              m.presenceStatus === "online" ||
+              m.presenceStatus === "idle" ||
+              m.presenceStatus === "dnd"
+          )
+          .map((m) => m.discordUserId)
+      ),
+    [guildMembers]
+  );
+
   const enriched = useMemo(
     () =>
       crewGames.map((game) => {
@@ -124,9 +145,16 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
         const mine = currentDiscordUserId
           ? game.owners.some((owner) => owner.discordUserId === currentDiscordUserId)
           : false;
-        return { game, category, mine };
+        const onlineOwners = game.owners.filter((o) => onlineIds.has(o.discordUserId)).length;
+        const coopCapable =
+          game.isOnlineCoop || game.isLanCoop || game.isSharedSplitCoop || game.isMmo ||
+          hasGenericMultiplayerTag(game);
+        // "Tonight" rank: a session needs ≥2 reachable owners AND a way to
+        // play together; score by how many of the crew could actually join.
+        const tonightScore = coopCapable && onlineOwners >= 2 ? onlineOwners : 0;
+        return { game, category, mine, onlineOwners, tonightScore };
       }),
-    [crewGames, currentDiscordUserId]
+    [crewGames, currentDiscordUserId, onlineIds]
   );
 
   const mineCount = useMemo(() => enriched.filter((entry) => entry.mine).length, [enriched]);
@@ -157,6 +185,14 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
       out.sort((a, b) => b.game.ownerCount - a.game.ownerCount || a.game.name.localeCompare(b.game.name));
     } else if (sort === "title") {
       out.sort((a, b) => a.game.name.localeCompare(b.game.name));
+    } else if (sort === "tonight") {
+      out.sort(
+        (a, b) =>
+          b.tonightScore - a.tonightScore ||
+          b.onlineOwners - a.onlineOwners ||
+          b.game.ownerCount - a.game.ownerCount ||
+          a.game.name.localeCompare(b.game.name)
+      );
     }
     return out;
   }, [enriched, search, filter, sort]);
@@ -239,6 +275,7 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
         >
           <option value="owned">Most owned</option>
           <option value="title">Alphabetical</option>
+          <option value="tonight">Playable tonight</option>
         </select>
         <span
           className="island-mono"
@@ -251,9 +288,16 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
 
       {empty ? (
         <IslandCard>
-          <div style={{ padding: 22, fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
-            Crew library is empty so far. Sync a Steam account from Profile, then this shelf lights up.
-          </div>
+          <IslandEmptyState
+            pose="snooze"
+            title="The shelf is bare"
+            body="Crew library is empty so far. Sync a Steam account from Profile, then this shelf lights up."
+            action={
+              <IslandButton variant="primary" onClick={() => onNavigate("profile")}>
+                Link Steam →
+              </IslandButton>
+            }
+          />
         </IslandCard>
       ) : visible.length ? (
         <div className="bi-poster-wall">
@@ -263,6 +307,7 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
               game={entry.game}
               category={entry.category}
               mine={entry.mine}
+              onlineOwners={entry.onlineOwners}
               onPlan={onPlan}
               onDetails={setOpenAppId}
             />
@@ -270,9 +315,7 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
         </div>
       ) : (
         <IslandCard>
-          <div style={{ padding: 22, fontSize: 13, color: islandTheme.color.textMuted, textAlign: "center" }}>
-            No games match your filter.
-          </div>
+          <IslandEmptyState compact pose="shrug" title="No games match your filter" />
         </IslandCard>
       )}
 
@@ -326,12 +369,14 @@ function PosterCard({
   game,
   category,
   mine,
+  onlineOwners,
   onPlan,
   onDetails
 }: {
   game: CrewOwnedGame;
   category: LibCategory;
   mine: boolean;
+  onlineOwners: number;
   onPlan: (appId: number) => void;
   onDetails: (appId: number) => void;
 }) {
@@ -397,7 +442,11 @@ function PosterCard({
           {game.name}
         </div>
         <div className="island-mono" style={{ fontSize: islandTheme.text.sm, color: "#cbd5e1", marginTop: 1 }}>
-          {game.ownerCount} own{priceLine ? ` · ${priceLine}` : ""}
+          {game.ownerCount} own
+          {onlineOwners >= 2 ? (
+            <span style={{ color: islandTheme.color.successAccent }}> · {onlineOwners} online</span>
+          ) : null}
+          {priceLine ? ` · ${priceLine}` : ""}
         </div>
       </div>
 
