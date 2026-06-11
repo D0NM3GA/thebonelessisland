@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, apiFetch } from "./api/client.js";
 import { GAME_NIGHTS_TILE_BG_URL, getGameNightBanner } from "./assets.js";
-import { AdminPage } from "./pages/Admin.js";
-import { CommunityPage } from "./pages/Community.js";
-import { GamesPage } from "./pages/Games.js";
-import { GamingNewsPage } from "./pages/GamingNews.js";
-import { HomePage } from "./pages/Home.js";
-import { LibraryPage } from "./pages/Library.js";
 import { LoginScreen } from "./pages/LoginScreen.js";
-import { AchievementsPage } from "./pages/Achievements.js";
-import { MilestonesPage } from "./pages/Milestones.js";
-import { CasinoPage } from "./pages/games/CasinoPage.js";
-import { ForumsPage } from "./pages/Forums.js";
-import { ProfilePage } from "./pages/Profile.js";
-import { SettingsPage } from "./pages/Settings.js";
+
+// Route-level code splitting: each routed page is lazy-loaded so its bundle is
+// only fetched when the page is first rendered. Named-export pages are mapped to
+// a default export; the new leaderboard/history pages are already default exports.
+const AdminPage = lazy(() => import("./pages/Admin.js").then((m) => ({ default: m.AdminPage })));
+const CommunityPage = lazy(() => import("./pages/Community.js").then((m) => ({ default: m.CommunityPage })));
+const GamesPage = lazy(() => import("./pages/Games.js").then((m) => ({ default: m.GamesPage })));
+const GamingNewsPage = lazy(() => import("./pages/GamingNews.js").then((m) => ({ default: m.GamingNewsPage })));
+const HomePage = lazy(() => import("./pages/Home.js").then((m) => ({ default: m.HomePage })));
+const LibraryPage = lazy(() => import("./pages/Library.js").then((m) => ({ default: m.LibraryPage })));
+const AchievementsPage = lazy(() => import("./pages/Achievements.js").then((m) => ({ default: m.AchievementsPage })));
+const MilestonesPage = lazy(() => import("./pages/Milestones.js").then((m) => ({ default: m.MilestonesPage })));
+const CasinoPage = lazy(() => import("./pages/games/CasinoPage.js").then((m) => ({ default: m.CasinoPage })));
+const ForumsPage = lazy(() => import("./pages/Forums.js").then((m) => ({ default: m.ForumsPage })));
+const ProfilePage = lazy(() => import("./pages/Profile.js").then((m) => ({ default: m.ProfilePage })));
+const SettingsPage = lazy(() => import("./pages/Settings.js").then((m) => ({ default: m.SettingsPage })));
+const CommunityLeaderboardPage = lazy(() => import("./pages/CommunityLeaderboard.js"));
+const NuggiesHistoryPage = lazy(() => import("./pages/NuggiesHistory.js"));
 import { ToastHost, ToastQueueProvider, useToastQueue, useToastsFromStatus } from "./system/toast.js";
 import { ActivityRefetchProvider } from "./system/activityContext.js";
 import { AchievementCelebration, useCelebrationQueue } from "./system/celebration.js";
@@ -52,12 +58,35 @@ function ComingSoonPage({ title, description }: { title: string; description: st
   );
 }
 
+function PageLoadingFallback() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "40vh",
+        fontSize: 15,
+        opacity: 0.6,
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
+
 export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [loginExiting, setLoginExiting] = useState(false);
   const prevAuth = useRef<boolean | null>(null);
+  // Last-applied snapshots for polled loaders — used to skip redundant setStates
+  // (which would otherwise re-render the whole tree every poll tick).
+  const lastGuildMembersRef = useRef<string | null>(null);
+  const lastGameNightsRef = useRef<string | null>(null);
+  const lastSelectedNightRef = useRef<string | null>(null);
   const [page, setPage] = useState<PageId>("home");
+  const [composerScrollNonce, setComposerScrollNonce] = useState(0);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
   const [results, setResults] = useState<Recommendation[]>([]);
   const [status, setStatus] = useState("Idle");
@@ -376,35 +405,28 @@ export function App() {
     setCurrentUserAttendingSelectedNight(false);
   }, [gameNights, selectedNightId]);
 
+  // The server now drives the actual Discord member sync on its own interval.
+  // The client only refreshes the member list for the UI every 60s.
   useEffect(() => {
     if (isAuthenticated !== true) return;
 
-    let syncing = false;
-    const runBackgroundSync = async () => {
-      if (syncing || document.hidden) return;
-      syncing = true;
+    let refreshing = false;
+    const runMembersRefresh = async () => {
+      if (refreshing || document.hidden) return;
+      refreshing = true;
       try {
-        await syncGuildMembers(true);
+        await loadGuildMembers(true);
       } finally {
-        syncing = false;
+        refreshing = false;
       }
     };
 
-    void runBackgroundSync();
     const intervalId = window.setInterval(() => {
-      void runBackgroundSync();
+      void runMembersRefresh();
     }, 60000);
 
-    const onVisibilityChange = () => {
-      if (!document.hidden) {
-        void runBackgroundSync();
-      }
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [isAuthenticated]);
 
@@ -1151,9 +1173,16 @@ export function App() {
       if (!response.ok) {
         throw new Error(data?.error ?? `Member load failed (${response.status})`);
       }
-      setGuildMembers(data?.members ?? []);
+      const nextMembers = data?.members ?? [];
+      // Equality guard: avoid a tree-wide re-render when the 60s poll returns
+      // identical member data.
+      const signature = JSON.stringify(nextMembers);
+      if (signature !== lastGuildMembersRef.current) {
+        lastGuildMembersRef.current = signature;
+        setGuildMembers(nextMembers);
+      }
       if (!silent) {
-        setStatus(`Loaded ${data?.members?.length ?? 0} guild member(s)`);
+        setStatus(`Loaded ${nextMembers.length} guild member(s)`);
       }
     } catch (error) {
       if (!silent) {
@@ -1182,11 +1211,6 @@ export function App() {
       if (!response.ok) {
         throw new Error(data?.details ?? data?.error ?? `Member sync failed (${response.status})`);
       }
-      await Promise.all([
-        loadGuildMembers(true),
-        loadProfile(true),
-        loadFeaturedRecommendation(true),
-      ]);
       if (!silent) {
         const voiceInfo = data?.voice;
         const voiceDetails =
@@ -1227,6 +1251,19 @@ export function App() {
     setSelectedMemberIds(nightAttendees.map((attendee) => attendee.discordUserId));
   }
 
+  // Library "Plan" seed: resolve the owners of the chosen game from the crew
+  // library, seed them as the selected members (which auto-refires the composer
+  // recommendation), bump the scroll nonce so Games scrolls to its composer, and
+  // hop over to Games.
+  function onPlan(appId: number) {
+    const game = crewGames.find((row) => row.appId === appId);
+    const ownerIds = game?.owners.map((owner) => owner.discordUserId) ?? [];
+    setSelectedMemberIds(ownerIds);
+    setComposerScrollNonce((nonce) => nonce + 1);
+    setPage("games");
+    toastQueue.pushToast(`Planning around ${game?.name ?? "this game"}`, "info");
+  }
+
   function toggleExcludedOwnedGame(appId: number) {
     setExcludedOwnedGameAppIds((current) => {
       if (current.includes(appId)) {
@@ -1246,9 +1283,16 @@ export function App() {
       if (!response.ok) {
         throw new Error(data?.error ?? `Game nights request failed (${response.status})`);
       }
-      setGameNights(data?.gameNights ?? []);
+      const nextNights = data?.gameNights ?? [];
+      // Equality guard: avoid a tree-wide re-render when the poll returns
+      // identical game-night data.
+      const signature = JSON.stringify(nextNights);
+      if (signature !== lastGameNightsRef.current) {
+        lastGameNightsRef.current = signature;
+        setGameNights(nextNights);
+      }
       if (!silent) {
-        setStatus(`Loaded ${data?.gameNights?.length ?? 0} game night(s)`);
+        setStatus(`Loaded ${nextNights.length} game night(s)`);
       }
     } catch (error) {
       if (!silent) {
@@ -1312,8 +1356,15 @@ export function App() {
     if (!response.ok) {
       throw new Error(data?.error ?? `Attendee load failed (${response.status})`);
     }
-    setNightAttendees(data?.attendees ?? []);
-    setCurrentUserAttendingSelectedNight(Boolean(data?.currentUserIsAttending));
+    const nextAttendees = data?.attendees ?? [];
+    const nextAttending = Boolean(data?.currentUserIsAttending);
+    // Equality guard: skip setState when the polled payload is unchanged so we
+    // don't re-render the whole tree on every selected-night poll tick.
+    const signature = JSON.stringify({ gameNightId, nextAttendees, nextAttending });
+    if (signature === lastSelectedNightRef.current) return;
+    lastSelectedNightRef.current = signature;
+    setNightAttendees(nextAttendees);
+    setCurrentUserAttendingSelectedNight(nextAttending);
   }
 
   async function joinSelectedNight() {
@@ -1479,6 +1530,8 @@ export function App() {
         }}
       >
 
+      <Suspense fallback={<PageLoadingFallback />}>
+
       {page === "home" ? (
         <HomePage
           profile={profileData}
@@ -1508,6 +1561,7 @@ export function App() {
           crewGames={crewGames}
           crewWishlist={crewWishlist}
           gameNews={gameNews}
+          composerScrollNonce={composerScrollNonce}
           onSelectNight={(id, title) => void selectNight(id, title)}
           onNewNightTitleChange={setNewNightTitle}
           onNewNightScheduledForChange={setNewNightScheduledFor}
@@ -1527,6 +1581,7 @@ export function App() {
           crewGames={crewGames}
           currentDiscordUserId={profileData?.discordUserId ?? null}
           onNavigate={setPage}
+          onPlan={onPlan}
         />
       ) : null}
 
@@ -1534,6 +1589,8 @@ export function App() {
         <CommunityPage
           isAdmin={isAdmin}
           activityEvents={activityEvents}
+          guildMembers={guildMembers}
+          gameNights={gameNights}
           onNavigate={setPage}
         />
       ) : null}
@@ -1547,7 +1604,7 @@ export function App() {
       ) : null}
 
       {page === "community-leaderboard" ? (
-        <ComingSoonPage title="Leaderboard" description="Top Nuggies holders across the crew. Coming soon." />
+        <CommunityLeaderboardPage onNavigate={setPage} />
       ) : null}
 
       {page === "nuggies" ? <AchievementsPage onProfileChanged={() => void loadProfile(true)} /> : null}
@@ -1555,7 +1612,7 @@ export function App() {
       {page === "nuggies-casino" ? <CasinoPage /> : null}
 
       {page === "nuggies-history" ? (
-        <ComingSoonPage title="Nuggies History" description="Your full transaction log. Coming soon." />
+        <NuggiesHistoryPage onNavigate={setPage} />
       ) : null}
 
       {page === "nuggies-milestones" ? <MilestonesPage /> : null}
@@ -1622,6 +1679,8 @@ export function App() {
           onFetchGeneralNewsRecurateStatus={fetchGeneralNewsRecurateStatus}
         />
       ) : null}
+
+      </Suspense>
 
       <style>{`
         @keyframes islandBladePulse {

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { IslandButton, IslandCard, islandInputStyle } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
 import { islandTheme } from "../theme.js";
+import { apiFetch } from "../api/client.js";
 import type { MeProfile, OwnedGameLite } from "../types.js";
 
 type SteamVisibility = "private" | "members" | "public";
@@ -39,6 +40,18 @@ export function ProfilePage({
     return ownedGames.filter((game) => game.name.toLowerCase().includes(query));
   }, [ownedGames, ownedGameSearch]);
 
+  async function handleUnlinkSteam() {
+    if (!window.confirm("Unlink your Steam account? You can always link it again later.")) return;
+    try {
+      const response = await apiFetch("/steam/unlink", { method: "POST", credentials: "include" });
+      if (!response.ok) return;
+      // Re-run the same profile load the app does on mount so the unlinked state shows.
+      window.location.reload();
+    } catch {
+      // Leave the page unchanged on failure; the user can retry.
+    }
+  }
+
   return (
     <IslandCard style={{ marginTop: 10 }}>
       <h2 style={{ marginTop: 0 }}>User Profile Settings</h2>
@@ -54,6 +67,22 @@ export function ProfilePage({
         <p style={{ marginTop: 0, marginBottom: 0 }}>
           <strong>Discord Username:</strong> @{profileData?.username ?? "unknown"}
         </p>
+        {profileData?.steamId64 ? (
+          <p style={{ marginTop: 10, marginBottom: 0 }}>
+            <IslandButton
+              variant="secondary"
+              onClick={handleUnlinkSteam}
+              style={{
+                background: "transparent",
+                color: islandTheme.color.danger,
+                borderColor: islandTheme.color.danger,
+                fontWeight: 600
+              }}
+            >
+              Unlink Steam
+            </IslandButton>
+          </p>
+        ) : null}
       </IslandCard>
 
       {profileData && !profileData.nuggiesOptedOut && (

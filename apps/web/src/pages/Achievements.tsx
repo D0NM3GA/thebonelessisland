@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../api/client.js";
 import { useRefetchActivity } from "../system/activityContext.js";
+import { usePushToast } from "../system/toast.js";
+import { ConfettiBurst } from "../system/celebration.js";
 import { IslandButton, IslandCard } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
 import { NuggieCoin } from "../components/NuggieCoin.js";
@@ -63,7 +65,7 @@ type AchievementsPageProps = {
   onProfileChanged?: () => void;
 };
 
-export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {}) {
+function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {}) {
   const [me, setMe] = useState<MeData | null>(null);
   const [shop, setShop] = useState<NuggiesShopItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<NuggiesLeaderboardEntry[]>([]);
@@ -80,7 +82,11 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
   const [equipPending, setEquipPending] = useState<number | null>(null);
   const [loanPending, setLoanPending] = useState<number | null>(null);
 
+  const [claimConfetti, setClaimConfetti] = useState(0);
+  const [shopConfetti, setShopConfetti] = useState(0);
+
   const refetchActivity = useRefetchActivity();
+  const pushToast = usePushToast();
 
   const load = useCallback(async () => {
     const [meRes, shopRes, lbRes] = await Promise.all([
@@ -123,6 +129,7 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
       );
       setClaimedToday(true);
       setClaimMsg(`+${fmt(body.amount ?? 0)} Nuggies claimed!`);
+      setClaimConfetti((n) => n + 1);
       void refetchActivity();
     } else {
       setClaimMsg(body.error ?? "Could not claim daily");
@@ -135,9 +142,10 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
     const res = await apiFetch(`/nuggies/shop/${itemId}/buy`, { method: "POST" });
     if (res.ok) {
       await load();
+      setShopConfetti((n) => n + 1);
     } else {
       const b = await res.json() as { error?: string };
-      alert(b.error ?? "Purchase failed");
+      pushToast(b.error ?? "Purchase failed", "error");
     }
     setBuying(null);
   }
@@ -318,7 +326,8 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
       <div className="bi-nuggies-top">
         <div style={{ display: "grid", gap: 12 }}>
       {/* Balance Hero */}
-      <IslandCard style={{ display: "grid", gap: 12 }}>
+      <IslandCard style={{ display: "grid", gap: 12, position: "relative" }}>
+        <ConfettiBurst trigger={claimConfetti} />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: 11, fontFamily: islandTheme.font.mono, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted, marginBottom: 4, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -343,7 +352,7 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
               </div>
             ) : (
               <IslandButton variant="primary" onClick={() => void claimDaily()} disabled={claiming}>
-                {claiming ? "Claiming…" : "Claim 75 Nuggies Today"}
+                {claiming ? "Claiming…" : "Claim Daily Nuggies"}
               </IslandButton>
             )}
             {claimMsg && (
@@ -541,7 +550,8 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
       </div>
 
       {/* Shop */}
-      <IslandCard as="section" style={{ display: "grid", gap: 12 }}>
+      <IslandCard as="section" style={{ display: "grid", gap: 12, position: "relative" }}>
+        <ConfettiBurst trigger={shopConfetti} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Shop</div>
           <TabBar value={shopTab} onChange={setShopTab} />
@@ -649,6 +659,8 @@ export function AchievementsPage({ onProfileChanged }: AchievementsPageProps = {
     </div>
   );
 }
+
+export const AchievementsPage = React.memo(AchievementsPageInner);
 
 function TabBar({ value, onChange }: { value: ItemTab; onChange: (t: ItemTab) => void }) {
   const tabs: { key: ItemTab; label: string }[] = [

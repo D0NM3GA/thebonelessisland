@@ -49,6 +49,9 @@ recommendationRouter.post("/what-can-we-play", async (req, res) => {
 
 type FeaturedScope = "voice" | "crew";
 
+const FEATURED_CACHE_TTL_MS = 5 * 60 * 1000;
+const featuredCache = new Map<FeaturedScope, { timestamp: number; payload: unknown }>();
+
 async function resolveFeaturedScope(requestedScope: FeaturedScope): Promise<{
   memberIds: string[];
   resolvedScope: FeaturedScope;
@@ -95,6 +98,12 @@ recommendationRouter.get("/featured", async (req, res) => {
   const requestedScope: FeaturedScope = req.query.scope === "voice" ? "voice" : "crew";
   const { memberIds, resolvedScope } = await resolveFeaturedScope(requestedScope);
 
+  const cached = featuredCache.get(resolvedScope);
+  if (cached && Date.now() - cached.timestamp < FEATURED_CACHE_TTL_MS) {
+    res.json(cached.payload);
+    return;
+  }
+
   if (memberIds.length === 0) {
     res.json({ featured: null, scope: resolvedScope, scopeMemberCount: 0 });
     return;
@@ -127,7 +136,7 @@ recommendationRouter.get("/featured", async (req, res) => {
 
   const blurb = await generateRecommendationBlurb(top, memberIds.length).catch(() => null);
 
-  res.json({
+  const payload = {
     featured: {
       appId: top.appId,
       name: top.name,
@@ -142,5 +151,9 @@ recommendationRouter.get("/featured", async (req, res) => {
     },
     scope: resolvedScope,
     scopeMemberCount: memberIds.length
-  });
+  };
+
+  featuredCache.set(resolvedScope, { timestamp: Date.now(), payload });
+
+  res.json(payload);
 });

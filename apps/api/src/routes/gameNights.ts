@@ -5,7 +5,6 @@ import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
 import { recordEvent } from "../lib/activityEvents.js";
-import { enrichGameMetadataFromSteam, enrichMissingGameImages } from "../lib/gameCatalogEnrichment.js";
 import { whatCanWePlay } from "../lib/recommend.js";
 import { generateRecommendationBlurb } from "../lib/recommendBlurb.js";
 
@@ -13,15 +12,6 @@ const createGameNightSchema = z.object({
   title: z.string().trim().min(1).max(120),
   scheduledFor: z.iso.datetime(),
   attendeeIds: z.array(z.string().trim().min(1)).optional()
-});
-
-const voteSchema = z.object({
-  appId: z.number().int().positive(),
-  vote: z.number().int().min(-1).max(1)
-});
-
-const finalizeSchema = z.object({
-  appId: z.number().int().positive().optional()
 });
 
 const recommendationSchema = z.object({
@@ -121,8 +111,6 @@ gameNightRouter.get("/", requireSession, async (_req, res) => {
     title: string;
     scheduled_for: string;
     created_by_user_id: number;
-    top_game_name: string | null;
-    top_game_vote: number | null;
     selected_game_name: string | null;
     selected_app_id: number | null;
     selected_at: string | null;
@@ -135,23 +123,12 @@ gameNightRouter.get("/", requireSession, async (_req, res) => {
         gn.title,
         gn.scheduled_for,
         gn.created_by_user_id,
-        top_game.name AS top_game_name,
-        top_game.total_vote AS top_game_vote,
         selected_game.name AS selected_game_name,
         gn.selected_app_id,
         gn.selected_at,
         COUNT(gna.user_id)::int AS attendee_count,
         COALESCE(BOOL_OR(gna.user_id = $1), false) AS current_user_attending
       FROM game_nights gn
-      LEFT JOIN LATERAL (
-        SELECT g.name, SUM(gnv.vote)::int AS total_vote
-        FROM game_night_votes gnv
-        INNER JOIN games g ON g.app_id = gnv.app_id
-        WHERE gnv.game_night_id = gn.id
-        GROUP BY g.name
-        ORDER BY total_vote DESC, g.name ASC
-        LIMIT 1
-      ) top_game ON TRUE
       LEFT JOIN games selected_game ON selected_game.app_id = gn.selected_app_id
       LEFT JOIN game_night_attendees gna ON gna.game_night_id = gn.id
       WHERE gn.scheduled_for >= NOW() - INTERVAL '12 hours'
@@ -160,8 +137,6 @@ gameNightRouter.get("/", requireSession, async (_req, res) => {
         gn.title,
         gn.scheduled_for,
         gn.created_by_user_id,
-        top_game.name,
-        top_game.total_vote,
         selected_game.name,
         gn.selected_app_id,
         gn.selected_at
@@ -177,8 +152,6 @@ gameNightRouter.get("/", requireSession, async (_req, res) => {
       title: row.title,
       scheduledFor: row.scheduled_for,
       createdByUserId: row.created_by_user_id,
-      topGameName: row.top_game_name,
-      topGameVote: row.top_game_vote,
       selectedGameName: row.selected_game_name,
       selectedAppId: row.selected_app_id,
       selectedAt: row.selected_at,
@@ -371,300 +344,6 @@ gameNightRouter.delete("/:id/attendees", requireSession, async (req, res) => {
   );
 
   res.json({ ok: true, removedMemberIds: body.memberIds });
-});
-
-gameNightRouter.get("/:id/available-games", requireSession, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ error: "Invalid game night id" });
-    return;
-  }
-  if (!(await gameNightExists(id))) {
-    res.status(404).json({ error: "Game night not found" });
-    return;
-  }
-  const discordUserId = String(res.locals.userId);
-  const user = await getAuthedUser(discordUserId);
-  if (!user) {
-    res.status(401).json({ error: "User not found for active session" });
-    return;
-  }
-
-  const attendees = await db.query<{ user_id: number }>(
-    `SELECT user_id FROM game_night_attendees WHERE game_night_id = $1`,
-    [id]
-  );
-  const voters = await db.query<{ user_id: number }>(
-    `SELECT DISTINCT user_id FROM game_night_votes WHERE game_night_id = $1`,
-    [id]
-  );
-
-  const participantIds = (attendees.rows.length ? attendees.rows : voters.rows).map((row) => row.user_id);
-  if (participantIds.length === 0) {
-    res.json({ games: [] });
-    return;
-  }
-
-  type AvailableGameRow = {
-    app_id: number;
-    name: string;
-    owners: number;
-    vote_total: number;
-    max_players: number;
-    median_session_minutes: number;
-    developers: string[];
-    tags: string[];
-    header_image_url: string | null;
-    header_image_provider: string | null;
-    header_image_checked_at: string | null;
-    current_user_vote: number | null;
-  };
-
-  const query = async () =>
-    db.query<AvailableGameRow>(
-      `
-        WITH vote_totals AS (
-          SELECT app_id, SUM(vote)::int AS vote_total
-          FROM game_night_votes
-          WHERE game_night_id = $1
-          GROUP BY app_id
-        )
-        SELECT
-          g.app_id,
-          g.name,
-          COUNT(DISTINCT ug.user_id)::int AS owners,
-          COALESCE(vt.vote_total, 0)::int AS vote_total,
-          g.max_players,
-          g.median_session_minutes,
-          g.developers,
-          g.tags,
-          g.header_image_url,
-          g.header_image_provider,
-          g.header_image_checked_at,
-          uv.vote::int AS current_user_vote
-        FROM user_games ug
-        INNER JOIN games g ON g.app_id = ug.app_id
-        LEFT JOIN vote_totals vt ON vt.app_id = g.app_id
-        LEFT JOIN game_night_votes uv
-          ON uv.game_night_id = $1
-          AND uv.app_id = g.app_id
-          AND uv.user_id = $4
-        WHERE ug.user_id = ANY($2::bigint[])
-        GROUP BY
-          g.app_id,
-          g.name,
-          vt.vote_total,
-          g.max_players,
-          g.median_session_minutes,
-          g.developers,
-          g.tags,
-          g.header_image_url,
-          g.header_image_provider,
-          g.header_image_checked_at,
-          uv.vote
-        HAVING COUNT(DISTINCT ug.user_id) = $3::int
-        ORDER BY vote_total DESC, g.name ASC
-        LIMIT 200
-      `,
-      [id, participantIds, participantIds.length, user.id]
-    );
-
-  let available = await query();
-
-  const missingMetadataIds = available.rows
-    .filter((row) => row.developers.length === 0 && row.tags.length === 0)
-    .slice(0, 8)
-    .map((row) => row.app_id);
-  await enrichGameMetadataFromSteam(missingMetadataIds);
-
-  const missingImageIds = available.rows
-    .filter((row) => !row.header_image_url)
-    .slice(0, 12)
-    .map((row) => row.app_id);
-  await enrichMissingGameImages(missingImageIds);
-
-  if (missingMetadataIds.length || missingImageIds.length) {
-    available = await query();
-  }
-
-  res.json({
-    games: available.rows.map((row) => ({
-      appId: row.app_id,
-      name: row.name,
-      owners: row.owners,
-      voteTotal: row.vote_total,
-      maxPlayers: row.max_players,
-      medianSessionMinutes: row.median_session_minutes,
-      developers: row.developers,
-      tags: row.tags,
-      headerImageUrl: row.header_image_url,
-      headerImageProvider: row.header_image_provider,
-      headerImageCheckedAt: row.header_image_checked_at,
-      currentUserVote: row.current_user_vote
-    }))
-  });
-});
-
-gameNightRouter.get("/:id/votes", requireSession, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ error: "Invalid game night id" });
-    return;
-  }
-  const discordUserId = String(res.locals.userId);
-  const user = await getAuthedUser(discordUserId);
-  if (!user) {
-    res.status(401).json({ error: "User not found for active session" });
-    return;
-  }
-
-  const votes = await db.query<{ app_id: number; name: string; total_vote: number; current_user_vote: number | null }>(
-    `
-      SELECT
-        g.app_id,
-        g.name,
-        COALESCE(SUM(gnv.vote), 0)::int AS total_vote,
-        MAX(CASE WHEN gnv.user_id = $2 THEN gnv.vote END)::int AS current_user_vote
-      FROM game_night_votes gnv
-      INNER JOIN games g ON g.app_id = gnv.app_id
-      WHERE gnv.game_night_id = $1
-      GROUP BY g.app_id, g.name
-      ORDER BY total_vote DESC, g.name ASC
-      LIMIT 50
-    `,
-    [id, user.id]
-  );
-
-  res.json({
-    votes: votes.rows.map((row) => ({
-      appId: row.app_id,
-      name: row.name,
-      totalVote: row.total_vote,
-      currentUserVote: row.current_user_vote
-    }))
-  });
-});
-
-gameNightRouter.post("/:id/votes", requireSession, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ error: "Invalid game night id" });
-    return;
-  }
-
-  const body = voteSchema.parse(req.body);
-  const discordUserId = String(res.locals.userId);
-  const user = await getAuthedUser(discordUserId);
-
-  if (!user) {
-    res.status(401).json({ error: "User not found for active session" });
-    return;
-  }
-
-  if (!(await gameNightExists(id))) {
-    res.status(404).json({ error: "Game night not found" });
-    return;
-  }
-
-  const gameExists = await db.query<{ app_id: number }>(`SELECT app_id FROM games WHERE app_id = $1`, [body.appId]);
-  if (!gameExists.rows[0]) {
-    res.status(404).json({ error: "Game not found. Sync Steam games first." });
-    return;
-  }
-
-  await db.query(
-    `
-      INSERT INTO game_night_votes (game_night_id, user_id, app_id, vote)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (game_night_id, user_id, app_id)
-      DO UPDATE SET vote = EXCLUDED.vote
-    `,
-    [id, user.id, body.appId, body.vote]
-  );
-
-  res.json({ ok: true });
-});
-
-gameNightRouter.post("/:id/finalize", requireSession, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ error: "Invalid game night id" });
-    return;
-  }
-  if (!(await gameNightExists(id))) {
-    res.status(404).json({ error: "Game night not found" });
-    return;
-  }
-
-  const body = finalizeSchema.parse(req.body ?? {});
-  let selectedAppId = body.appId;
-
-  if (!selectedAppId) {
-    const top = await db.query<{ app_id: number }>(
-      `
-        SELECT gnv.app_id
-        FROM game_night_votes gnv
-        WHERE gnv.game_night_id = $1
-        GROUP BY gnv.app_id
-        ORDER BY SUM(gnv.vote) DESC, gnv.app_id ASC
-        LIMIT 1
-      `,
-      [id]
-    );
-    selectedAppId = top.rows[0]?.app_id;
-  }
-
-  if (!selectedAppId) {
-    res.status(400).json({ error: "No votes found to finalize from" });
-    return;
-  }
-
-  const gameExists = await db.query<{ app_id: number }>(`SELECT app_id FROM games WHERE app_id = $1`, [selectedAppId]);
-  if (!gameExists.rows[0]) {
-    res.status(404).json({ error: "Selected game does not exist" });
-    return;
-  }
-
-  await db.query(
-    `
-      UPDATE game_nights
-      SET selected_app_id = $2, selected_at = NOW()
-      WHERE id = $1
-    `,
-    [id, selectedAppId]
-  );
-
-  void recordEvent({
-    eventType: "game_night.game_picked",
-    actorDiscordUserId: String(res.locals.userId),
-    targetGameNightId: id,
-    targetAppId: selectedAppId
-  });
-
-  res.json({ ok: true, selectedAppId });
-});
-
-gameNightRouter.delete("/:id/finalize", requireSession, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ error: "Invalid game night id" });
-    return;
-  }
-  if (!(await gameNightExists(id))) {
-    res.status(404).json({ error: "Game night not found" });
-    return;
-  }
-
-  await db.query(
-    `
-      UPDATE game_nights
-      SET selected_app_id = NULL, selected_at = NULL
-      WHERE id = $1
-    `,
-    [id]
-  );
-
-  res.json({ ok: true });
 });
 
 gameNightRouter.post("/:id/recommendations", async (req, res) => {

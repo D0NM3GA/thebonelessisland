@@ -238,8 +238,23 @@ function isProviderEnabled(provider: GameImageProvider): boolean {
 export async function enrichGameMetadataFromSteam(appIds: number[]): Promise<void> {
   if (!appIds.length) return;
 
-  const payload = await fetchSteamAppDetails(appIds);
-  for (const appId of appIds) {
+  // Freshness gate: skip rows whose metadata was updated within the last 24h.
+  const fresh = await db.query<{ app_id: number }>(
+    `
+      SELECT app_id
+      FROM games
+      WHERE app_id = ANY($1::int[])
+        AND metadata_updated_at IS NOT NULL
+        AND metadata_updated_at > NOW() - INTERVAL '24 hours'
+    `,
+    [appIds]
+  );
+  const freshIds = new Set(fresh.rows.map((row) => row.app_id));
+  const staleIds = appIds.filter((appId) => !freshIds.has(appId));
+  if (!staleIds.length) return;
+
+  const payload = await fetchSteamAppDetails(staleIds);
+  for (const appId of staleIds) {
     const appData = payload[String(appId)];
     if (!appData?.success || !appData.data) {
       continue;
@@ -287,8 +302,11 @@ export async function enrichMissingGameImages(appIds: number[]): Promise<void> {
     [appIds]
   );
 
+  // Skip rows that already have an image BEFORE any external fetch.
+  const missingImageGames = games.rows.filter((game) => !game.header_image_url);
+
   const steamImageMap = GAME_IMAGE_PROVIDER_PRIORITY.includes("steam")
-    ? await resolveSteamImageMap(games.rows.map((game) => game.app_id))
+    ? await resolveSteamImageMap(missingImageGames.map((game) => game.app_id))
     : new Map<number, string>();
 
   const resolveImageForProvider = async (
@@ -307,11 +325,7 @@ export async function enrichMissingGameImages(appIds: number[]): Promise<void> {
     return null;
   };
 
-  for (const game of games.rows) {
-    if (game.header_image_url) {
-      continue;
-    }
-
+  for (const game of missingImageGames) {
     let resolvedProvider: GameImageProvider | null = null;
     let resolvedUrl: string | null = null;
     for (const provider of GAME_IMAGE_PROVIDER_PRIORITY) {

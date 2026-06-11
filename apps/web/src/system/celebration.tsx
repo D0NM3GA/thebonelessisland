@@ -309,3 +309,78 @@ export function AchievementCelebration({
     document.body
   );
 }
+
+// ── Card-scoped confetti burst ──────────────────────────────────────────────────
+// Drop inside a position: relative parent. Each time `trigger` changes (after the
+// first value) it fires a short-lived confetti burst scoped to the parent, then
+// clears the pieces once the animation has run. Respects prefers-reduced-motion.
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+export function ConfettiBurst({ trigger }: { trigger: number }) {
+  const [pieces, setPieces] = useState<ConfettiPiece[]>([]);
+  const prevTriggerRef = useRef(trigger);
+
+  useEffect(() => {
+    // Skip the initial value — only fire on subsequent changes.
+    if (prevTriggerRef.current === trigger) return;
+    prevTriggerRef.current = trigger;
+
+    if (prefersReducedMotion()) return;
+
+    const burst = buildConfetti(`burst-${trigger}`);
+    setPieces(burst);
+
+    // Longest piece finishes at delay + duration; clear shortly after.
+    const longest = burst.reduce((max, p) => Math.max(max, p.delayMs + p.durationMs), 0);
+    const t = window.setTimeout(() => setPieces([]), longest + 200);
+    return () => window.clearTimeout(t);
+  }, [trigger]);
+
+  if (!pieces.length) return null;
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        inset: 0,
+        overflow: "hidden",
+        pointerEvents: "none",
+        zIndex: 5,
+      }}
+    >
+      {pieces.map((c, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: `${c.leftPct}%`,
+            fontSize: `${c.sizeRem}rem`,
+            animation: `bi-celeb-confetti ${c.durationMs}ms ${c.delayMs}ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards`,
+            ["--rot-start" as string]: `${c.rotateStart}deg`,
+            ["--rot-end" as string]: `${c.rotateEnd}deg`,
+            ["--drift" as string]: `${c.drift}px`,
+            willChange: "transform, opacity",
+          } as React.CSSProperties}
+        >
+          {c.emoji}
+        </span>
+      ))}
+      <style>{`
+        @keyframes bi-celeb-confetti {
+          0%   { opacity: 0; transform: translate(0, -10vh) rotate(var(--rot-start)); }
+          10%  { opacity: 1; }
+          100% { opacity: 0; transform: translate(var(--drift), 110vh) rotate(var(--rot-end)); }
+        }
+      `}</style>
+    </div>
+  );
+}

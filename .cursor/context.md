@@ -1,5 +1,9 @@
 PROJECT NAME: The Boneless Island
 
+> **Forward plan: see `ROADMAP.md` at the repo root.** It holds the prioritized,
+> `file:line`-grounded launch/expansion plan (P0 blockers → go-live → performance →
+> expansion → delight) from the 2026-06-10 functionality audit. Update it as items land.
+
 PROJECT TYPE:
 Community web platform + Discord integration for a long-running gaming Discord server.
 
@@ -43,8 +47,9 @@ IDENTITY PHILOSOPHY:
 INFORMATION ARCHITECTURE (current):
 Top nav: Home · Games · Community · Achievements · Admin (gated to "Parent" role)
 Topbar uses `position: fixed` (not sticky) so it stays locked to the viewport during overscroll/rubber-band. A 62px spacer div in App.tsx compensates for the removed document-flow space.
-User menu (avatar dropdown): Discord profile + custom status + rich presence + status picker + theme toggle (Day/Night) + Profile + Sign out
-Sub-pages: Games → Library; Admin hub → 8 sub-pages (Configuration, News, Data Sync, Members & Roles, Game Nights & Events, Forum Moderation, Game Library, Audit Log)
+User menu (avatar dropdown): Discord profile + rich presence + Steam-linked dot + theme toggle (Day/Night) + Profile + Sign out. (No status picker or stat strip — the design mocked them but they were never built; UserMenu is otherwise fully real.)
+Sub-pages: Games → Library; Achievements pillar → Nuggies economy page (fully live); Admin hub → operations sub-pages. Nav also exposes a MegaMenu with Forums + Gaming News + community-leaderboard + nuggies-history entries.
+Admin sub-pages (audit 2026-06-10): 7 LIVE (Forum Moderation, News Pipeline, Patch Sources, Economy, AI Health, AI Settings, Discord Bridge), 1 PARTIAL (Game Nights & Events — real recommendation runner, fake defaults + display-only weight sliders), 3 MOCK/STUB (Members & Roles, Game Library, Data Sync) + a mostly-fake Audit Log. ConfigurationSubpage/ServerConfigSubpage are dead code.
 
 CORE FEATURE PILLARS:
 
@@ -73,18 +78,19 @@ CORE FEATURE PILLARS:
 3. LIBRARY (sub-page of Games)
 - Steam library list with search, category filter chips, sort, co-ownership avatar stacks, PLAN shortcut
 
-4. COMMUNITY
-- Crew carousel (admin button gated to Parent)
-- Recent clips & captures grid
-- Activity timeline
-- Forums table (channels)
-- Clubs cards
-- Upcoming events with date tiles + RSVP
-- Weekly leaderboards
+4. COMMUNITY (mostly mock as of 2026-06-10 — only the activity timeline + Nuggies leaderboard are real)
+- Crew carousel (admin button gated to Parent) — MOCK; wire to GET /members (ROADMAP P1)
+- Recent clips & captures grid — MOCK, no data source → CUT (ROADMAP P1)
+- Activity timeline — LIVE (GET /activity)
+- Forums table (channels) — MOCK on Community; wire to GET /forums/categories (the standalone Forums page already does)
+- Clubs cards — MOCK, no schema/data source → CUT (ROADMAP P1)
+- Upcoming events with date tiles + RSVP — MOCK (stale May dates); wire to GET /game-nights
+- Weekly leaderboards — LIVE (Nuggies leaderboard)
 
-5. ACHIEVEMENTS (placeholder)
-- Island-specific badges for attendance/participation/milestones
-- No competitive pressure or grind
+5. ACHIEVEMENTS — now the live "Nuggies" economy page (NOT a placeholder)
+- Fully wired against `/nuggies/*`: balance, daily claim, shop, inventory/equip, loans, ladder, opt-out, milestones
+- Island-specific badges for attendance/participation/milestones; no competitive pressure or grind
+- NOTE: per-user Steam achievement completion data IS synced (`user_game_progress`, 035 migration) but has no member-facing surface yet — a dedicated crew-achievements page is a planned expansion (ROADMAP P3)
 
 6. DISCORD + STEAM INTELLIGENCE (CORE VALUE)
 PRIMARY PROBLEM TO SOLVE:
@@ -95,14 +101,15 @@ PRIMARY PROBLEM TO SOLVE:
 - Surface best matches, near matches (one missing), dormant libraries
 
 7. DISCORD INTEGRATION
-- Thin Discord bot backed by website logic
-- Slash commands: /whatcanweplay (live), more planned
-- Future: automated weekly digest
+- Thin Discord bot ("Nuggie") backed by website logic — single-file discord.js v14 gateway worker, no DB, all via the API
+- 21 slash commands live (game recs, full Nuggies economy: daily/balance/give/shop/buy/equip, 3 gambling games, loans, marketplace, leaderboard/profile/inventory/milestones/activity, opt-in/out, /nuggie ask). Nothing registered-but-unimplemented.
+- Real-time presence sync (PresenceUpdate → POST /members/presence/:id) powers the web Friends Online card; needs privileged GuildPresences + GuildMembers intents
+- Future: automated weekly digest (the "Sunday Tide Check" — homepage already advertises it on a dead button; see ROADMAP P3)
 
 8. ADMIN
-- Hub of 8 tinted tiles → sub-pages
+- Hub of tinted tiles → operations sub-pages
 - Role-gated to Discord "Parent" role
-- Configuration (Discord server + AI provider merged), News (external feeds + game news curation + drift log merged), Data Sync (connectors + live log), Members & Roles, Game Nights & Events (game night mod + recommendation tester merged), Forum Moderation, Game Library, Audit Log
+- Live sub-pages: Forum Moderation, News Pipeline, Patch Sources, Economy, AI Health, AI Settings, Discord Bridge. Partial: Game Nights & Events (real rec runner, fake defaults). Mock/stub: Members & Roles, Game Library, Data Sync, Audit Log (see ROADMAP P1 "Admin truth pass"). ConfigurationSubpage/ServerConfigSubpage = dead code.
 - Tournaments deliberately removed — no near-term plans to implement
 
 VISUAL SYSTEM:
@@ -144,7 +151,7 @@ IMPLEMENTATION GUIDANCE:
 - Day/night context lives in `apps/web/src/scene/useDayNight.tsx`
 - Scene + palms + sky live in `apps/web/src/scene/IslandSceneShell.tsx`, mounted around `<App>` in `main.tsx`
 - Default to shared themed components before creating one-off inline UI patterns
-- Many activity/news/streams/wishlist/forum/club/event/leaderboard cards currently render mock data — wire to real API endpoints as backend grows
+- Some surfaces still render mock/decorative data (streams drawer, Community crew/clips/clubs/forums/events, session-composer chrome) — see ROADMAP.md for which to wire vs cut. Before building a "new" feature, check ROADMAP + the audit notes in CURRENT STATE: the work is often API-wiring of a design-shipped shell, not new UI.
 
 CURRENT STATE:
 - React + Vite + TypeScript monorepo (`apps/web`, `apps/api`, `apps/bot`, `packages/shared`)
@@ -178,7 +185,13 @@ CURRENT STATE:
   - **Tagline generator** now uses `getAIProvider()` abstraction (was hardcoded Anthropic).
 - Background news refresh: `setInterval` in `server.ts` triggers `ingestAndCurateGeneralNews()` every 4 hours guaranteeing fresh content even with zero traffic. Page-load triggers still fire (≥1hr cooldown). Manual admin button bypasses cooldown entirely.
 - Admin panel: consolidated from 12 tiles to 8. Server Config + AI Settings → Configuration; News Sources + News Curation → News (+ game news curation trigger); Game Night Mod + Recommendation Tester → Game Nights & Events. Tournaments removed entirely. Data Sync is now observability-only (connectors + live log).
-- Real-data wired pages: Home (Featured + Friends Online + Activity Feed + Drift Log), Games (AI session composer reads composer recs / falls back to featured, Patches rolodex from Steam News, Group Wishlist from real crew wishlists), Library (full crew list with avatars + MINE badge), Community (activity timeline), Admin (News Curation CRUD + server settings + AI settings + news sources), Profile, Topbar, scheduled-nights cards. Live streams drawer + remaining Community cards (crew carousel, clips, forums, clubs, events, leaderboards) + most other Admin sub-pages remain mock until ingestion pipelines land.
+- Real-data wired pages: Home (Featured + Friends Online + Activity Feed + Drift Log), Games (AI session composer reads composer recs / falls back to featured, Patches rolodex from Steam News, Group Wishlist from real crew wishlists, live Nuggie chat), Library (full crew list with avatars + MINE badge), Achievements/Nuggies (fully live), Forums + Gaming News (live), Community (activity timeline + Nuggies leaderboard only), Admin (7 of 11 sub-pages live), Profile, UserMenu, Topbar, scheduled-nights cards.
+
+FUNCTIONALITY AUDIT (2026-06-10, every high-impact claim verified at file:line — see ROADMAP.md for the full prioritized plan):
+- LAUNCH BLOCKERS (P0): (1) six `/news/general/*` admin endpoints have NO auth middleware — anyone reaching the API can trigger paid AI runs (generalNews.ts:181,195,211,237,393,424); (2) two raw `fetch()` calls bypass apiFetch and 404 cross-origin in prod — Admin.tsx:308 (`/settings/ai-cost-today`, the only AI-spend monitor) and GamingNews.tsx:131 (news feedback votes); (3) DEPLOY.md `API_BASE_URL` was the public hostname → Caddy 403s every bot `/internal*` call (announcements, settings, autocomplete, /nuggie ask) — corrected in DEPLOY.md to `http://api:3000`, still needs updating in the box's live `.env`.
+- The locked 2026-06 news/appdetails plan (migrations 045/046/047, capability + price columns) has NOT landed — highest migration is 044. games.max_players(=8)/median_session_minutes(=60) are dead defaults no code writes; the recommender's groupFit+sessionFit (50% of score) runs on them. Library "Players" column + "Shortest session" sort are fabricated until this ships. See memory project_news_appdetails_plan.md for the locked contracts.
+- Still-mock/decorative (cut or wire per ROADMAP): StreamDrawer (STREAMS_MOCK — fake streamers/viewers), Community crew carousel + Clips + Clubs + Forums + Events (Clips/Clubs have NO data source — cut them), session-composer When/Where + Send-invite + Tune-weights chrome, Topbar search, "weekly Sunday digest" homepage copy (feature doesn't exist), two "Coming Soon" pages (Leaderboard + Nuggies History — both have finished backends), Library DETAILS button, several Home CTAs. Steam unlink endpoint exists but no UI calls it despite the onboarding promise.
+- Dead code: game_night_votes endpoints + LATERAL in the 20s-polled GET /game-nights (voting was removed — do NOT re-add UI; deleting the dead server code enforces the decision).
 
 NUGGIE PERSONA SYSTEM (May 2026):
 - **Two deliberate brands**: "The Boneless Island" = org identity (login, header, footer, admin, casino, achievements, profile, marketing). "Nuggie" = chicken nugget mascot voice across every AI/bot surface (web chat companion, Discord `/nuggie ask`, achievement announcements). Site branding never says "Nuggie"; conversational AI never says "Island AI".

@@ -30,7 +30,7 @@ const NAV_GROUPS: NavGroup[] = [
     children: [
       { id: "community", label: "Members", description: "Who's on the island right now" },
       { id: "community-forums", label: "Forums", description: "Island discussions and crew talk" },
-      { id: "community-leaderboard", label: "Leaderboard", description: "Top Nuggies holders", badge: "soon" }
+      { id: "community-leaderboard", label: "Leaderboard", description: "Top Nuggies holders" }
     ]
   },
   {
@@ -39,7 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
     children: [
       { id: "nuggies", label: "Balance & Shop", description: "Your balance and the item shop" },
       { id: "nuggies-casino", label: "The Arcade", description: "Coinflip, blackjack, hi-lo" },
-      { id: "nuggies-history", label: "History", description: "Your transaction log", badge: "soon" },
+      { id: "nuggies-history", label: "History", description: "Your transaction log" },
       { id: "nuggies-milestones", label: "Milestones", description: "Rank ladder + achievements" }
     ]
   }

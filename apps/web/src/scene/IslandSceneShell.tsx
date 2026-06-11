@@ -48,30 +48,49 @@ function SceneBackdrop() {
 }
 
 function Stars({ active }: { active: boolean }) {
+  // A tiny date-keyed flourish: a single shooting star whose horizontal start
+  // position shifts day to day, so the night sky feels a touch different each
+  // evening without any per-frame work. The CSS animation handles the motion;
+  // prefers-reduced-motion hides it via the .island-shooting-star guard.
+  const shootingLeft = `${8 + (new Date().getDate() % 10) * 8}%`;
+
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
         opacity: active ? 0.85 : 0,
-        transition: "opacity 1500ms ease",
-        animation: "islandTwinkle 4s ease-in-out infinite",
-        backgroundImage: [
-          "radial-gradient(1px 1px at 12% 18%, white, transparent)",
-          "radial-gradient(1px 1px at 22% 38%, white, transparent)",
-          "radial-gradient(1.5px 1.5px at 35% 12%, white, transparent)",
-          "radial-gradient(1px 1px at 48% 28%, white, transparent)",
-          "radial-gradient(1px 1px at 62% 8%, white, transparent)",
-          "radial-gradient(1.5px 1.5px at 75% 22%, white, transparent)",
-          "radial-gradient(1px 1px at 85% 35%, white, transparent)",
-          "radial-gradient(1px 1px at 92% 14%, white, transparent)",
-          "radial-gradient(1px 1px at 18% 48%, white, transparent)",
-          "radial-gradient(1px 1px at 55% 42%, white, transparent)",
-          "radial-gradient(1.5px 1.5px at 8% 28%, white, transparent)",
-          "radial-gradient(1px 1px at 42% 52%, white, transparent)"
-        ].join(", ")
+        transition: "opacity 1500ms ease"
       }}
-    />
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          animation: "islandTwinkle 4s ease-in-out infinite",
+          backgroundImage: [
+            "radial-gradient(1px 1px at 12% 18%, white, transparent)",
+            "radial-gradient(1px 1px at 22% 38%, white, transparent)",
+            "radial-gradient(1.5px 1.5px at 35% 12%, white, transparent)",
+            "radial-gradient(1px 1px at 48% 28%, white, transparent)",
+            "radial-gradient(1px 1px at 62% 8%, white, transparent)",
+            "radial-gradient(1.5px 1.5px at 75% 22%, white, transparent)",
+            "radial-gradient(1px 1px at 85% 35%, white, transparent)",
+            "radial-gradient(1px 1px at 92% 14%, white, transparent)",
+            "radial-gradient(1px 1px at 18% 48%, white, transparent)",
+            "radial-gradient(1px 1px at 55% 42%, white, transparent)",
+            "radial-gradient(1.5px 1.5px at 8% 28%, white, transparent)",
+            "radial-gradient(1px 1px at 42% 52%, white, transparent)"
+          ].join(", ")
+        }}
+      />
+      {active ? (
+        <span
+          className="island-shooting-star"
+          style={{ left: shootingLeft, top: "8%" }}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -341,6 +360,7 @@ function PalmFrameLeft() {
     <div
       ref={ref}
       aria-hidden="true"
+      className="bi-palm-frame"
       style={{
         position: "fixed",
         top: 0,
@@ -365,6 +385,7 @@ function PalmFrameRight() {
     <div
       ref={ref}
       aria-hidden="true"
+      className="bi-palm-frame"
       style={{
         position: "fixed",
         top: 0,
@@ -636,6 +657,25 @@ function SceneGlobalStyles() {
           to { transform: translateX(120vw); }
         }
 
+        /* ── Occasional shooting star (night flourish) ── */
+        .island-shooting-star {
+          position: absolute;
+          width: 90px;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.85));
+          border-radius: 999px;
+          opacity: 0;
+          transform: rotate(18deg);
+          filter: drop-shadow(0 0 3px rgba(190,225,255,0.7));
+          animation: islandShootingStar 16s ease-in infinite;
+          pointer-events: none;
+        }
+        @keyframes islandShootingStar {
+          0%, 92% { opacity: 0; transform: translate(0, 0) rotate(18deg); }
+          93% { opacity: 0.9; }
+          100% { opacity: 0; transform: translate(180px, 60px) rotate(18deg); }
+        }
+
         /* ── Button base states ── */
         .island-btn {
           transition: filter 140ms ease, transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
@@ -716,6 +756,25 @@ function SceneGlobalStyles() {
         /* Topbar spacer — height tied to --bi-topbar-h so a single change keeps them in sync */
         .bi-topbar-spacer { height: var(--bi-topbar-h, 62px); }
 
+        /* ── Mobile (≤720px) layout collapses ── */
+        @media (max-width: 720px) {
+          /* Games page: side-by-side split + when/where stack to one column */
+          .bi-games-split { grid-template-columns: 1fr !important; }
+          .bi-when-where { grid-template-columns: 1fr !important; }
+
+          /* Library rows/header: collapse the 6-col grid into a stacked card */
+          .bi-lib-head { display: none !important; }
+          .bi-lib-row {
+            display: flex !important;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+          }
+
+          /* Palm frames eat too much width on phones — hide them */
+          .bi-palm-frame { display: none !important; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .island-palm-canopy-l,
           .island-palm-canopy-r,
@@ -724,6 +783,9 @@ function SceneGlobalStyles() {
           .island-cloud-b,
           .island-cloud-c {
             animation: none !important;
+          }
+          .island-shooting-star {
+            display: none !important;
           }
           .island-btn {
             transition: none !important;

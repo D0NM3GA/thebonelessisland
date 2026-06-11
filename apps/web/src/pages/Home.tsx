@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { apiFetch } from "../api/client.js";
+import { ConfettiBurst } from "../system/celebration.js";
 import { LOGO_BG_URL } from "../assets.js";
 import { IslandCard, IslandTag, islandInputStyle } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
@@ -29,7 +30,7 @@ type HomePageProps = {
 
 type HeroPhase = "visible" | "fading" | "collapsing" | "gone";
 
-export function HomePage({
+function HomePageInner({
   profile,
   activeMembers,
   totalMemberCount,
@@ -87,12 +88,14 @@ export function HomePage({
         </section>
         {featuredArticle && <FeaturedNewsCard item={featuredArticle} onNavigate={onNavigate} />}
         <ActivityFeed events={activityEvents} onNavigate={onNavigate} />
-        <DriftLog cards={newsCards} />
-        <BotAndRitualRow />
+        <DriftLog cards={newsCards} onNavigate={onNavigate} />
+        <BotAndRitualRow onNavigate={onNavigate} />
       </div>
     </div>
   );
 }
+
+export const HomePage = memo(HomePageInner);
 
 function Hero({
   profile,
@@ -106,6 +109,17 @@ function Hero({
   onNavigate: (page: PageId) => void;
 }) {
   const name = profile?.displayName ?? "friend";
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 5
+      ? { lead: "Still up,", subline: "The island's quiet and the tide's low. Night-owl co-op, anyone?" }
+      : hour < 12
+        ? { lead: "Morning,", subline: "Fresh coffee, calm waters. Plenty of daylight to fill the queue." }
+        : hour < 17
+          ? { lead: "Afternoon,", subline: "Game nights, low-stakes co-op, and a lounge that lives on Discord. Here's what's happening on the island today." }
+          : hour < 22
+            ? { lead: "Evening,", subline: "Prime time on the island. Round up the crew and pick something to play." }
+            : { lead: "Late night,", subline: "The good hours. Low-stakes co-op while the rest of the island sleeps." };
   return (
     <section
       style={{
@@ -143,7 +157,7 @@ function Hero({
           textShadow: "0 4px 28px rgba(0,0,0,0.45)"
         }}
       >
-        Welcome back,
+        {greeting.lead}
         <br />
         <span style={{ fontStyle: "italic", color: islandTheme.palette.sandWarmAccent }}>{name}</span>
       </h1>
@@ -174,7 +188,8 @@ function Hero({
           opacity: 0.95
         }}
       >
-        Game nights, low-stakes co-op, and a lounge that lives on Discord. Here's what's happening on the island today.
+        {greeting.subline}{" "}
+        {onlineCount === 1 ? "1 crewmate is on the island right now." : `${onlineCount} crewmates are on the island right now.`}
       </p>
 
       <HeroButton variant="ghost" onClick={() => onNavigate("games")}>
@@ -420,6 +435,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
   const [claimedToday, setClaimedToday] = useState<boolean | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [claimFlash, setClaimFlash] = useState<{ amount: number } | null>(null);
+  const [claimConfetti, setClaimConfetti] = useState(0);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [msLeft, setMsLeft] = useState(() => msUntilNextDailyReset());
   const refetchActivity = useRefetchActivity();
@@ -459,6 +475,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
         setBalanceOverride(body.newBalance);
         setClaimedToday(true);
         setClaimFlash({ amount: body.amount ?? 0 });
+        setClaimConfetti((n) => n + 1);
         setTimeout(() => setClaimFlash(null), 3500);
         void refetchActivity();
       } else if (res.status === 409) {
@@ -476,6 +493,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
   return (
     <IslandCard
       style={{
+        position: "relative",
         display: "flex",
         flexDirection: "column",
         gap: 8,
@@ -484,6 +502,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
         border: `1px solid rgba(251,191,119,0.2)`
       }}
     >
+      <ConfettiBurst trigger={claimConfetti} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3 className="island-display" style={{ margin: 0, fontSize: 16 }}>Nuggies</h3>
         <NuggieCoin size={22} />
@@ -1547,13 +1566,14 @@ function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: bool
   );
 }
 
-function DriftLog({ cards }: { cards: NewsCardData[] }) {
+function DriftLog({ cards, onNavigate }: { cards: NewsCardData[]; onNavigate: (page: PageId) => void }) {
   return (
     <section style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Washed up on shore"
         meta="Drift log: news, patch notes, and crew gossip curated by the parents."
         action="Full feed →"
+        onAction={() => onNavigate("games-news")}
       />
       {cards.length === 0 ? (
         <IslandCard style={{ padding: "16px 18px" }}>
@@ -1646,7 +1666,7 @@ function NewsCardTile({ card }: { card: NewsCardData }) {
   return content;
 }
 
-function BotAndRitualRow() {
+function BotAndRitualRow({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   return (
     <section
       style={{
@@ -1662,14 +1682,22 @@ function BotAndRitualRow() {
         body="Drop the slash command in any island channel. The bot pings the API, scans the crew's libraries, and surfaces overlap and near-matches in three seconds."
         ctaLabel="Open in Discord ↗"
         primary
+        onCta={() => {
+          // No guild id wired into the web env, so fall back to the in-app
+          // "what can we play" surface on the Games page.
+          onNavigate("games");
+        }}
       />
       <CtaCard
         accent={islandTheme.palette.sandWarmAccent}
-        eyebrow="Crew ritual"
-        title="Tide check, every Sunday"
-        body="The island sends one weekly digest: who showed up, what got played, what's queued. Quiet, opt-in, never pings the off-duty."
-        ctaLabel="See last week's tide →"
+        eyebrow="Live on the island"
+        title="Who showed up today"
+        body="The activity feed tracks who's been around and what got played — no digest, no emails, just the real log of island life as it happens."
+        ctaLabel="Jump to activity →"
         primary={false}
+        onCta={() => {
+          document.getElementById("activity")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}
       />
     </section>
   );
@@ -1682,9 +1710,10 @@ type CtaCardProps = {
   body: string;
   ctaLabel: string;
   primary: boolean;
+  onCta?: () => void;
 };
 
-function CtaCard({ accent, eyebrow, title, body, ctaLabel, primary }: CtaCardProps) {
+function CtaCard({ accent, eyebrow, title, body, ctaLabel, primary, onCta }: CtaCardProps) {
   return (
     <article
       style={{
@@ -1727,6 +1756,7 @@ function CtaCard({ accent, eyebrow, title, body, ctaLabel, primary }: CtaCardPro
       <button
         type="button"
         className="island-btn"
+        onClick={onCta}
         style={{
           background: primary ? islandTheme.color.primary : "transparent",
           border: `1px solid ${primary ? islandTheme.color.primary : islandTheme.color.cardBorder}`,

@@ -324,6 +324,11 @@ steamRouter.post("/unlink", async (_req, res) => {
 });
 
 const OWNED_GAMES_COOLDOWN_MS = 30 * 60 * 1000;
+const RECENT_GAMES_COOLDOWN_MS = 4 * 60 * 1000;
+// In-memory per-user cooldown for recent-games sync. The web fires this every
+// 5 min per tab plus on refocus, so a lightweight module-scope gate avoids
+// hammering the Steam API without needing a DB column.
+const recentGamesLastSyncByUser = new Map<string, number>();
 const GROUPS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const ACHIEVEMENTS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const ACHIEVEMENT_TOP_N = 15;
@@ -724,6 +729,16 @@ steamRouter.post("/sync-recent-games", async (_req, res) => {
     return;
   }
 
+  const lastRecentSync = recentGamesLastSyncByUser.get(discordUserId) ?? 0;
+  const msSinceRecentSync = Date.now() - lastRecentSync;
+  if (msSinceRecentSync < RECENT_GAMES_COOLDOWN_MS) {
+    const retryAfterSecs = Math.ceil((RECENT_GAMES_COOLDOWN_MS - msSinceRecentSync) / 1000);
+    res.setHeader("Retry-After", String(retryAfterSecs));
+    res.status(429).json({ error: "Sync cooldown active", retryAfterSeconds: retryAfterSecs });
+    return;
+  }
+  recentGamesLastSyncByUser.set(discordUserId, Date.now());
+
   try {
     const url =
       `https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v1/` +
@@ -891,25 +906,7 @@ steamRouter.get("/crew-games", async (req, res) => {
     return result.rows;
   };
 
-  let rows = await baseQuery();
-
-  const missingMetadataIds = rows
-    .filter((row) => row.developers.length === 0 && row.tags.length === 0)
-    .slice(0, 50)
-    .map((row) => row.app_id);
-  const missingImageIds = rows
-    .filter((row) => !row.header_image_url)
-    .slice(0, 50)
-    .map((row) => row.app_id);
-
-  await Promise.all([
-    enrichGameMetadataFromSteam(missingMetadataIds),
-    enrichMissingGameImages(missingImageIds)
-  ]);
-
-  if (missingMetadataIds.length || missingImageIds.length) {
-    rows = await baseQuery();
-  }
+  const rows = await baseQuery();
 
   res.json({
     games: rows.map((row) => ({
@@ -923,6 +920,25 @@ steamRouter.get("/crew-games", async (req, res) => {
       ownerCount: row.owner_count,
       owners: row.owners
     }))
+  });
+
+  // Fire-and-forget catalog enrichment for cold rows. Up to 50 cold games means
+  // serial external fetches, so we never await it — the next request picks up
+  // the enriched data once it lands.
+  const missingMetadataIds = rows
+    .filter((row) => row.developers.length === 0 && row.tags.length === 0)
+    .slice(0, 50)
+    .map((row) => row.app_id);
+  const missingImageIds = rows
+    .filter((row) => !row.header_image_url)
+    .slice(0, 50)
+    .map((row) => row.app_id);
+
+  void Promise.all([
+    enrichGameMetadataFromSteam(missingMetadataIds),
+    enrichMissingGameImages(missingImageIds)
+  ]).catch((error: unknown) => {
+    console.error("crew-games enrichment failed", error);
   });
 });
 
@@ -997,25 +1013,7 @@ steamRouter.get("/crew-wishlist", async (req, res) => {
     return result.rows;
   };
 
-  let rows = await baseQuery();
-
-  const missingMetadataIds = rows
-    .filter((row) => row.developers.length === 0 && row.tags.length === 0)
-    .slice(0, 50)
-    .map((row) => row.app_id);
-  const missingImageIds = rows
-    .filter((row) => !row.header_image_url)
-    .slice(0, 50)
-    .map((row) => row.app_id);
-
-  await Promise.all([
-    enrichGameMetadataFromSteam(missingMetadataIds),
-    enrichMissingGameImages(missingImageIds)
-  ]);
-
-  if (missingMetadataIds.length || missingImageIds.length) {
-    rows = await baseQuery();
-  }
+  const rows = await baseQuery();
 
   res.json({
     games: rows.map((row) => ({
@@ -1030,5 +1028,24 @@ steamRouter.get("/crew-wishlist", async (req, res) => {
       earliestAddedAt: row.earliest_added_at,
       wishlistedBy: row.wishlisted_by
     }))
+  });
+
+  // Fire-and-forget catalog enrichment for cold rows. Up to 50 cold games means
+  // serial external fetches, so we never await it — the next request picks up
+  // the enriched data once it lands.
+  const missingMetadataIds = rows
+    .filter((row) => row.developers.length === 0 && row.tags.length === 0)
+    .slice(0, 50)
+    .map((row) => row.app_id);
+  const missingImageIds = rows
+    .filter((row) => !row.header_image_url)
+    .slice(0, 50)
+    .map((row) => row.app_id);
+
+  void Promise.all([
+    enrichGameMetadataFromSteam(missingMetadataIds),
+    enrichMissingGameImages(missingImageIds)
+  ]).catch((error: unknown) => {
+    console.error("crew-wishlist enrichment failed", error);
   });
 });

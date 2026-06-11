@@ -122,6 +122,52 @@ nuggiesRouter.get("/me", requireBotOrSession, async (_req, res) => {
   });
 });
 
+// ── GET /nuggies/me/transactions ──────────────────────────────────────────────
+// Paginated transaction history for the web Nuggies History page. Same row
+// shape as /nuggies/me's transactions, plus a total count respecting the type
+// filter so the page can render pagination controls.
+
+nuggiesRouter.get("/me/transactions", requireBotOrSession, async (req, res) => {
+  if (!isEnabled()) { res.json({ enabled: false }); return; }
+
+  const discordUserId = String(res.locals.userId);
+  const userId = await resolveInternalId(discordUserId);
+  if (!userId) { res.status(404).json({ error: "User not found" }); return; }
+
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "50"), 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(String(req.query.offset ?? "0"), 10) || 0, 0);
+  const type = req.query.type ? String(req.query.type) : null;
+
+  const [txRows, countRow] = await Promise.all([
+    db.query<{ id: string; amount: string; type: string; reason: string; reference_id: string | null; created_at: string }>(
+      `SELECT id, amount, type, reason, reference_id, created_at
+       FROM nuggies_transactions
+       WHERE user_id = $1 AND ($2::text IS NULL OR type = $2)
+       ORDER BY created_at DESC
+       LIMIT $3 OFFSET $4`,
+      [userId, type, limit, offset]
+    ),
+    db.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM nuggies_transactions
+       WHERE user_id = $1 AND ($2::text IS NULL OR type = $2)`,
+      [userId, type]
+    ),
+  ]);
+
+  res.json({
+    transactions: txRows.rows.map((r) => ({
+      id: parseInt(r.id, 10),
+      amount: parseInt(r.amount, 10),
+      type: r.type,
+      reason: r.reason,
+      referenceId: r.reference_id,
+      createdAt: r.created_at,
+    })),
+    total: parseInt(countRow.rows[0]?.total ?? "0", 10),
+  });
+});
+
 // ── GET /nuggies/user/:discordUserId ─────────────────────────────────────────
 
 nuggiesRouter.get("/user/:discordUserId", requireBotOrSession, async (req, res) => {

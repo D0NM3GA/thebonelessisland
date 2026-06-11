@@ -28,6 +28,7 @@ import { ALL_SETTINGS, DOMAIN_INFO, searchSettings } from "./admin/settingMeta.j
 import type { SettingDomain, SettingMeta } from "./admin/settingMeta.js";
 import { QuickActionCard } from "../components/QuickActionCard.js";
 import type {
+  ActivityEvent,
   ForumBan,
   ForumCategory,
   ForumModLogEntry,
@@ -305,7 +306,7 @@ function AIHealthArea({
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/settings/ai-cost-today", { credentials: "include" });
+        const res = await apiFetch("/settings/ai-cost-today");
         if (!res.ok) return;
         const data = (await res.json().catch(() => null)) as AiCostToday | null;
         if (!cancelled && data) setCost(data);
@@ -1390,18 +1391,24 @@ function RecRow({ rec, firstRow }: { rec: Recommendation; firstRow: boolean }) {
 }
 
 function DataSyncSubpage() {
+  // Connector cadences are how often each sync routine is configured to run.
+  // We do not yet collect per-connector health telemetry, so we deliberately
+  // show the schedule (a real, known fact) rather than an invented online badge.
   const connectors = [
-    { name: "Discord OAuth", status: "ok", last: "live" },
-    { name: "Discord Members", status: "ok", last: "60s" },
-    { name: "Discord Voice State", status: "ok", last: "15s" },
-    { name: "Steam OpenID", status: "ok", last: "live" },
-    { name: "Steam OwnedGames", status: "ok", last: "30m" },
-    { name: "Steam Wishlist", status: "ok", last: "30m" }
+    { name: "Discord OAuth", cadence: "on login" },
+    { name: "Discord Members", cadence: "every 60s" },
+    { name: "Discord Voice State", cadence: "on event" },
+    { name: "Steam OpenID", cadence: "on link" },
+    { name: "Steam OwnedGames", cadence: "every 30m" },
+    { name: "Steam Wishlist", cadence: "every 30m" }
   ];
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
         <SubsectionTitle style={{ padding: "14px 16px 0" }}>Connectors</SubsectionTitle>
+        <p style={{ margin: "0 16px 4px", fontSize: 12, color: islandTheme.color.textMuted, lineHeight: 1.5 }}>
+          Configured sync cadence per connector. Per-connector health telemetry isn’t wired up yet.
+        </p>
         {connectors.map((c, i) => (
           <ConnectorRow key={c.name} entry={c} firstRow={i === 0} />
         ))}
@@ -1409,28 +1416,9 @@ function DataSyncSubpage() {
 
       <IslandCard style={{ padding: 16 }}>
         <SubsectionTitle>Live log</SubsectionTitle>
-        <pre
-          style={{
-            margin: 0,
-            padding: 12,
-            background: islandTheme.color.panelMutedBg,
-            border: `1px solid ${islandTheme.color.cardBorder}`,
-            borderRadius: 8,
-            fontFamily: islandTheme.font.mono,
-            fontSize: 11,
-            color: islandTheme.color.textSubtle,
-            maxHeight: 240,
-            overflow: "auto"
-          }}
-        >
-{`[ok]   discord.member.sync     guild=1172780198912065536  count=24      4.2s
-[ok]   discord.voice.snapshot  in_voice=4                              0.6s
-[ok]   steam.owned.refresh     user=donmega   games=141    180KB       2.1s
-[ok]   steam.wishlist.refresh  user=donmega   items=38                 1.1s
-[ok]   steam.owned.refresh     user=palmwave  games=87     120KB       1.8s
-[ok]   steam.wishlist.refresh  user=palmwave  items=12                 0.4s
-[ok]   game_nights.scan        scheduled=3   upcoming=2                0.2s`}
-        </pre>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          A streaming sync log isn’t collected yet. When telemetry lands, per-run results show here.
+        </p>
       </IslandCard>
     </div>
   );
@@ -1440,20 +1428,14 @@ function ConnectorRow({
   entry,
   firstRow
 }: {
-  entry: { name: string; status: string; last: string };
+  entry: { name: string; cadence: string };
   firstRow: boolean;
 }) {
-  const tone =
-    entry.status === "ok"
-      ? { dot: islandTheme.color.successAccent, label: "OK" }
-      : entry.status === "warn"
-        ? { dot: islandTheme.color.warnAccent, label: "WARN" }
-        : { dot: islandTheme.color.textMuted, label: "OFF" };
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr auto auto",
+        gridTemplateColumns: "1fr auto",
         gap: 12,
         padding: "12px 16px",
         alignItems: "center",
@@ -1462,46 +1444,56 @@ function ConnectorRow({
     >
       <div style={{ fontSize: 13, fontWeight: 700 }}>{entry.name}</div>
       <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-        {entry.last}
-      </span>
-      <span
-        className="island-mono"
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          color: tone.dot,
-          display: "flex",
-          alignItems: "center",
-          gap: 6
-        }}
-      >
-        <span style={{ width: 8, height: 8, borderRadius: 999, background: tone.dot }} />
-        {tone.label}
+        {entry.cadence}
       </span>
     </div>
   );
 }
 
 function MembersSubpage() {
-  const roster = [
-    { handle: "donmega", roles: ["Parent", "Crew"], joined: "2019-04-12", status: "online" },
-    { handle: "jkraken", roles: ["Crew", "Captain"], joined: "2020-01-08", status: "online" },
-    { handle: "aloha-pirate", roles: ["Crew", "Late-Boat"], joined: "2020-06-22", status: "live" },
-    { handle: "palmwave", roles: ["Crew", "Cozy"], joined: "2021-03-17", status: "online" },
-    { handle: "ChefNugget", roles: ["Crew"], joined: "2022-11-05", status: "online" },
-    { handle: "LoreNugget", roles: ["Crew", "Lore"], joined: "2023-02-19", status: "idle" },
-    { handle: "ReefTroll", roles: ["Crew"], joined: "2023-08-30", status: "idle" },
-    { handle: "newGuest", roles: ["Onboarding"], joined: "2026-04-29", status: "online" }
-  ];
+  const [members, setMembers] = useState<GuildMember[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await apiFetch("/members");
+        if (!res.ok) {
+          if (!cancelled) setLoadState("error");
+          return;
+        }
+        const data = (await res.json().catch(() => null)) as { members?: GuildMember[] } | null;
+        if (!cancelled) {
+          setMembers(data?.members ?? []);
+          setLoadState("ready");
+        }
+      } catch {
+        if (!cancelled) setLoadState("error");
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sorted = useMemo(
+    () => [...members].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [members]
+  );
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
-        <SubsectionTitle style={{ padding: "14px 16px 0" }}>Roster</SubsectionTitle>
+        <SubsectionTitle style={{ padding: "14px 16px 0" }}>
+          Roster{loadState === "ready" ? ` · ${sorted.length}` : ""}
+        </SubsectionTitle>
         <div
           className="island-mono"
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1.4fr 100px 80px auto",
+            gridTemplateColumns: "1.2fr 1.6fr 90px 80px auto",
             gap: 12,
             padding: "8px 16px",
             fontSize: 10,
@@ -1512,103 +1504,119 @@ function MembersSubpage() {
             borderBottom: `1px solid ${islandTheme.color.cardBorder}`
           }}
         >
-          <div>Handle</div>
+          <div>Member</div>
           <div>Roles</div>
-          <div>Joined</div>
-          <div>Status</div>
+          <div>Presence</div>
+          <div>In guild</div>
           <div />
         </div>
-        {roster.map((r, i) => (
-          <MemberRow key={r.handle} entry={r} firstRow={i === 0} />
-        ))}
+        {loadState === "loading" ? (
+          <div style={{ padding: "16px", fontSize: 13, color: islandTheme.color.textMuted }}>
+            Loading roster…
+          </div>
+        ) : loadState === "error" ? (
+          <div style={{ padding: "16px", fontSize: 13, color: islandTheme.color.dangerText }}>
+            Couldn’t load the roster. Try again in a moment.
+          </div>
+        ) : sorted.length === 0 ? (
+          <div style={{ padding: "16px", fontSize: 13, color: islandTheme.color.textMuted }}>
+            No members synced yet.
+          </div>
+        ) : (
+          sorted.map((m, i) => <MemberRow key={m.discordUserId} entry={m} firstRow={i === 0} />)
+        )}
       </IslandCard>
 
       <IslandCard style={{ padding: 16 }}>
         <SubsectionTitle>Role mapping</SubsectionTitle>
         <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
-          Discord roles → app capabilities. <strong>Parent</strong> = full admin. <strong>Captain</strong> = host
-          privileges. <strong>Onboarding</strong> = read-only until promoted.
+          Discord roles drive app capabilities. Admin access is granted by role in Discord — manage roles
+          there and they sync here. In-app promote/remove controls aren’t wired up yet.
         </p>
-      </IslandCard>
-
-      <IslandCard style={{ padding: 16 }}>
-        <SubsectionTitle>Onboarding queue · 1</SubsectionTitle>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "8px 0"
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>newGuest</div>
-            <div style={{ fontSize: 12, color: islandTheme.color.textMuted }}>Joined 2 days ago</div>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button type="button" className="island-btn" style={smallBtn(islandTheme.color.primary, islandTheme.color.primaryText)}>
-              Promote
-            </button>
-            <button type="button" className="island-btn" style={smallBtn("transparent", islandTheme.color.dangerText, true, islandTheme.color.danger)}>
-              Remove
-            </button>
-          </div>
-        </div>
       </IslandCard>
     </div>
   );
 }
 
-function MemberRow({
-  entry,
-  firstRow
-}: {
-  entry: { handle: string; roles: string[]; joined: string; status: string };
-  firstRow: boolean;
-}) {
-  const dot = entry.status === "online" ? islandTheme.color.successAccent : entry.status === "live" ? islandTheme.color.dangerAccent : islandTheme.color.textMuted;
+const PRESENCE_LABEL: Record<NonNullable<GuildMember["presenceStatus"]>, string> = {
+  online: "online",
+  idle: "idle",
+  dnd: "dnd",
+  offline: "offline"
+};
+
+function MemberRow({ entry, firstRow }: { entry: GuildMember; firstRow: boolean }) {
+  const presence = entry.presenceStatus;
+  const dot =
+    presence === "online"
+      ? islandTheme.color.successAccent
+      : presence === "idle"
+        ? islandTheme.color.warnAccent
+        : presence === "dnd"
+          ? islandTheme.color.dangerAccent
+          : islandTheme.color.textMuted;
+  const presenceText = entry.inVoice
+    ? "in voice"
+    : presence
+      ? PRESENCE_LABEL[presence]
+      : "unknown";
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr 1.4fr 100px 80px auto",
+        gridTemplateColumns: "1.2fr 1.6fr 90px 80px auto",
         gap: 12,
         padding: "12px 16px",
         alignItems: "center",
         borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`
       }}
     >
-      <div style={{ fontSize: 13, fontWeight: 700 }}>{entry.handle}</div>
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-        {entry.roles.map((r) => (
-          <span
-            key={r}
-            className="island-mono"
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              padding: "2px 8px",
-              borderRadius: 999,
-              background: islandTheme.color.panelMutedBg,
-              border: `1px solid ${islandTheme.color.cardBorder}`,
-              color: islandTheme.color.textSubtle
-            }}
-          >
-            {r}
-          </span>
-        ))}
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>{entry.displayName}</div>
+        <div className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+          @{entry.username}
+        </div>
       </div>
-      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-        {entry.joined}
-      </span>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {entry.roleNames.length === 0 ? (
+          <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>—</span>
+        ) : (
+          entry.roleNames.map((r) => (
+            <span
+              key={r}
+              className="island-mono"
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: 999,
+                background: islandTheme.color.panelMutedBg,
+                border: `1px solid ${islandTheme.color.cardBorder}`,
+                color: islandTheme.color.textSubtle
+              }}
+            >
+              {r}
+            </span>
+          ))
+        )}
+      </div>
       <span
         className="island-mono"
         style={{ fontSize: 10, color: dot, display: "flex", alignItems: "center", gap: 4 }}
       >
         <span style={{ width: 6, height: 6, borderRadius: 999, background: dot }} />
-        {entry.status}
+        {presenceText}
       </span>
-      <button type="button" className="island-btn" style={smallBtn("transparent", islandTheme.color.textMuted, true)}>
+      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.successAccent }}>
+        in guild
+      </span>
+      <button
+        type="button"
+        className="island-btn"
+        disabled
+        title="Manage roles in Discord — in-app editing isn’t available yet."
+        style={{ ...smallBtn("transparent", islandTheme.color.textMuted, true), cursor: "not-allowed", opacity: 0.5 }}
+      >
         Edit
       </button>
     </div>
@@ -3442,44 +3450,102 @@ function ServerConfigSubpage({
   );
 }
 
+function auditTimeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return "";
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function auditSummary(event: ActivityEvent): string {
+  const verb = event.eventType.replace(/[._]/g, " ");
+  const subject = event.game?.name ?? event.target?.displayName ?? event.gameNightId ?? "";
+  return subject ? `${verb} · ${subject}` : verb;
+}
+
 function AuditSubpage({ profileJson }: { profileJson: string }) {
-  const events = [
-    { who: "donmega", what: "promoted", target: "newGuest → Crew", ago: "2h" },
-    { who: "donmega", what: "approved", target: "news item #392", ago: "5h" },
-    { who: "donmega", what: "force-picked", target: "Friday Night → Helldivers II", ago: "yesterday" },
-    { who: "system", what: "auto-flagged", target: "thread #4823 (#late-boat)", ago: "1d" }
-  ];
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await apiFetch("/activity?limit=50");
+        if (!res.ok) {
+          if (!cancelled) setLoadState("error");
+          return;
+        }
+        const data = (await res.json().catch(() => null)) as { events?: ActivityEvent[] } | null;
+        if (!cancelled) {
+          setEvents(data?.events ?? []);
+          setLoadState("ready");
+        }
+      } catch {
+        if (!cancelled) setLoadState("error");
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <IslandCard style={{ padding: 16, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input placeholder="Search audit log…" style={{ ...islandInputStyle, flex: 1, minWidth: 240 }} />
-        <button type="button" className="island-btn" style={smallBtn("transparent", islandTheme.color.textSubtle, true)}>
-          Export CSV
-        </button>
+      <IslandCard style={{ padding: 16 }}>
+        <SubsectionTitle>Event log</SubsectionTitle>
+        <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+          Recent categorized activity events serve as the interim audit view. Search and export aren’t
+          available yet.
+        </p>
       </IslandCard>
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>
-        {events.map((e, i) => (
-          <div
-            key={e.target + i}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr auto",
-              gap: 12,
-              padding: "12px 16px",
-              borderTop: i === 0 ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
-              alignItems: "center"
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 13 }}>
-                <strong>{e.who}</strong> {e.what} <strong>{e.target}</strong>
-              </div>
-            </div>
-            <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-              {e.ago} ago
-            </span>
+        {loadState === "loading" ? (
+          <div style={{ padding: "16px", fontSize: 13, color: islandTheme.color.textMuted }}>
+            Loading events…
           </div>
-        ))}
+        ) : loadState === "error" ? (
+          <div style={{ padding: "16px", fontSize: 13, color: islandTheme.color.dangerText }}>
+            Couldn’t load the event log. Try again in a moment.
+          </div>
+        ) : events.length === 0 ? (
+          <div style={{ padding: "16px", fontSize: 13, color: islandTheme.color.textMuted }}>
+            No events recorded yet.
+          </div>
+        ) : (
+          events.map((e, i) => (
+            <div
+              key={e.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                gap: 12,
+                padding: "12px 16px",
+                borderTop: i === 0 ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
+                alignItems: "center"
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 13 }}>
+                  <strong>{e.actor?.displayName ?? "system"}</strong> {auditSummary(e)}
+                </div>
+                <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
+                  {e.category}
+                </div>
+              </div>
+              <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+                {auditTimeAgo(e.createdAt)}
+              </span>
+            </div>
+          ))
+        )}
       </IslandCard>
       <details>
         <summary style={{ cursor: "pointer", fontSize: 13, color: islandTheme.color.textMuted }}>

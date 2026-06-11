@@ -14,7 +14,6 @@ type TopbarProps = {
 };
 
 export function Topbar({ page, onNavigate, profile, isAdmin, tagline, onLogout }: TopbarProps) {
-  const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -69,7 +68,6 @@ export function Topbar({ page, onNavigate, profile, isAdmin, tagline, onLogout }
         <Brand onNavigate={onNavigate} tagline={tagline} />
         <MegaMenu page={page} onNavigate={onNavigate} isAdmin={isAdmin} />
         <div style={{ flex: 1, minWidth: 12 }} />
-        <SearchInput value={search} onChange={setSearch} />
         <div style={{ position: "relative", display: "flex", flexShrink: 0 }}>
           <UserTrigger
             buttonRef={triggerRef}
@@ -162,41 +160,6 @@ function Brand({ onNavigate, tagline }: { onNavigate: (page: PageId) => void; ta
         </div>
       </div>
     </button>
-  );
-}
-
-type SearchInputProps = {
-  value: string;
-  onChange: (value: string) => void;
-};
-
-function SearchInput({ value, onChange }: SearchInputProps) {
-  const searchIcon =
-    "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><path d='m21 21-4.3-4.3'/></svg>";
-  return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="Search the island…"
-      style={{
-        border: `1px solid ${islandTheme.color.cardBorder}`,
-        background: islandTheme.color.panelMutedBg,
-        color: islandTheme.color.textPrimary,
-        padding: "8px 12px 8px 34px",
-        borderRadius: 999,
-        fontSize: 13,
-        // Was a hard 220px — at narrow widths that pushed the user trigger
-        // off the row. Now it shrinks down to 96px before yielding to other
-        // chrome and never wraps.
-        flex: "0 1 220px",
-        minWidth: 96,
-        width: "100%",
-        backgroundImage: `url("${searchIcon}")`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "11px center",
-        outline: "none"
-      }}
-    />
   );
 }
 

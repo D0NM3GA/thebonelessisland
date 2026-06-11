@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 import { IslandCard, IslandTag, islandInputStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type { CrewOwnedGame, CrewOwner, PageId } from "../types.js";
@@ -7,6 +7,7 @@ type LibraryPageProps = {
   crewGames: CrewOwnedGame[];
   currentDiscordUserId: string | null;
   onNavigate: (page: PageId) => void;
+  onPlan: (appId: number) => void;
 };
 
 type LibCategory = "co-op" | "horror" | "puzzle" | "party" | "solo";
@@ -94,7 +95,7 @@ function tagLabel(game: CrewOwnedGame, category: LibCategory): string {
   }
 }
 
-export function LibraryPage({ crewGames, currentDiscordUserId, onNavigate }: LibraryPageProps) {
+function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }: LibraryPageProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<LibFilter>("all");
   const [sort, setSort] = useState<SortMode>("owned");
@@ -243,7 +244,7 @@ export function LibraryPage({ crewGames, currentDiscordUserId, onNavigate }: Lib
               game={entry.game}
               category={entry.category}
               mine={entry.mine}
-              onPlan={() => onNavigate("games")}
+              onPlan={onPlan}
             />
           ))
         ) : (
@@ -256,12 +257,14 @@ export function LibraryPage({ crewGames, currentDiscordUserId, onNavigate }: Lib
   );
 }
 
+export const LibraryPage = memo(LibraryPageImpl);
+
 const COLUMNS = "60px 1.4fr 1fr 80px 80px auto";
 
 function HeaderRow() {
   return (
     <div
-      className="island-mono"
+      className="island-mono bi-lib-head"
       style={{
         display: "grid",
         gridTemplateColumns: COLUMNS,
@@ -298,7 +301,7 @@ function LibRow({
   game: CrewOwnedGame;
   category: LibCategory;
   mine: boolean;
-  onPlan: () => void;
+  onPlan: (appId: number) => void;
 }) {
   const cover = game.headerImageUrl
     ? { backgroundImage: `url("${game.headerImageUrl}")`, backgroundSize: "cover", backgroundPosition: "center" }
@@ -307,6 +310,7 @@ function LibRow({
 
   return (
     <div
+      className="bi-lib-row"
       style={{
         display: "grid",
         gridTemplateColumns: COLUMNS,
@@ -350,7 +354,7 @@ function LibRow({
       <div style={{ display: "flex", gap: 6 }}>
         <button
           type="button"
-          onClick={onPlan}
+          onClick={() => onPlan(game.appId)}
           className="island-btn island-mono"
           style={{
             background: islandTheme.color.primary,
@@ -368,6 +372,7 @@ function LibRow({
         </button>
         <button
           type="button"
+          onClick={() => window.open(`https://store.steampowered.com/app/${game.appId}`, "_blank", "noopener")}
           className="island-btn island-mono"
           style={{
             background: "transparent",

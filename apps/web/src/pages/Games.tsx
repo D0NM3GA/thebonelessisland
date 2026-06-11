@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { IslandCard, IslandTag, islandInputStyle, islandTagStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type {
@@ -29,6 +29,7 @@ type GamesPageProps = {
   crewGames: CrewOwnedGame[];
   crewWishlist: CrewWishlistGame[];
   gameNews: GameNewsItem[];
+  composerScrollNonce: number;
   onSelectNight: (id: number, title: string) => void;
   onNewNightTitleChange: (value: string) => void;
   onNewNightScheduledForChange: (value: string) => void;
@@ -59,7 +60,7 @@ type ComposerPick = {
   medianSessionMinutes: number | null;
 };
 
-export function GamesPage(props: GamesPageProps) {
+function GamesPageImpl(props: GamesPageProps) {
   return (
     <div style={{ display: "grid", gap: 24, position: "relative" }}>
       <GamesHero />
@@ -68,10 +69,12 @@ export function GamesPage(props: GamesPageProps) {
       <ScheduledNights {...props} />
       <GroupWishlist crewWishlist={props.crewWishlist} />
       <LibrarySnapshot onNavigate={props.onNavigate} />
-      <StreamDrawer />
+      <StreamDrawer members={props.filteredGuildMembers} />
     </div>
   );
 }
+
+export const GamesPage = React.memo(GamesPageImpl);
 
 function GamesHero() {
   return (
@@ -97,6 +100,7 @@ function GamesHero() {
 function SessionAndPatchesRow(props: GamesPageProps) {
   return (
     <section
+      className="bi-games-split"
       style={{
         display: "grid",
         gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
@@ -190,8 +194,16 @@ function pickCoverInitials(name: string): string {
 function SessionComposer(props: GamesPageProps) {
   const [mode, setMode] = useState<AIMode>("Tonight");
   const pick = useMemo(() => buildComposerPick(props), [props]);
+  const composerRef = useRef<HTMLDivElement>(null);
+  const { composerScrollNonce } = props;
+
+  useEffect(() => {
+    if (composerScrollNonce === 0) return;
+    composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [composerScrollNonce]);
 
   return (
+    <div ref={composerRef} style={{ scrollMarginTop: 90 }}>
     <IslandCard style={{ padding: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <div
         style={{
@@ -218,24 +230,6 @@ function SessionComposer(props: GamesPageProps) {
             Empty shore — sync some crew Steam libraries to populate.
           </span>
         )}
-        <button
-          type="button"
-          className="island-btn"
-          style={{
-            marginLeft: "auto",
-            background: "transparent",
-            border: `1px solid ${islandTheme.color.cardBorder}`,
-            color: islandTheme.color.textSubtle,
-            fontSize: 11,
-            padding: "4px 10px",
-            borderRadius: 999,
-            cursor: "pointer",
-            font: "inherit"
-          }}
-          disabled={!pick}
-        >
-          Tune weights
-        </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 14, padding: 16 }}>
@@ -277,9 +271,8 @@ function SessionComposer(props: GamesPageProps) {
       </div>
 
       <RosterPicker {...props} />
-      <WhenWhereStrip />
-      <SessionFooter pick={pick} />
     </IslandCard>
+    </div>
   );
 }
 
@@ -473,67 +466,6 @@ function RosterPicker({
   );
 }
 
-function WhenWhereStrip() {
-  const [time, setTime] = useState("Now");
-  const [channel, setChannel] = useState("Lagoon Lounge");
-  return (
-    <div
-      style={{
-        borderTop: `1px solid ${islandTheme.color.cardBorder}`,
-        padding: "10px 16px",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: 12
-      }}
-    >
-      <MetaCell label="When" value={time}>
-        {["Now", "9pm", "10pm", "Tmrw"].map((t) => (
-          <QuickChip key={t} active={t === time} onClick={() => setTime(t)}>
-            {t}
-          </QuickChip>
-        ))}
-      </MetaCell>
-      <MetaCell label="Where" value={channel}>
-        {["Lagoon Lounge", "Beach Hut", "Reef Stage"].map((c) => (
-          <QuickChip key={c} active={c === channel} onClick={() => setChannel(c)}>
-            {c}
-          </QuickChip>
-        ))}
-      </MetaCell>
-    </div>
-  );
-}
-
-function MetaCell({
-  label,
-  value,
-  children
-}: {
-  label: string;
-  value: string;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <span
-          className="island-mono"
-          style={{
-            fontSize: 10,
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            color: islandTheme.color.textMuted
-          }}
-        >
-          {label}
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 700 }}>{value}</span>
-      </div>
-      <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>{children}</div>
-    </div>
-  );
-}
-
 function QuickChip({
   active,
   onClick,
@@ -547,76 +479,6 @@ function QuickChip({
     <IslandTag tone="primary" active={active} onClick={onClick}>
       {children}
     </IslandTag>
-  );
-}
-
-function SessionFooter({ pick }: { pick: ComposerPick | null }) {
-  const disabled = !pick;
-  return (
-    <div
-      style={{
-        borderTop: `1px solid ${islandTheme.color.cardBorder}`,
-        padding: "10px 16px",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        flexWrap: "wrap"
-      }}
-    >
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          color: islandTheme.color.textSubtle
-        }}
-      >
-        <input type="checkbox" defaultChecked /> Ping crew
-      </label>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          color: islandTheme.color.textSubtle
-        }}
-      >
-        <input type="checkbox" /> Calendar event
-      </label>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          color: islandTheme.color.textSubtle
-        }}
-      >
-        <input type="checkbox" /> Auto DM no-shows
-      </label>
-      <button
-        type="button"
-        disabled={disabled}
-        title={disabled ? "Pick a crew to enable invites" : `Send invite for ${pick.name}`}
-        style={{
-          marginLeft: "auto",
-          background: disabled ? "transparent" : islandTheme.color.primary,
-          border: `1px solid ${disabled ? islandTheme.color.cardBorder : islandTheme.color.primary}`,
-          color: disabled ? islandTheme.color.textMuted : islandTheme.color.primaryText,
-          padding: "8px 18px",
-          borderRadius: 999,
-          fontSize: 13,
-          fontWeight: 700,
-          cursor: disabled ? "not-allowed" : "pointer",
-          opacity: disabled ? 0.7 : 1,
-          font: "inherit"
-        }}
-      >
-        Send invite →
-      </button>
-    </div>
   );
 }
 
@@ -1443,14 +1305,15 @@ function LibrarySnapshot({ onNavigate }: { onNavigate: (page: PageId) => void })
   );
 }
 
-const STREAMS_MOCK = [
-  { name: "jkraken", game: "Helldivers II", viewers: 142, status: "live" },
-  { name: "aloha-pirate", game: "Stardew Valley", viewers: 38, status: "live" },
-  { name: "palmwave", game: "Cosmic Cruiser", viewers: 12, status: "live" }
-];
-
-function StreamDrawer() {
+function StreamDrawer({ members }: { members: GuildMember[] }) {
   const [open, setOpen] = useState(false);
+  const inGame = useMemo(
+    () => members.filter((m) => m.inVoice || (m.richPresenceText ?? "").trim().length > 0),
+    [members]
+  );
+
+  if (inGame.length === 0) return null;
+
   return (
     <>
       <button
@@ -1464,7 +1327,7 @@ function StreamDrawer() {
           transform: "translateY(-50%) rotate(180deg)",
           writingMode: "vertical-rl",
           padding: "16px 8px",
-          background: "rgba(220, 38, 38, 0.85)",
+          background: islandTheme.color.successAccent,
           color: islandTheme.color.textInverted,
           border: "none",
           borderTopLeftRadius: 12,
@@ -1479,7 +1342,7 @@ function StreamDrawer() {
           boxShadow: "-4px 0 14px rgba(0,0,0,0.4)"
         }}
       >
-        ● Live · {STREAMS_MOCK.length}
+        ● In game · {inGame.length}
       </button>
       <aside
         style={{
@@ -1505,7 +1368,7 @@ function StreamDrawer() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <h3 className="island-display" style={{ margin: 0, fontSize: 15 }}>
-            Live streams
+            In game now
           </h3>
           <button
             type="button"
@@ -1525,44 +1388,67 @@ function StreamDrawer() {
           </button>
         </div>
         <div style={{ display: "grid", gap: 6 }}>
-          {STREAMS_MOCK.map((s) => (
-            <article
-              key={s.name}
-              style={{
-                padding: 10,
-                borderRadius: 10,
-                background: islandTheme.color.panelMutedBg,
-                border: `1px solid ${islandTheme.color.cardBorder}`,
-                display: "grid",
-                gridTemplateColumns: "32px 1fr",
-                gap: 10
-              }}
-            >
-              <div
+          {inGame.map((m) => {
+            const presence = (m.richPresenceText ?? "").trim() || "In voice";
+            return (
+              <article
+                key={m.discordUserId}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 999,
-                  background: "rgba(220, 38, 38, 0.85)",
-                  color: islandTheme.color.textInverted,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 11,
-                  fontWeight: 800
+                  padding: 10,
+                  borderRadius: 10,
+                  background: islandTheme.color.panelMutedBg,
+                  border: `1px solid ${islandTheme.color.cardBorder}`,
+                  display: "grid",
+                  gridTemplateColumns: "32px 1fr",
+                  gap: 10,
+                  alignItems: "center"
                 }}
               >
-                ●
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</div>
-                <div style={{ fontSize: 11, color: islandTheme.color.textSubtle }}>{s.game}</div>
-                <div className="island-mono" style={{ fontSize: 10, color: islandTheme.color.textMuted, marginTop: 2 }}>
-                  {s.viewers} watching
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 999,
+                    background: m.avatarUrl
+                      ? `center / cover no-repeat url(${JSON.stringify(m.avatarUrl)})`
+                      : islandTheme.color.successAccent,
+                    color: islandTheme.color.textInverted,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    fontWeight: 800
+                  }}
+                >
+                  {m.avatarUrl ? "" : (m.displayName[0] ?? "?").toUpperCase()}
                 </div>
-              </div>
-            </article>
-          ))}
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                  >
+                    {m.displayName}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: islandTheme.color.textSubtle,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                  >
+                    {presence}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </aside>
     </>
@@ -1592,6 +1478,45 @@ function SectionHead({ title, meta }: { title: string; meta: string }) {
 }
 
 // ── Crew Chat ─────────────────────────────────────────────────────────────────
+
+const NUGGIE_STARTERS = [
+  "What should we play tonight?",
+  "Any big patches this week?",
+  "Pick a co-op game for 4"
+];
+
+function NuggieTyping() {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-start" }}>
+      <div
+        aria-label="Nuggie is thinking"
+        style={{
+          padding: "10px 14px",
+          borderRadius: "14px 14px 14px 4px",
+          background: islandTheme.color.panelMutedBg,
+          border: `1px solid ${islandTheme.color.cardBorder}`,
+          display: "flex",
+          alignItems: "center",
+          gap: 5
+        }}
+      >
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="bi-nuggie-dot"
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: islandTheme.color.textMuted,
+              animationDelay: `${i * 0.16}s`
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]) => Promise<{ reply: string; error?: string }> }) {
   const [history, setHistory] = useState<ChatMessage[]>([]);
@@ -1623,6 +1548,16 @@ function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]
 
   return (
     <IslandCard style={{ padding: 0, overflow: "hidden" }}>
+      <style>{`
+        @keyframes bi-nuggie-bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+          40% { transform: translateY(-4px); opacity: 1; }
+        }
+        .bi-nuggie-dot { animation: bi-nuggie-bounce 1.1s infinite ease-in-out; }
+        @media (prefers-reduced-motion: reduce) {
+          .bi-nuggie-dot { animation: none; opacity: 0.7; }
+        }
+      `}</style>
       <div
         style={{
           padding: "12px 16px",
@@ -1680,22 +1615,7 @@ function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]
               </div>
             </div>
           ))}
-          {sending ? (
-            <div style={{ display: "flex", justifyContent: "flex-start" }}>
-              <div
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "14px 14px 14px 4px",
-                  background: islandTheme.color.panelMutedBg,
-                  border: `1px solid ${islandTheme.color.cardBorder}`,
-                  fontSize: 13,
-                  color: islandTheme.color.textMuted
-                }}
-              >
-                Thinking…
-              </div>
-            </div>
-          ) : null}
+          {sending ? <NuggieTyping /> : null}
           {error ? (
             <div
               style={{
@@ -1711,7 +1631,36 @@ function CrewChat({ onSend }: { onSend: (message: string, history: ChatMessage[]
             </div>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <div style={{ padding: "20px 16px", display: "flex", flexDirection: "column", gap: 12, alignItems: "center", textAlign: "center" }}>
+          <span style={{ fontSize: 34 }}>🍗</span>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 360 }}>
+            Hiya, I'm Nuggie. Ask me what the crew should play, who owns what, or what just dropped on Steam.
+          </p>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+            {NUGGIE_STARTERS.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="island-btn"
+                onClick={() => setInput(starter)}
+                style={{
+                  background: islandTheme.color.panelMutedBg,
+                  border: `1px solid ${islandTheme.color.cardBorder}`,
+                  color: islandTheme.color.textSubtle,
+                  fontSize: 12,
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  cursor: "pointer",
+                  font: "inherit"
+                }}
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div
         style={{

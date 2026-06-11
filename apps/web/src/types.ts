@@ -29,8 +29,6 @@ export type GameNight = {
   title: string;
   scheduledFor: string;
   createdByUserId: number;
-  topGameName: string | null;
-  topGameVote: number | null;
   selectedGameName: string | null;
   selectedAppId: number | null;
   selectedAt: string | null;

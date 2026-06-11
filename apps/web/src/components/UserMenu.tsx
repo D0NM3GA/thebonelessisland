@@ -1,5 +1,5 @@
 import { type ReactNode, type RefObject } from "react";
-import { useDayNight } from "../scene/useDayNight.js";
+import { useDayNight, type DayNightMode, type DayNightPreference } from "../scene/useDayNight.js";
 import { islandTheme } from "../theme.js";
 import type { MeProfile, PageId } from "../types.js";
 import { UserAvatar, getInitials } from "./Topbar.js";
@@ -23,7 +23,7 @@ export function UserMenu({
   onNavigate,
   onLogout
 }: UserMenuProps) {
-  const { mode, toggle } = useDayNight();
+  const { mode, preference, cyclePreference } = useDayNight();
   const initials = getInitials(profile?.displayName ?? profile?.username ?? "??");
   const handle = profile?.username ?? "guest";
   const inVoice = profile?.inVoice ?? false;
@@ -199,7 +199,7 @@ export function UserMenu({
           Settings
         </NavItem>
 
-        <ThemeNavItem mode={mode} onToggle={toggle} />
+        <ThemeNavItem mode={mode} preference={preference} onCycle={cyclePreference} />
       </div>
 
       {/* ── Divider ── */}
@@ -454,21 +454,33 @@ function SteamNavItem({ linked, onClick }: { linked: boolean; onClick: () => voi
 
 /* ── Theme nav item ── */
 
-function ThemeNavItem({ mode, onToggle }: { mode: "day" | "night"; onToggle: () => void }) {
+function ThemeNavItem({
+  mode,
+  preference,
+  onCycle
+}: {
+  mode: DayNightMode;
+  preference: DayNightPreference;
+  onCycle: () => void;
+}) {
   const day = mode === "day";
+  const auto = preference === "auto";
+  // Auto reflects whatever the clock resolved to; explicit choices show their icon.
+  const icon = auto ? "🌗" : day ? "☀️" : "🌙";
+  const label = auto ? "Auto" : day ? "Day" : "Night";
   return (
     <NavItem
-      icon={day ? "☀️" : "🌙"}
-      onClick={onToggle}
+      icon={icon}
+      onClick={onCycle}
       rightSlot={
         <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span
             className="island-mono"
             style={{ fontSize: 10, color: islandTheme.color.textMuted }}
           >
-            {day ? "Day" : "Night"}
+            {label}
           </span>
-          <ThemeSwitch on={day} />
+          <ThemeSwitch on={day} dimmed={auto} />
         </span>
       }
     >
@@ -477,7 +489,7 @@ function ThemeNavItem({ mode, onToggle }: { mode: "day" | "night"; onToggle: () 
   );
 }
 
-function ThemeSwitch({ on }: { on: boolean }) {
+function ThemeSwitch({ on, dimmed = false }: { on: boolean; dimmed?: boolean }) {
   return (
     <span
       style={{
@@ -489,7 +501,8 @@ function ThemeSwitch({ on }: { on: boolean }) {
         border: `1px solid ${islandTheme.color.cardBorder}`,
         position: "relative",
         transition: "background 280ms ease",
-        flexShrink: 0
+        flexShrink: 0,
+        opacity: dimmed ? 0.65 : 1
       }}
     >
       <span

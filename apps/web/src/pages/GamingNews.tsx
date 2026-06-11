@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { apiFetch } from "../api/client.js";
 import { IslandCard, IslandTag, islandTagStyle, getTagColor } from "../islandUi.js";
 import { useDayNight } from "../scene/useDayNight.js";
 import { islandTheme } from "../theme.js";
@@ -128,11 +129,10 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
     const current = userVotes[articleId] ?? 0;
     const next: 0 | 1 | -1 = current === dir ? 0 : dir;
     setUserVotes((prev) => ({ ...prev, [articleId]: next }));
-    fetch(`/api/news/general/${articleId}/feedback`, {
+    apiFetch("/news/general/" + articleId + "/feedback", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ rating: next }),
-      credentials: "include"
+      body: JSON.stringify({ rating: next })
     }).catch(() => {});
   }
 

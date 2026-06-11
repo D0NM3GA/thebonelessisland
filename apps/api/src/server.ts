@@ -17,7 +17,7 @@ import { gameNewsSourcesRouter } from "./routes/gameNewsSources.js";
 import { generalNewsRouter } from "./routes/generalNews.js";
 import { internalRouter } from "./routes/internal.js";
 import { gameNightRouter } from "./routes/gameNights.js";
-import { membersRouter } from "./routes/members.js";
+import { membersRouter, syncGuildMembers } from "./routes/members.js";
 import { newsCardsRouter } from "./routes/newsCards.js";
 import { newsSourcesRouter } from "./routes/newsSources.js";
 import { nuggiesRouter } from "./routes/nuggies.js";
@@ -191,6 +191,19 @@ async function bootstrap() {
       console.error("[generalNews] scheduled background ingest failed:", err);
     });
   }, 4 * 60 * 60 * 1000);
+
+  // Member sync: server is now the sole driver (the web client no longer
+  // POSTs /members/sync per tab). Run shortly after boot, then every 60s.
+  setTimeout(() => {
+    syncGuildMembers().catch((err) => {
+      console.error("[members] initial sync failed:", err);
+    });
+  }, 5_000);
+  setInterval(() => {
+    syncGuildMembers().catch((err) => {
+      console.error("[members] scheduled sync failed:", err);
+    });
+  }, 60_000);
 
   app.listen(Number(env.API_PORT), () => {
     console.log(`API listening on ${env.API_PORT}`);
