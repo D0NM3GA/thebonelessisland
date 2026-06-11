@@ -134,7 +134,7 @@ export function AdminLayout({ renderPage }: AdminLayoutProps) {
 
       <div className="bi-admin-shell">
         <Sidebar page={page} onNavigate={navigate} />
-        <div style={{ minWidth: 0, display: "grid", gap: 14, alignContent: "start" }}>
+        <div className="bi-admin-content" style={{ display: "grid", gap: 14, alignContent: "start" }}>
           {page !== "dashboard" && (
             <p style={{ margin: 0, fontSize: 13, color: islandTheme.color.textMuted, lineHeight: 1.4 }}>
               {current.icon} {current.blurb}
@@ -147,16 +147,32 @@ export function AdminLayout({ renderPage }: AdminLayoutProps) {
       <style>{`
         .bi-admin-shell {
           display: grid;
-          grid-template-columns: 208px minmax(0, 1fr);
-          gap: 18px;
+          grid-template-columns: 216px minmax(0, 1fr);
+          gap: 24px;
           align-items: start;
         }
+        /* Contained panel: without a surface of its own the nav items float in
+           space and visually collide with the content column. */
         .bi-admin-sidebar {
           position: sticky;
           top: calc(var(--bi-topbar-h, 62px) + 16px);
           display: grid;
           gap: 14px;
           align-content: start;
+          padding: 12px 10px;
+          border-radius: 14px;
+          background: var(--bi-panel-bg);
+          border: 1px solid var(--bi-border);
+          z-index: 0;
+        }
+        .bi-admin-group {
+          display: grid;
+          gap: 2px;
+        }
+        .bi-admin-content {
+          position: relative;
+          z-index: 1;
+          min-width: 0;
         }
         @media (max-width: 880px) {
           .bi-admin-shell {
@@ -167,13 +183,17 @@ export function AdminLayout({ renderPage }: AdminLayoutProps) {
             display: flex;
             gap: 6px;
             overflow-x: auto;
-            padding-bottom: 6px;
+            padding: 8px 10px;
             scrollbar-width: thin;
           }
-          .bi-admin-sidebar .bi-admin-group {
-            display: flex;
-            gap: 6px;
-            flex-shrink: 0;
+          /* Flatten groups so every nav item flows into one scrollable pill row
+             instead of stacking tall columns side by side. */
+          .bi-admin-group {
+            display: contents;
+          }
+          .bi-admin-item {
+            width: auto !important;
+            flex: 0 0 auto;
           }
           .bi-admin-sidebar .bi-admin-group-label {
             display: none;
@@ -206,7 +226,7 @@ function Sidebar({ page, onNavigate }: { page: AdminPageId; onNavigate: (p: Admi
         />
       </div>
       {ADMIN_NAV_GROUPS.map((group) => (
-        <div key={group.label} className="bi-admin-group" style={{ display: "grid", gap: 2 }}>
+        <div key={group.label} className="bi-admin-group">
           <span
             className="island-mono bi-admin-group-label"
             style={{
@@ -245,6 +265,7 @@ function SidebarItem({
   return (
     <button
       type="button"
+      className="bi-admin-item"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       style={{

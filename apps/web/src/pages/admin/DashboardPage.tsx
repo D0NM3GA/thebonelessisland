@@ -76,7 +76,21 @@ export function DashboardPage({ settings, onNavigate }: DashboardProps) {
   return (
     <div style={{ display: "grid", gap: 18 }}>
       {/* Health strip */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "grid", gap: 10 }}>
+        <h2
+          className="island-display"
+          style={{
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: islandTheme.color.textMuted
+          }}
+        >
+          Island status
+        </h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {chips.map((chip) => {
           const color =
             chip.ok === null
@@ -116,6 +130,7 @@ export function DashboardPage({ settings, onNavigate }: DashboardProps) {
             </button>
           );
         })}
+        </div>
       </div>
 
       {/* Quick actions */}
