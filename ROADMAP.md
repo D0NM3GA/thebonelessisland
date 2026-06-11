@@ -17,6 +17,7 @@ Worked through the entire roadmap across 5 verified commits. Every pass: web + a
 | `f1febd7` | Steam achievements surface, "Hot this week" trending, wishlist sale radar, GHA buildx cache |
 | `9ba8f4f` | Sunday Tide Check digest, islander profiles, game detail drawer |
 | `724b92d` | SSE event stream (members/nights), polling kept as lighter fallback |
+| `642bc9b` | Steam achievement activity diffs, migration 047 column drops, dailyAmount + guildId polish |
 
 - ✅ **P0** — general-news auth, two `fetch()` fixes, DEPLOY.md. *Manual step left: flip `API_BASE_URL` to `http://api:3000` in the box's live `.env`.*
 - ✅ **P1** — ComingSoon pages, Steam unlink, StreamDrawer→presence, Community rewire + Clips/Clubs cut, dead-chrome sweep, Topbar search removed, Admin truth pass.
@@ -24,10 +25,11 @@ Worked through the entire roadmap across 5 verified commits. Every pass: web + a
 - ✅ **P3** — appdetails build (045), Steam achievements surface, Tide Check digest, trending card, wishlist sale radar, islander profiles, game detail drawer.
 - ✅ **P4** — auto day/night, confetti, mobile breakpoints, Library PLAN seed, Nuggie chat polish, toast glow-up, time-aware hero.
 
-**Deliberately NOT done (need your call):**
-- **Irreversible DB column drops** — the old plan's migrations 046/047 physically `DROP COLUMN` (legacy `min/max_players`, `median_session_minutes`, dead `game_news` AI cols) on the live DB. Code no longer relies on them; dropping is a separate, reviewed, one-way migration. *(Note: migration number 046 was used here for `weekly_digests`; if the de-AI plan resumes, renumber its drops to 048+.)*
-- **News-pipeline de-AI redesign** — phases 3–6 of `project_news_appdetails_plan.md` (mechanical radar, strip AI curation, `games-news`→`gaming-news` rename). Its own initiative, see `project_news_redesign.md`.
-- **Steam-unlock activity diffs** — small; skipped only because it needs describer edits across Home/Community/bot. Easy follow-up.
+- ✅ **DB column drops** — migration `047_drop_legacy_player_columns` drops `min/max_players` + `median_session_minutes` (legacy hardcoded defaults, zero readers after 045). `game_news` AI columns were **NOT** dropped — still used by the live AI news pipeline (de-AI redesign deferred).
+- ✅ **Steam achievement activity diffs** — `achievement.steam_progress` emitted on the 24h sync (delta>0, baseline-skipped), described in Home feed + Community + bot.
+
+**Still deliberately NOT done (separate initiative):**
+- **News-pipeline de-AI redesign** — phases 3–6 of `project_news_appdetails_plan.md` (mechanical radar, strip AI curation, `games-news`→`gaming-news` rename + drop `game_news` AI columns). See `project_news_redesign.md`. *(Migration 046 here is `weekly_digests`, 047 is the player-col drop; that plan's drops would be 048+.)*
 
 Deploy notes / small follow-ups:
 - Run migrations 045 + 046 on next deploy (the runner applies them in order; both are additive `ADD COLUMN` / `CREATE TABLE`).
