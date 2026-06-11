@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client.js";
-import { IslandTag } from "../islandUi.js";
+import { IslandTag, memberColor } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import { GameCover } from "../steamArt.js";
 
@@ -103,12 +103,6 @@ function metacriticColor(score: number): string {
   return "#fb7185"; // red
 }
 
-function memberColor(seed: string): string {
-  const palette = ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15", "#f472b6"];
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  return palette[Math.abs(hash) % palette.length];
-}
 
 function memberInitials(name: string): string {
   return (name || "??").trim().slice(0, 2).toUpperCase();

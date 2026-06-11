@@ -259,7 +259,7 @@ function CrewCard({
                   width: 12,
                   height: 12,
                   borderRadius: 999,
-                  background: "linear-gradient(135deg,#f59e0b,#d97706)",
+                  background: islandTheme.gradient.crownAmber,
                   color: islandTheme.color.textDark,
                   fontSize: 12,
                   fontWeight: 900,

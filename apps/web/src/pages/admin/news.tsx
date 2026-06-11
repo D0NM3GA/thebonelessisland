@@ -870,7 +870,7 @@ function NewsSourceRegistryPanel({ accent }: { accent: string }) {
                 background: svc.ready
                   ? "rgba(34, 197, 94, 0.15)"
                   : "rgba(239, 68, 68, 0.15)",
-                color: svc.ready ? "#86efac" : "#fca5a5",
+                color: svc.ready ? islandTheme.color.successSoft : islandTheme.color.dangerSoft,
                 border: `1px solid ${svc.ready ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)"}`,
                 fontSize: 12,
                 letterSpacing: "0.05em",
@@ -1032,7 +1032,7 @@ function NewsSourceRegistryPanel({ accent }: { accent: string }) {
                         </span>
                       )}
                       {src.last_error && (
-                        <span className="island-mono" style={{ fontSize: 12, padding: "1px 6px", borderRadius: 999, background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.4)", letterSpacing: "0.06em", textTransform: "uppercase" }} title={src.last_error}>
+                        <span className="island-mono" style={{ fontSize: 12, padding: "1px 6px", borderRadius: 999, background: "rgba(239, 68, 68, 0.15)", color: islandTheme.color.dangerSoft, border: "1px solid rgba(239, 68, 68, 0.4)", letterSpacing: "0.06em", textTransform: "uppercase" }} title={src.last_error}>
                           error
                         </span>
                       )}

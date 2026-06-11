@@ -26,9 +26,35 @@ export const islandTheme = {
     success: "#14532d",
     successText: "#dcfce7",
     successAccent: "#22c55e",
+    // Soft on-dark text variants for inline status copy (readable on panelBg
+    // where successAccent/dangerAccent are too saturated for body-size text).
+    successSoft: "#86efac",
+    dangerSoft: "#fca5a5",
     warnAccent: "#f59e0b",
+    // The Nuggies brand gold — balances, claim CTAs, trending highlights.
+    nuggieGold: "#fbbf77",
+    // "Earned/unlocked" lime — achievement chips.
+    limeEarned: "#a3e635",
+    // Game-night vote feedback (theme-static, identifies actions not surfaces).
+    voteUp: "#38bdf8",
+    voteDown: "#f87171",
+    voteMaybe: "#facc15",
     textDark: "#0f172a"
   },
+  // Semantic type scale (px). Use instead of inline fontSize literals so
+  // hierarchy stays consistent and globally tunable.
+  text: {
+    xs: 11,
+    sm: 12,
+    md: 13,
+    base: 14,
+    lg: 16,
+    xl: 20,
+    h2: 22,
+    display: "clamp(28px, 4vw, 38px)"
+  },
+  // 4px-base spacing scale. space[1]=4 … space[6]=32.
+  space: [0, 4, 8, 12, 16, 24, 32],
   radius: {
     control: 10,
     card: 12,
@@ -59,7 +85,11 @@ export const islandTheme = {
     gameNightTile: "linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.8))",
     toolsTile: "linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.82))",
     comingSoonTile: "linear-gradient(160deg, #0b1220, #0f172a)",
-    gameArtFallback: "linear-gradient(140deg, #0b1220, #132640)"
+    gameArtFallback: "linear-gradient(140deg, #0b1220, #132640)",
+    crownAmber: "linear-gradient(135deg, #f59e0b, #d97706)",
+    nuggieCoin: "linear-gradient(135deg, #fbbf77, #ef8354)",
+    progressDone: "linear-gradient(90deg, #16a34a, #4ade80)",
+    progressActive: "linear-gradient(90deg, #0369a1, #38bdf8)"
   },
   shadow: {
     tileIdle: "0 4px 14px rgba(2,6,23,0.45)",

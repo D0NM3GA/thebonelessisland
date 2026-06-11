@@ -251,7 +251,7 @@ function BalanceStrip({ balance, maxBet, cooldownSecs }: { balance: number | nul
         <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Balance
         </div>
-        <div className="island-display" style={{ fontSize: 22, fontWeight: 800, color: "#fbbf77" }}>
+        <div className="island-display" style={{ fontSize: 22, fontWeight: 800, color: islandTheme.color.nuggieGold }}>
           ₦{balance == null ? "—" : balance.toLocaleString()}
         </div>
       </div>

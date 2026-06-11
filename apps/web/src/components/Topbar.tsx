@@ -258,7 +258,7 @@ export function UserAvatar({ profile, initials, size }: UserAvatarProps) {
         width: size,
         height: size,
         borderRadius: 999,
-        background: "linear-gradient(135deg, #fbbf77, #ef8354)",
+        background: islandTheme.gradient.nuggieCoin,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

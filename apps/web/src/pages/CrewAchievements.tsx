@@ -225,7 +225,7 @@ function GameCard({ game }: { game: CrewAchievementGame }) {
             border: `1px solid ${islandTheme.color.cardBorder}`,
             background: game.headerImageUrl
               ? `url("${game.headerImageUrl}") center/cover`
-              : "linear-gradient(140deg, #0b1220, #132640)",
+              : islandTheme.gradient.gameArtFallback,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -392,8 +392,8 @@ function ProgressBar({ pct, cleared, thin }: { pct: number; cleared?: boolean; t
           width: `${pct}%`,
           borderRadius: 999,
           background: cleared
-            ? "linear-gradient(90deg, #16a34a, #4ade80)"
-            : "linear-gradient(90deg, #0369a1, #38bdf8)",
+            ? islandTheme.gradient.progressDone
+            : islandTheme.gradient.progressActive,
           transition: "width 600ms ease"
         }}
       />

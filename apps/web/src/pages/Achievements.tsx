@@ -438,7 +438,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: reached ? 22 : 16,
-                    color: reached ? "#0f172a" : islandTheme.color.textMuted,
+                    color: reached ? islandTheme.color.textDark : islandTheme.color.textMuted,
                     boxShadow: reached
                       ? `0 0 18px ${tier.reachedGlow}, inset 0 0 0 1px rgba(255,255,255,0.18)`
                       : isNext
@@ -540,7 +540,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                               padding: "1px 6px",
                               borderRadius: 999,
                               background: "rgba(163, 230, 53, 0.18)",
-                              color: "#a3e635",
+                              color: islandTheme.color.limeEarned,
                               border: "1px solid rgba(163, 230, 53, 0.45)",
                               letterSpacing: "0.08em",
                               textTransform: "uppercase",

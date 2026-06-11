@@ -275,10 +275,10 @@ export function IslandGameBlade({
             fontWeight: 700,
             border:
               voteFlashTone === "up"
-                ? "1px solid #38bdf8"
+                ? `1px solid ${islandTheme.color.voteUp}`
                 : voteFlashTone === "down"
-                  ? "1px solid #f87171"
-                  : "1px solid #facc15",
+                  ? `1px solid ${islandTheme.color.voteDown}`
+                  : `1px solid ${islandTheme.color.voteMaybe}`,
             background:
               voteFlashTone === "up" ? "rgba(8,47,73,0.9)" : voteFlashTone === "down" ? "rgba(69,10,10,0.9)" : "rgba(66,32,6,0.9)",
             color: voteFlashTone === "up" ? "#bae6fd" : voteFlashTone === "down" ? "#fee2e2" : "#fef9c3",
@@ -781,4 +781,17 @@ export function IslandTag({ children, tone = "default", color, active, onClick, 
     );
   }
   return <span className="island-mono" style={base}>{children}</span>;
+}
+
+/**
+ * Stable per-member identity color, hashed from a seed (discord id /
+ * display name) into the theme's categorical avatar palette. Single source —
+ * pages must not hand-roll their own palettes or the same member shifts color
+ * between surfaces.
+ */
+export function memberColor(seed: string): string {
+  const palette = islandTheme.categorical.avatars;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  return palette[Math.abs(hash) % palette.length];
 }

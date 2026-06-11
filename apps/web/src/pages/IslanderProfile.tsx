@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from "react";
 import { apiFetch } from "../api/client.js";
-import { IslandCard, IslandTag } from "../islandUi.js";
+import { IslandCard, IslandTag, memberColor } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import { coverUrl } from "../steamArt.js";
 import type { PageId } from "../types.js";
@@ -95,12 +95,6 @@ function relTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function memberColor(seed: string): string {
-  const palette = ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15", "#f472b6"];
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  return palette[Math.abs(hash) % palette.length];
-}
 
 function memberInitials(name: string): string {
   return (name || "??").trim().slice(0, 2).toUpperCase();

@@ -382,7 +382,7 @@ function CrewTrending({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   );
 }
 
-const TRENDING_RANK_COLORS = ["#fbbf77", "#cbd5e1", "#d4956a"];
+const TRENDING_RANK_COLORS = [islandTheme.color.nuggieGold, "#cbd5e1", "#d4956a"];
 
 function TrendingRow({ game, rank }: { game: TrendingGame; rank: number }) {
   const hours = (game.totalMinutes2Weeks / 60).toFixed(1);
@@ -445,7 +445,7 @@ function TrendingRow({ game, rank }: { game: TrendingGame; rank: number }) {
         ) : null}
       </div>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.1 }}>
-        <span className="island-display" style={{ fontSize: 16, fontWeight: 800, color: "#fbbf77" }}>
+        <span className="island-display" style={{ fontSize: 16, fontWeight: 800, color: islandTheme.color.nuggieGold }}>
           {hours}h
         </span>
         <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -646,7 +646,7 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span
           className="island-display"
-          style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: "#fbbf77" }}
+          style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: islandTheme.color.nuggieGold }}
         >
           {balance !== undefined && !optedOut ? `₦${balance.toLocaleString()}` : "—"}
         </span>
@@ -724,11 +724,11 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
             +{claimFlash.amount} <NuggieCoin size={16} /> claimed!
           </div>
         ) : !optedOut && claimedToday === true ? (
-          <div style={{ ...nuggieFooterBtnStyle("#fbbf77"), cursor: "default", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, lineHeight: 1.1, padding: "4px 10px" }}>
+          <div style={{ ...nuggieFooterBtnStyle(islandTheme.color.nuggieGold), cursor: "default", display: "flex", flexDirection: "column", alignItems: "center", gap: 1, lineHeight: 1.1, padding: "4px 10px" }}>
             <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Next claim
             </span>
-            <span className="island-mono" style={{ fontSize: 12, color: "#fbbf77", fontWeight: 700 }}>
+            <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.nuggieGold, fontWeight: 700 }}>
               {formatCountdown(msLeft)}
             </span>
           </div>
@@ -738,14 +738,14 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
             onClick={() => void handleClaim()}
             disabled={claiming || optedOut || claimedToday === null}
             style={{
-              ...nuggieFooterBtnStyle("#fbbf77"),
+              ...nuggieFooterBtnStyle(islandTheme.color.nuggieGold),
               opacity: claiming || optedOut || claimedToday === null ? 0.6 : 1,
               cursor: claiming ? "wait" : optedOut ? "not-allowed" : "pointer"
             }}
           >
             {!claiming && !optedOut && claimedToday === false ? (
               <GlowFollower
-                accent="#fbbf77"
+                accent={islandTheme.color.nuggieGold}
                 colors={{ primary: "rgba(251, 191, 119, 0.55)", secondary: "rgba(245, 158, 11, 0.45)" }}
               />
             ) : null}

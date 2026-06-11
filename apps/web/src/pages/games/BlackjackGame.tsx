@@ -288,11 +288,11 @@ function ScoreChip({ total, isDealer }: { total: number; isDealer: boolean }) {
   const bust = total > 21;
   const blackjack = total === 21;
   const color = bust
-    ? "#fca5a5"
+    ? islandTheme.color.dangerSoft
     : blackjack
       ? "#fde68a"
       : isDealer
-        ? "#fbbf77"
+        ? islandTheme.color.nuggieGold
         : islandTheme.color.textPrimary;
   const bg = bust
     ? "rgba(239, 68, 68, 0.20)"
