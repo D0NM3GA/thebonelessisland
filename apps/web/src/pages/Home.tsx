@@ -405,6 +405,8 @@ type TrendingGame = {
   name: string;
   headerImageUrl: string | null;
   totalMinutes2Weeks: number;
+  /** Rolling window from ~a fortnight ago; null until snapshots accrue. */
+  prevMinutes2Weeks?: number | null;
   players: number;
   topPlayer: { displayName: string; minutes: number } | null;
 };
@@ -493,6 +495,11 @@ const TRENDING_RANK_COLORS = [islandTheme.color.nuggieGold, "#cbd5e1", "#d4956a"
 function TrendingRow({ game, rank }: { game: TrendingGame; rank: number }) {
   const hours = (game.totalMinutes2Weeks / 60).toFixed(1);
   const leaderHours = game.topPlayer ? Math.round(game.topPlayer.minutes / 60) : 0;
+  // Delta vs the snapshot from ~14 days back; hidden until |Δ| ≥ 1h or no history.
+  const deltaMin =
+    typeof game.prevMinutes2Weeks === "number" ? game.totalMinutes2Weeks - game.prevMinutes2Weeks : null;
+  const deltaHours = deltaMin !== null ? Math.round(Math.abs(deltaMin) / 60) : 0;
+  const showDelta = deltaMin !== null && deltaHours >= 1;
   return (
     <div
       style={{
@@ -553,6 +560,20 @@ function TrendingRow({ game, rank }: { game: TrendingGame; rank: number }) {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.1 }}>
         <span className="island-display" style={{ fontSize: 16, fontWeight: 800, color: islandTheme.color.nuggieGold }}>
           {hours}h
+          {showDelta ? (
+            <span
+              className="island-mono"
+              title={`vs last fortnight: ${deltaMin! > 0 ? "+" : "−"}${deltaHours}h`}
+              style={{
+                marginLeft: 6,
+                fontSize: 12,
+                fontWeight: 700,
+                color: deltaMin! > 0 ? islandTheme.color.successAccent : islandTheme.color.dangerSoft
+              }}
+            >
+              {deltaMin! > 0 ? "↑" : "↓"}{deltaHours}h
+            </span>
+          ) : null}
         </span>
         <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           {game.players === 1 ? "1 player" : `${game.players} players`}

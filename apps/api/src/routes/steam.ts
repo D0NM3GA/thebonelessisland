@@ -1350,6 +1350,7 @@ type CrewTrendingRow = {
   players: number;
   top_player_name: string | null;
   top_player_minutes: number | null;
+  prev_minutes_2weeks: number | null;
 };
 
 steamRouter.get("/crew-trending", async (_req, res) => {
@@ -1392,7 +1393,17 @@ steamRouter.get("/crew-trending", async (_req, res) => {
             AND ug2.playtime_2weeks > 0
           ORDER BY ug2.playtime_2weeks DESC
           LIMIT 1
-        ) AS top_player_minutes
+        ) AS top_player_minutes,
+        (
+          -- The rolling window from ~a fortnight ago: closest daily snapshot
+          -- in the 12–16 day band. NULL until snapshots have accrued.
+          SELECT s.total_minutes_2weeks
+          FROM crew_trending_snapshots s
+          WHERE s.app_id = g.app_id
+            AND s.captured_on BETWEEN CURRENT_DATE - 16 AND CURRENT_DATE - 12
+          ORDER BY ABS(s.captured_on - (CURRENT_DATE - 14))
+          LIMIT 1
+        ) AS prev_minutes_2weeks
       FROM shareable_user_games ug
       INNER JOIN games g ON g.app_id = ug.app_id
       INNER JOIN users u ON u.id = ug.user_id
@@ -1414,6 +1425,7 @@ steamRouter.get("/crew-trending", async (_req, res) => {
       name: row.name,
       headerImageUrl: row.header_image_url,
       totalMinutes2Weeks: row.total_minutes_2weeks,
+      prevMinutes2Weeks: row.prev_minutes_2weeks,
       players: row.players,
       topPlayer:
         row.top_player_name != null

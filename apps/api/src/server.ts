@@ -42,6 +42,7 @@ import { seedCuratedSources } from "./lib/news/curatedSources.js";
 import { loadSettings } from "./lib/serverSettings.js";
 import { isTaglineStale, refreshTaglines } from "./lib/taglineGenerator.js";
 import { runMigrations } from "./db/runMigrations.js";
+import { snapshotCrewTrending } from "./lib/crewTrendingSnapshots.js";
 import { recommendationRouter } from "./routes/recommendations.js";
 import { steamRouter, syncAllOwnedGames } from "./routes/steam.js";
 import { authLimiter, aiLimiter, steamLimiter, defaultLimiter } from "./middleware/rateLimit.js";
@@ -282,6 +283,20 @@ async function bootstrap() {
         console.error("[steam] scheduled owned-games sync failed:", err);
       });
   }, 30 * 60 * 1000);
+
+  // Crew-trending snapshot: records today's per-app rolling 2-week totals so
+  // the home page can show "up/down vs last fortnight" deltas. Cheap single
+  // upsert; runs after the first owned-games sync settles, then twice daily
+  // (same-day re-runs just refresh today's row).
+  setTimeout(() => {
+    snapshotCrewTrending()
+      .then(({ apps }) => console.log(`[trending] snapshot: ${apps} app(s)`))
+      .catch((err) => console.error("[trending] initial snapshot failed:", err));
+  }, 60_000);
+  setInterval(() => {
+    snapshotCrewTrending()
+      .catch((err) => console.error("[trending] scheduled snapshot failed:", err));
+  }, 12 * 60 * 60 * 1000);
 
   // Steam player-summary sync: one batched GetPlayerSummaries call refreshes
   // every linked member's persona/avatar/in-game status/account age, plus a
