@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { IslandCard, IslandTag, islandInputStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import type { CrewOwnedGame, CrewOwner, PageId } from "../types.js";
@@ -63,7 +63,7 @@ function pickCoverFor(category: LibCategory): string {
 }
 
 function ownerColor(seed: string): string {
-  const palette = ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15", "#f472b6"];
+  const palette = islandTheme.categorical.avatars;
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   return palette[Math.abs(hash) % palette.length];
@@ -120,11 +120,45 @@ function tagLabel(game: CrewOwnedGame, category: LibCategory): string {
   }
 }
 
+const LIB_HASH_PREFIX = "#/library";
+
+function readLibHashParams(): URLSearchParams {
+  if (typeof window === "undefined") return new URLSearchParams();
+  const hash = window.location.hash;
+  if (!hash.startsWith(LIB_HASH_PREFIX)) return new URLSearchParams();
+  const qIndex = hash.indexOf("?");
+  return new URLSearchParams(qIndex >= 0 ? hash.slice(qIndex + 1) : "");
+}
+
+const LIB_FILTERS: LibFilter[] = ["all", "mine", "co-op", "horror", "puzzle", "party", "solo"];
+
 function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }: LibraryPageProps) {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<LibFilter>("all");
-  const [sort, setSort] = useState<SortMode>("owned");
+  // Filter/sort/search live in the URL hash so refreshes and shared links
+  // land on the same view (#/library?f=co-op&s=title&q=…).
+  const initialParams = readLibHashParams();
+  const [search, setSearch] = useState(() => initialParams.get("q") ?? "");
+  const [filter, setFilter] = useState<LibFilter>(() => {
+    const f = initialParams.get("f") as LibFilter | null;
+    return f && LIB_FILTERS.includes(f) ? f : "all";
+  });
+  const [sort, setSort] = useState<SortMode>(() => (initialParams.get("s") === "title" ? "title" : "owned"));
   const [openAppId, setOpenAppId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filter !== "all") params.set("f", filter);
+    if (sort !== "owned") params.set("s", sort);
+    if (search.trim()) params.set("q", search.trim());
+    const qs = params.toString();
+    window.history.replaceState(null, "", `${LIB_HASH_PREFIX}${qs ? `?${qs}` : ""}`);
+  }, [filter, sort, search]);
+
+  // Leaving the library: drop the hash so refreshing elsewhere doesn't bounce back here.
+  useEffect(() => () => {
+    if (window.location.hash.startsWith(LIB_HASH_PREFIX)) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }, []);
 
   const enriched = useMemo(
     () =>
@@ -243,11 +277,19 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
         <select
           value={sort}
           onChange={(e) => setSort(e.target.value as SortMode)}
+          aria-label="Sort library"
           style={{ ...islandInputStyle, fontSize: 12 }}
         >
           <option value="owned">Most owned</option>
           <option value="title">Alphabetical</option>
         </select>
+        <span
+          className="island-mono"
+          style={{ fontSize: 12, color: islandTheme.color.textMuted, whiteSpace: "nowrap" }}
+        >
+          {visible.length} of {totalGames} game{totalGames === 1 ? "" : "s"}
+          {filter === "mine" ? ` · ${mineCount} yours` : ""}
+        </span>
       </IslandCard>
 
       <IslandCard style={{ padding: 0, overflow: "hidden" }}>

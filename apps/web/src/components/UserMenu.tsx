@@ -467,7 +467,8 @@ function ThemeNavItem({
   const auto = preference === "auto";
   // Auto reflects whatever the clock resolved to; explicit choices show their icon.
   const icon = auto ? "🌗" : day ? "☀️" : "🌙";
-  const label = auto ? "Auto" : day ? "Day" : "Night";
+  // Show the resolved mode alongside auto so people discover auto exists.
+  const label = auto ? `${day ? "Day" : "Night"} · auto` : day ? "Day" : "Night";
   return (
     <NavItem
       icon={icon}

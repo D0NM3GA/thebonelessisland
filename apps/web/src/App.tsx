@@ -81,11 +81,14 @@ export function App() {
   const lastGuildMembersRef = useRef<string | null>(null);
   const lastGameNightsRef = useRef<string | null>(null);
   const lastSelectedNightRef = useRef<string | null>(null);
-  // Deep links into the admin area use the URL hash (#/admin/<page>); landing
-  // on one starts the session on the admin page instead of home.
-  const [page, setPage] = useState<PageId>(() =>
-    typeof window !== "undefined" && window.location.hash.startsWith("#/admin") ? "admin" : "home"
-  );
+  // Deep links use the URL hash: #/admin/<page> and #/library?… land the
+  // session on that page instead of home.
+  const [page, setPage] = useState<PageId>(() => {
+    if (typeof window === "undefined") return "home";
+    if (window.location.hash.startsWith("#/admin")) return "admin";
+    if (window.location.hash.startsWith("#/library")) return "library";
+    return "home";
+  });
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [composerScrollNonce, setComposerScrollNonce] = useState(0);
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);

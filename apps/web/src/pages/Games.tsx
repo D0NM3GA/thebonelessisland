@@ -226,37 +226,50 @@ function SessionComposer(props: GamesPageProps) {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: 14, padding: 16 }}>
+      <div style={{ display: "grid", gap: 12, padding: 16 }}>
+        {/* Featured-banner treatment: the picked game gets the same wide
+            art-with-gradient presentation as the home featured card. */}
         <div
+          role={pick?.headerImageUrl ? "img" : undefined}
+          aria-label={pick?.headerImageUrl ? pick.name : undefined}
           style={{
-            width: 96,
-            height: 128,
-            borderRadius: 10,
+            minHeight: pick ? 120 : 88,
+            borderRadius: 12,
             border: `1px solid ${islandTheme.color.cardBorder}`,
             display: "flex",
             alignItems: "flex-end",
-            padding: 6,
-            color: islandTheme.color.textInverted,
-            fontSize: 12,
-            textShadow: "0 1px 2px rgba(0,0,0,0.6)",
-            fontWeight: 700,
+            padding: "12px 16px",
             overflow: "hidden",
-            backgroundImage: pick?.headerImageUrl
-              ? `linear-gradient(180deg, rgba(15,23,42,0.05) 40%, rgba(15,23,42,0.85) 100%), url("${pick.headerImageUrl}")`
-              : undefined,
-            backgroundColor: pick?.headerImageUrl ? undefined : "transparent",
-            background: pick?.headerImageUrl ? undefined : SESSION_COMPOSER_FALLBACK.cover,
-            backgroundSize: "cover",
-            backgroundPosition: "center"
+            background: pick?.headerImageUrl
+              ? `linear-gradient(135deg, rgba(8,16,34,0.88) 25%, rgba(8,16,34,0.45) 70%, rgba(8,16,34,0.15) 100%), url("${pick.headerImageUrl}") center / cover no-repeat`
+              : SESSION_COMPOSER_FALLBACK.cover
           }}
         >
-          {pick?.headerImageUrl ? null : pick ? pickCoverInitials(pick.name) : "—"}
+          <div style={{ minWidth: 0 }}>
+            {!pick?.headerImageUrl && pick ? (
+              <div
+                className="island-mono"
+                style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.1em", color: "rgba(255,255,255,0.55)", marginBottom: 2 }}
+              >
+                {pickCoverInitials(pick.name)}
+              </div>
+            ) : null}
+            <h2
+              className="island-display"
+              style={{
+                margin: 0,
+                fontSize: 22,
+                fontWeight: 800,
+                color: "#f8fafc",
+                textShadow: "0 2px 10px rgba(0,0,0,0.55)"
+              }}
+            >
+              {pick?.name ?? SESSION_COMPOSER_FALLBACK.title}
+            </h2>
+          </div>
         </div>
         <div style={{ minWidth: 0 }}>
-          <h2 className="island-display" style={{ margin: "2px 0 4px", fontSize: 22, fontWeight: 800 }}>
-            {pick?.name ?? SESSION_COMPOSER_FALLBACK.title}
-          </h2>
-          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: islandTheme.color.textSubtle }}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: "68ch" }}>
             {pick?.blurb ?? pick?.reason ?? SESSION_COMPOSER_FALLBACK.reason}
           </p>
           <ModeBar value={mode} onChange={setMode} />
