@@ -5,6 +5,7 @@ import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
 import { recordEvent } from "../lib/activityEvents.js";
+import { broadcast } from "../lib/eventBus.js";
 import { whatCanWePlay } from "../lib/recommend.js";
 import { generateRecommendationBlurb } from "../lib/recommendBlurb.js";
 
@@ -190,6 +191,7 @@ gameNightRouter.post("/", requireSession, async (req, res) => {
       targetGameNightId: gameNightId,
       payload: { title: body.title, scheduledFor: body.scheduledFor }
     });
+    broadcast("nights-changed");
   }
 
   res.status(201).json({ id: gameNightId });
@@ -269,6 +271,8 @@ gameNightRouter.post("/:id/attendees/me", requireSession, async (req, res) => {
     targetGameNightId: id
   });
 
+  broadcast("nights-changed");
+
   res.json({ ok: true });
 });
 
@@ -298,6 +302,8 @@ gameNightRouter.delete("/:id/attendees/me", requireSession, async (req, res) => 
     actorDiscordUserId: discordUserId,
     targetGameNightId: id
   });
+
+  broadcast("nights-changed");
 
   res.json({ ok: true });
 });

@@ -3,6 +3,7 @@ import { env } from "../config.js";
 import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { requireBotSecret, requireSession } from "../lib/auth.js";
+import { broadcast } from "../lib/eventBus.js";
 
 const PRESENCE_STATUSES = new Set(["online", "idle", "dnd", "offline"]);
 
@@ -309,6 +310,7 @@ membersRouter.post("/presence/:discordUserId", requireBotSecret, async (req, res
     `,
     [status, guildId, discordUserId]
   );
+  broadcast("members-changed");
   res.json({ ok: true, updated: result.rowCount ?? 0 });
 });
 

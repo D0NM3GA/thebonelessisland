@@ -362,6 +362,26 @@ export function App() {
     };
   }, []);
 
+  // Server-sent events give near-instant freshness for member presence and
+  // game-night changes. This is additive on top of the polling fallbacks below —
+  // if SSE never flows (e.g. blocked by an edge proxy), polling still keeps the
+  // UI correct. EventSource auto-reconnects on error, so no manual retry logic.
+  useEffect(() => {
+    if (isAuthenticated !== true) return;
+
+    const es = new EventSource(`${API_BASE_URL}/events`, { withCredentials: true });
+    es.addEventListener("members-changed", () => {
+      void loadGuildMembers(true);
+    });
+    es.addEventListener("nights-changed", () => {
+      void loadGameNights(true);
+    });
+
+    return () => {
+      es.close();
+    };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (isAuthenticated !== true) return;
 
@@ -410,7 +430,8 @@ export function App() {
   }, [gameNights, selectedNightId]);
 
   // The server now drives the actual Discord member sync on its own interval.
-  // The client only refreshes the member list for the UI every 60s.
+  // The client refreshes the member list for the UI as a lighter polling
+  // fallback (every 180s); SSE ("members-changed") handles immediacy.
   useEffect(() => {
     if (isAuthenticated !== true) return;
 
@@ -427,7 +448,7 @@ export function App() {
 
     const intervalId = window.setInterval(() => {
       void runMembersRefresh();
-    }, 60000);
+    }, 180000);
 
     return () => {
       window.clearInterval(intervalId);
@@ -451,7 +472,7 @@ export function App() {
     void runNightListSync();
     const intervalId = window.setInterval(() => {
       void runNightListSync();
-    }, 20000);
+    }, 90000);
 
     return () => window.clearInterval(intervalId);
   }, [isAuthenticated, page]);

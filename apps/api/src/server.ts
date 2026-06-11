@@ -9,6 +9,8 @@ import { installRedactor } from "./lib/logger.js";
 // from this point on (including third-party libraries that use console)
 // will have any matching secret value replaced with [REDACTED].
 installRedactor();
+import { requireSession } from "./lib/auth.js";
+import { addSubscriber, removeSubscriber, broadcast } from "./lib/eventBus.js";
 import { activityRouter } from "./routes/activity.js";
 import { aiChatRouter } from "./routes/aiChat.js";
 import { authRouter } from "./routes/auth.js";
@@ -91,6 +93,34 @@ app.use(
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+// Server-sent events stream for push freshness (members + game nights).
+// Mounted directly with only requireSession, ahead of the rate-limited router
+// mounts, because this is a single long-lived connection per tab and the
+// per-minute defaultLimiter must not throttle it. SSE is additive immediacy:
+// the client keeps a lighter polling fallback so correctness never depends on
+// this stream surviving Cloudflare/Caddy buffering.
+app.get("/events", requireSession, (req, res) => {
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders();
+  res.write(": connected\n\n");
+
+  addSubscriber(res);
+
+  const heartbeat = setInterval(() => {
+    res.write(": ping\n\n");
+  }, 25_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeSubscriber(res);
+  });
 });
 
 // Rate limits are scoped to specific risk classes; everything else gets the
@@ -201,14 +231,18 @@ async function bootstrap() {
   // Member sync: server is now the sole driver (the web client no longer
   // POSTs /members/sync per tab). Run shortly after boot, then every 60s.
   setTimeout(() => {
-    syncGuildMembers().catch((err) => {
-      console.error("[members] initial sync failed:", err);
-    });
+    syncGuildMembers()
+      .then(() => broadcast("members-changed"))
+      .catch((err) => {
+        console.error("[members] initial sync failed:", err);
+      });
   }, 5_000);
   setInterval(() => {
-    syncGuildMembers().catch((err) => {
-      console.error("[members] scheduled sync failed:", err);
-    });
+    syncGuildMembers()
+      .then(() => broadcast("members-changed"))
+      .catch((err) => {
+        console.error("[members] scheduled sync failed:", err);
+      });
   }, 60_000);
 
   // Wishlist price sync: refreshes sale prices on wishlisted games via
