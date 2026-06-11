@@ -270,7 +270,7 @@ function FeaturedNewsCard({
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-1px)";
-        e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.28)";
+        e.currentTarget.style.boxShadow = islandTheme.shadow.cardHover;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "translateY(0)";
@@ -1010,7 +1010,7 @@ function CrewAvatar({ member }: { member: GuildMember }) {
   );
 }
 
-const AVATAR_PALETTE = ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15"];
+const AVATAR_PALETTE = islandTheme.categorical.avatars;
 
 function pickColorFor(seed: string): string {
   let hash = 0;
@@ -1032,7 +1032,7 @@ const ACTIVITY_TABS: Array<{ id: ActivityCategory; label: string }> = [
   { id: "patches", label: "Patch notes" }
 ];
 
-const ACTOR_COLORS = ["#22d3ee", "#a855f7", "#f4a261", "#86efac", "#fbbf77", "#ef8354", "#4ade80", "#60a5fa"];
+const ACTOR_COLORS = islandTheme.categorical.avatars;
 
 function colorForActor(id: string | null | undefined): string {
   if (!id) return ACTOR_COLORS[0];

@@ -298,7 +298,7 @@ function CrewCard({
   );
 }
 
-const COMMUNITY_ACTOR_COLORS = ["#22d3ee", "#a855f7", "#f4a261", "#86efac", "#fbbf77", "#ef8354", "#4ade80", "#60a5fa"];
+const COMMUNITY_ACTOR_COLORS = islandTheme.categorical.avatars;
 
 function communityColorFor(id: string | null | undefined): string {
   if (!id) return COMMUNITY_ACTOR_COLORS[0];

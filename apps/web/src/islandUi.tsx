@@ -221,7 +221,7 @@ export function IslandGameCard({
             height: 90,
             borderRadius: 6,
             border: `1px solid ${islandTheme.color.border}`,
-            background: "linear-gradient(140deg, #0b1220, #132640)",
+            background: islandTheme.gradient.gameArtFallback,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -310,7 +310,7 @@ export function IslandGameBlade({
         border: selected ? `1px solid ${islandTheme.color.primaryGlow}` : `1px solid ${islandTheme.color.border}`,
         minHeight: 98,
         background: islandTheme.color.panelBg,
-        boxShadow: hovered ? "0 0 0 1px rgba(96,165,250,0.6), 0 10px 24px rgba(10,20,45,0.5)" : "0 6px 16px rgba(2,6,23,0.28)",
+        boxShadow: hovered ? islandTheme.shadow.bladeHover : islandTheme.shadow.cardIdle,
         transform: hovered ? "translateY(-2px) scale(1.01)" : "translateY(0) scale(1)",
         transition: "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease",
         animation: justVoted ? "islandBladePulse 700ms ease-out" : undefined,
@@ -378,7 +378,7 @@ export function IslandGameBlade({
           style={{
             position: "absolute",
             inset: 0,
-            background: "linear-gradient(140deg, #0b1220, #132640)"
+            background: islandTheme.gradient.gameArtFallback
           }}
         />
       )}
@@ -800,7 +800,7 @@ export function islandTagStyle(opts: { color: string; active?: boolean }): CSSPr
     background: active ? `${color}55` : `${color}22`,
     border: `1px solid ${active ? color : `${color}44`}`,
     color,
-    borderRadius: 6,
+    borderRadius: islandTheme.radius.chip,
     padding: "1px 7px",
     whiteSpace: "nowrap",
     lineHeight: 1.5,

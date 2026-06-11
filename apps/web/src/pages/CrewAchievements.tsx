@@ -32,7 +32,7 @@ function clampPct(value: number): number {
 }
 
 function memberColor(seed: string): string {
-  const palette = ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15", "#f472b6"];
+  const palette = islandTheme.categorical.avatars;
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   return palette[Math.abs(hash) % palette.length];

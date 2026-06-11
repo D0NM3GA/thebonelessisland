@@ -581,7 +581,7 @@ function NewsHeroCard({
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = "translateY(-2px)";
-        e.currentTarget.style.boxShadow = "0 20px 45px rgba(0,0,0,0.35)";
+        e.currentTarget.style.boxShadow = islandTheme.shadow.cardHoverStrong;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "translateY(0)";

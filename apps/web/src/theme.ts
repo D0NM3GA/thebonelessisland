@@ -32,7 +32,8 @@ export const islandTheme = {
   radius: {
     control: 10,
     card: 12,
-    surface: 14
+    surface: 14,
+    chip: 6
   },
   spacing: {
     cardPadding: "0.95rem",
@@ -57,14 +58,25 @@ export const islandTheme = {
   gradient: {
     gameNightTile: "linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.8))",
     toolsTile: "linear-gradient(160deg, rgba(7,15,35,0.45), rgba(10,18,30,0.82))",
-    comingSoonTile: "linear-gradient(160deg, #0b1220, #0f172a)"
+    comingSoonTile: "linear-gradient(160deg, #0b1220, #0f172a)",
+    gameArtFallback: "linear-gradient(140deg, #0b1220, #132640)"
   },
   shadow: {
     tileIdle: "0 4px 14px rgba(2,6,23,0.45)",
     tileComingSoon: "0 4px 14px rgba(2,6,23,0.35)",
     tileGameNightHover: "0 0 0 1px #60a5fa, 0 0 24px rgba(96,165,250,0.55)",
     tileToolsHover: "0 0 0 1px #22d3ee, 0 0 24px rgba(34,211,238,0.55)",
-    toast: "0 8px 24px rgba(2, 6, 23, 0.42)"
+    toast: "0 8px 24px rgba(2, 6, 23, 0.42)",
+    cardIdle: "0 6px 16px rgba(2,6,23,0.28)",
+    cardHover: "0 12px 32px rgba(0,0,0,0.28)",
+    cardHoverStrong: "0 20px 45px rgba(0,0,0,0.35)",
+    bladeHover: "0 0 0 1px rgba(96,165,250,0.6), 0 10px 24px rgba(10,20,45,0.5)",
+    menu: "0 20px 48px rgba(0,0,0,0.45)"
+  },
+  // Theme-static categorical palettes. These deliberately do not flip with
+  // day/night — they identify entities (people, tags), not surfaces.
+  categorical: {
+    avatars: ["#fbbf77", "#22d3ee", "#a855f7", "#4ade80", "#ef8354", "#86efac", "#facc15", "#60a5fa"]
   },
   motion: {
     dur: {
