@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api/client.js";
 import { IslandButton, IslandCard, IslandEmptyState, IslandTag, islandInputStyle, islandTagStyle } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
+import { GameCover } from "../steamArt.js";
 import type {
+  CrewOwnedGame,
   ForumCategory,
   ForumFeedSort,
   ForumFeedThread,
@@ -10,6 +12,7 @@ import type {
   ForumRecentThread,
   ForumStats,
   ForumThreadDetail,
+  ForumThreadGame,
   ForumThreadListItem,
   MeProfile
 } from "../types.js";
@@ -23,11 +26,12 @@ type ForumView =
 type ForumsPageProps = {
   profile: MeProfile | null;
   isAdmin: boolean;
+  crewGames: CrewOwnedGame[];
 };
 
 const FEED_PAGE_SIZE = 30;
 
-export function ForumsPage({ profile, isAdmin }: ForumsPageProps) {
+export function ForumsPage({ profile, isAdmin, crewGames }: ForumsPageProps) {
   const [view, setView] = useState<ForumView>({ mode: "home" });
 
   return (
@@ -61,6 +65,7 @@ export function ForumsPage({ profile, isAdmin }: ForumsPageProps) {
       {view.mode === "compose" ? (
         <ComposeView
           categorySlug={view.categorySlug}
+          crewGames={crewGames}
           onCancel={() => setView({ mode: "category", slug: view.categorySlug })}
           onCreated={(threadId) => setView({ mode: "thread", threadId })}
         />
@@ -749,6 +754,7 @@ function FeedRow({
             {thread.replyCount} repl{thread.replyCount === 1 ? "y" : "ies"}
             {" · "}
             {thread.viewCount} view{thread.viewCount === 1 ? "" : "s"}
+            {thread.game ? <GameChip game={thread.game} /> : null}
           </div>
         </div>
       </div>
@@ -1373,6 +1379,7 @@ function ThreadView({
             </h1>
             <div style={{ marginTop: 6, fontSize: 12, color: islandTheme.color.textMuted }}>
               {posts.length} post{posts.length === 1 ? "" : "s"} · {thread.viewCount.toLocaleString()} views · started {formatRelative(thread.createdAt)}
+              {thread.game ? <GameChip game={thread.game} /> : null}
             </div>
           </div>
           {isAdmin ? (
@@ -1595,10 +1602,12 @@ function ModButton({ children, onClick, danger }: { children: React.ReactNode; o
 
 function ComposeView({
   categorySlug,
+  crewGames,
   onCancel,
   onCreated
 }: {
   categorySlug: string;
+  crewGames: CrewOwnedGame[];
   onCancel: () => void;
   onCreated: (threadId: number) => void;
 }) {
@@ -1621,6 +1630,14 @@ function ComposeView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [taggedGame, setTaggedGame] = useState<CrewOwnedGame | null>(null);
+  const [gameQuery, setGameQuery] = useState("");
+
+  const gameMatches = useMemo(() => {
+    const q = gameQuery.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return crewGames.filter((g) => g.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [gameQuery, crewGames]);
 
   useEffect(() => {
     if (title || body) sessionStorage.setItem(draftKey, JSON.stringify({ title, body }));
@@ -1635,7 +1652,11 @@ function ComposeView({
       const r = await apiFetch(`/forums/categories/${categorySlug}/threads`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), body: body.trim() })
+        body: JSON.stringify({
+          title: title.trim(),
+          body: body.trim(),
+          ...(taggedGame ? { appId: taggedGame.appId } : {})
+        })
       });
       const data = await r.json().catch(() => null);
       if (!r.ok) throw new Error(data?.error ?? "Post failed");
@@ -1718,6 +1739,79 @@ function ComposeView({
             />
           )}
         </div>
+        <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+          <span className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted }}>
+            🎮 Tag a game (optional)
+          </span>
+          {taggedGame ? (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 10px",
+                borderRadius: 10,
+                border: `1px solid ${islandTheme.color.cardBorder}`,
+                background: islandTheme.color.panelMutedBg,
+                justifySelf: "start"
+              }}
+            >
+              <GameCover
+                appId={taggedGame.appId}
+                storedUrl={taggedGame.headerImageUrl}
+                alt={taggedGame.name}
+                style={{ width: 46, height: 21, borderRadius: 4 }}
+              />
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{taggedGame.name}</span>
+              <button
+                type="button"
+                className="island-btn"
+                onClick={() => { setTaggedGame(null); setGameQuery(""); }}
+                aria-label="Remove game tag"
+                style={{ background: "transparent", border: "none", color: islandTheme.color.textMuted, cursor: "pointer", font: "inherit", fontSize: 13 }}
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                value={gameQuery}
+                onChange={(e) => setGameQuery(e.target.value)}
+                placeholder="Search the crew library…"
+                style={{ ...islandInputStyle, width: "100%", padding: "8px 12px", fontSize: 13 }}
+              />
+              {gameMatches.length > 0 ? (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {gameMatches.map((g) => (
+                    <button
+                      key={g.appId}
+                      type="button"
+                      className="island-btn"
+                      onClick={() => { setTaggedGame(g); setGameQuery(""); }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "4px 10px 4px 4px",
+                        borderRadius: 8,
+                        border: `1px solid ${islandTheme.color.cardBorder}`,
+                        background: islandTheme.color.panelMutedBg,
+                        color: islandTheme.color.textPrimary,
+                        cursor: "pointer",
+                        font: "inherit",
+                        fontSize: 12
+                      }}
+                    >
+                      <GameCover appId={g.appId} storedUrl={g.headerImageUrl} alt={g.name} style={{ width: 40, height: 19, borderRadius: 4 }} />
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
         {error ? (
           <p style={{ margin: "0 0 10px", fontSize: 12, color: islandTheme.color.dangerText }}>{error}</p>
         ) : null}
@@ -1759,6 +1853,39 @@ function BackLink({ onClick, label }: { onClick: () => void; label: string }) {
     >
       {label}
     </button>
+  );
+}
+
+function GameChip({ game }: { game: ForumThreadGame }) {
+  return (
+    <span
+      title={game.name}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        marginLeft: 8,
+        padding: "1px 8px 1px 2px",
+        borderRadius: 6,
+        border: `1px solid ${islandTheme.color.cardBorder}`,
+        background: islandTheme.color.panelMutedBg,
+        fontSize: 12,
+        fontWeight: 700,
+        color: islandTheme.color.textSubtle,
+        verticalAlign: "middle",
+        maxWidth: 220,
+        overflow: "hidden",
+        whiteSpace: "nowrap"
+      }}
+    >
+      <GameCover
+        appId={game.appId}
+        storedUrl={game.headerImageUrl}
+        alt=""
+        style={{ width: 32, height: 15, borderRadius: 3, flexShrink: 0 }}
+      />
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{game.name}</span>
+    </span>
   );
 }
 

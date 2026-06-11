@@ -411,6 +411,12 @@ export type ForumThreadListItem = {
   lastReplyUser: { displayName: string; avatarUrl: string | null } | null;
 };
 
+export type ForumThreadGame = {
+  appId: number;
+  name: string;
+  headerImageUrl: string | null;
+};
+
 export type ForumThreadDetail = {
   id: number;
   categoryId: number;
@@ -427,6 +433,7 @@ export type ForumThreadDetail = {
   createdAt: string;
   updatedAt: string;
   author: ForumAuthor;
+  game?: ForumThreadGame | null;
 };
 
 export type ForumPost = {
@@ -460,6 +467,7 @@ export type ForumFeedThread = {
   categoryAccent: string;
   author: ForumAuthor;
   lastReplyUser: { displayName: string; avatarUrl: string | null } | null;
+  game?: ForumThreadGame | null;
 };
 
 export type ForumStats = {

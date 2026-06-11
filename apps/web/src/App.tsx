@@ -1732,7 +1732,7 @@ export function App() {
       ) : null}
 
       {page === "community-forums" ? (
-        <ForumsPage profile={profileData} isAdmin={isAdmin} />
+        <ForumsPage profile={profileData} isAdmin={isAdmin} crewGames={crewGames} />
       ) : null}
 
       {page === "community-leaderboard" ? (

@@ -260,6 +260,7 @@ forumsRouter.get("/categories/:slug/threads", requireSession, async (req, res) =
 const createThreadSchema = z.object({
   title: z.string().min(3),
   body: z.string().min(2),
+  appId: z.number().int().positive().optional(),
 });
 
 forumsRouter.post("/categories/:slug/threads", requireSession, async (req, res) => {
@@ -309,14 +310,22 @@ forumsRouter.post("/categories/:slug/threads", requireSession, async (req, res) 
     }
   }
 
+  // Optional game tag: only store appIds the catalog actually knows, so feed
+  // joins always resolve a name + art and typos don't create dead chips.
+  let appId: number | null = null;
+  if (parsed.data.appId) {
+    const g = await db.query("SELECT 1 FROM games WHERE app_id = $1", [parsed.data.appId]);
+    if (g.rows.length > 0) appId = parsed.data.appId;
+  }
+
   const slug = slugify(title);
   const client = await db.connect();
   try {
     await client.query("BEGIN");
     const t = await client.query<{ id: string }>(
-      `INSERT INTO forum_threads (category_id, author_user_id, title, slug, last_reply_at, last_reply_user_id)
-       VALUES ($1, $2, $3, $4, NOW(), $2) RETURNING id`,
-      [categoryId, userId, title, slug]
+      `INSERT INTO forum_threads (category_id, author_user_id, title, slug, last_reply_at, last_reply_user_id, app_id)
+       VALUES ($1, $2, $3, $4, NOW(), $2, $5) RETURNING id`,
+      [categoryId, userId, title, slug, appId]
     );
     const threadId = parseInt(t.rows[0].id, 10);
     await client.query(
@@ -366,9 +375,11 @@ forumsRouter.get("/threads/:id", requireSession, async (req, res) => {
     view_count: number; reply_count: number; created_at: string; updated_at: string;
     author_discord_id: string; author_username: string; author_display_name: string; author_avatar_url: string | null;
     category_slug: string; category_name: string; category_icon: string; category_accent: string;
+    app_id: number | null; game_name: string | null; game_image: string | null;
   }>(
     `SELECT t.id, t.category_id, t.title, t.slug, t.is_pinned, t.is_locked, t.is_deleted,
-            t.view_count, t.reply_count, t.created_at, t.updated_at,
+            t.view_count, t.reply_count, t.created_at, t.updated_at, t.app_id,
+            g.name AS game_name, g.header_image_url AS game_image,
             u.discord_user_id AS author_discord_id,
             dp.username AS author_username,
             COALESCE(dp.global_name, dp.username) AS author_display_name,
@@ -378,6 +389,7 @@ forumsRouter.get("/threads/:id", requireSession, async (req, res) => {
      INNER JOIN users u ON u.id = t.author_user_id
      INNER JOIN discord_profiles dp ON dp.user_id = t.author_user_id
      INNER JOIN forum_categories c ON c.id = t.category_id
+     LEFT JOIN games g ON g.app_id = t.app_id
      WHERE t.id = $1`,
     [threadId]
   );
@@ -411,6 +423,9 @@ forumsRouter.get("/threads/:id", requireSession, async (req, res) => {
         displayName: row.author_display_name,
         avatarUrl: row.author_avatar_url,
       },
+      game: row.app_id && row.game_name
+        ? { appId: row.app_id, name: row.game_name, headerImageUrl: row.game_image }
+        : null,
     },
     posts: posts.map(serializePost),
   });
@@ -811,7 +826,8 @@ forumsRouter.get("/threads", requireSession, async (req, res) => {
 
   const sql = `
     SELECT t.id, t.title, t.slug, t.is_pinned, t.is_locked, t.view_count, t.reply_count,
-           t.created_at, t.last_reply_at,
+           t.created_at, t.last_reply_at, t.app_id,
+           g.name AS game_name, g.header_image_url AS game_image,
            c.slug AS category_slug, c.name AS category_name, c.icon AS category_icon, c.accent_color AS category_accent,
            u.discord_user_id AS author_discord_id,
            dp.username AS author_username,
@@ -824,6 +840,7 @@ forumsRouter.get("/threads", requireSession, async (req, res) => {
     INNER JOIN users u ON u.id = t.author_user_id
     INNER JOIN discord_profiles dp ON dp.user_id = t.author_user_id
     LEFT JOIN discord_profiles ldp ON ldp.user_id = t.last_reply_user_id
+    LEFT JOIN games g ON g.app_id = t.app_id
     WHERE ${where.join(" AND ")}
     ORDER BY ${orderBy}
     LIMIT $${limitParam} OFFSET $${offsetParam}
@@ -834,6 +851,7 @@ forumsRouter.get("/threads", requireSession, async (req, res) => {
     is_pinned: boolean; is_locked: boolean;
     view_count: number; reply_count: number;
     created_at: string; last_reply_at: string | null;
+    app_id: number | null; game_name: string | null; game_image: string | null;
     category_slug: string; category_name: string; category_icon: string; category_accent: string;
     author_discord_id: string; author_username: string; author_display_name: string; author_avatar_url: string | null;
     last_user_display: string | null; last_user_avatar: string | null;
@@ -862,6 +880,9 @@ forumsRouter.get("/threads", requireSession, async (req, res) => {
       },
       lastReplyUser: row.last_user_display
         ? { displayName: row.last_user_display, avatarUrl: row.last_user_avatar }
+        : null,
+      game: row.app_id && row.game_name
+        ? { appId: row.app_id, name: row.game_name, headerImageUrl: row.game_image }
         : null,
     })),
     sort,
