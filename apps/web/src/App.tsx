@@ -172,20 +172,23 @@ export function App() {
           kind: "achievement",
           emoji,
           title: name,
-          description: `New ${itemType} unlocked — equip it from the Milestones page.`,
+          itemType,
+          description: `A new ${itemType} just washed ashore — find it in your Milestones stash.`,
         });
       } else {
         const label = typeof p.label === "string" ? p.label : "New rank";
         const threshold = typeof p.threshold === "number" ? p.threshold : 0;
         const bonus = typeof p.bonus === "number" ? p.bonus : 0;
+        const emblem = typeof p.emblem === "string" ? p.emblem : emoji;
         celebrationQueue.enqueue({
           id: e.id,
           kind: "milestone",
           emoji,
+          emblem,
           title: label,
           description: threshold > 0
-            ? `Lifetime earned crossed ₦${threshold.toLocaleString()}.`
-            : "You climbed the ladder.",
+            ? `Your lifetime haul crossed ₦${threshold.toLocaleString()}.`
+            : "You climbed a rung on the island ladder.",
           bonus,
         });
       }
@@ -375,6 +378,13 @@ export function App() {
     });
     es.addEventListener("nights-changed", () => {
       void loadGameNights(true);
+    });
+    es.addEventListener("activity-changed", () => {
+      // Refetch the activity feed the instant any event is recorded server-side,
+      // so the Home feed and the achievement/milestone celebration overlay fire
+      // immediately (in step with the Discord announcement) instead of trailing
+      // the slow poll.
+      void loadActivity(true);
     });
 
     return () => {
@@ -1758,7 +1768,7 @@ export function App() {
 
       </main>
       <ToastHost toasts={toastQueue.toasts} onDismiss={toastQueue.dismiss} />
-      <AchievementCelebration current={celebrationQueue.current} onDismiss={celebrationQueue.dismiss} />
+      <AchievementCelebration current={celebrationQueue.current} onDismiss={celebrationQueue.dismiss} remaining={celebrationQueue.remaining} />
     </ToastQueueProvider>
     </ActivityRefetchProvider>
   );

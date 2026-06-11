@@ -13,12 +13,15 @@ export type CelebrationEvent = {
   title: string;         // "STREAK 7" or "Reached APEX TIDELORD"
   description: string;   // subtitle line
   bonus?: number;        // milestone tier bonus in Nuggies
+  emblem?: string;       // milestone tier emblem (falls back to emoji)
+  itemType?: string;     // achievement item type ("badge", "title", ...)
 };
 
 // ── Queue hook ────────────────────────────────────────────────────────────────
 
 export type CelebrationQueue = {
   current: CelebrationEvent | null;
+  remaining: number; // total pending including the one on screen
   enqueue: (event: CelebrationEvent) => void;
   dismiss: () => void;
 };
@@ -37,12 +40,11 @@ export function useCelebrationQueue(): CelebrationQueue {
     setQueue((prev) => prev.slice(1));
   }, []);
 
-  return { current: queue[0] ?? null, enqueue, dismiss };
+  return { current: queue[0] ?? null, remaining: queue.length, enqueue, dismiss };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const AUTO_DISMISS_MS = 4000;
 const CONFETTI_COUNT = 28;
 const CONFETTI_EMOJIS = ["🎉", "✨", "⭐", "🌟", "💫", "🎊", "🥳", "🍗"];
 
@@ -79,15 +81,36 @@ function buildConfetti(seed: string): ConfettiPiece[] {
 export function AchievementCelebration({
   current,
   onDismiss,
+  remaining = 0,
 }: {
   current: CelebrationEvent | null;
   onDismiss: () => void;
+  remaining?: number;
 }) {
-  const confetti = useMemo(() => (current ? buildConfetti(current.id) : []), [current?.id]);
+  const reducedMotion = prefersReducedMotion();
+  const confetti = useMemo(
+    () => (current && !reducedMotion ? buildConfetti(current.id) : []),
+    [current?.id, reducedMotion]
+  );
 
+  const [progress, setProgress] = useState(1);
+  const pausedRef = useRef(false);
+
+  // Countdown that drives the dismiss + the visible progress bar. Pauses while
+  // the pointer is over the card so a fast reader is never cut off mid-sentence.
   useEffect(() => {
     if (!current) return;
-    const t = window.setTimeout(onDismiss, AUTO_DISMISS_MS);
+    pausedRef.current = false;
+    setProgress(1);
+    const autoMs = current.kind === "milestone" ? 5500 : 4200;
+    let left = autoMs;
+    const step = 50;
+    const id = window.setInterval(() => {
+      if (pausedRef.current) return;
+      left -= step;
+      setProgress(Math.max(0, left / autoMs));
+      if (left <= 0) onDismiss();
+    }, step);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
         e.preventDefault();
@@ -96,16 +119,21 @@ export function AchievementCelebration({
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      window.clearTimeout(t);
+      window.clearInterval(id);
       window.removeEventListener("keydown", onKey);
     };
-  }, [current, onDismiss]);
+  }, [current?.id, onDismiss]);
 
   if (!current) return null;
 
   const isMilestone = current.kind === "milestone";
   const accent = isMilestone ? "#fbbf24" : "#a3e635";
-  const accentGlow = isMilestone ? "rgba(251, 191, 36, 0.55)" : "rgba(163, 230, 53, 0.55)";
+  const accentSoft = isMilestone ? "#fde68a" : "#d9f99d";
+  const accentGlow = isMilestone ? "rgba(251, 191, 36, 0.55)" : "rgba(163, 230, 53, 0.5)";
+  const badgeGlyph = isMilestone ? current.emblem || current.emoji || "🏅" : current.emoji || "🏆";
+  const cardWidth = isMilestone ? 472 : 412;
+  const extraInQueue = Math.max(0, remaining - 1);
+  const anim = (value: string) => (reducedMotion ? "none" : value);
 
   return createPortal(
     <div
@@ -120,18 +148,15 @@ export function AchievementCelebration({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "rgba(2, 6, 23, 0.55)",
+        background: isMilestone ? "rgba(2, 6, 23, 0.6)" : "rgba(2, 6, 23, 0.48)",
         backdropFilter: "blur(8px)",
         WebkitBackdropFilter: "blur(8px)",
-        animation: "bi-celeb-backdrop 240ms ease",
+        animation: anim("bi-celeb-backdrop 240ms ease"),
         cursor: "pointer",
       }}
     >
       <style>{`
-        @keyframes bi-celeb-backdrop {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
+        @keyframes bi-celeb-backdrop { from { opacity: 0; } to { opacity: 1; } }
         @keyframes bi-celeb-pop {
           0%   { opacity: 0; transform: scale(0.6) translateY(20px); }
           60%  { opacity: 1; transform: scale(1.06) translateY(0); }
@@ -141,10 +166,8 @@ export function AchievementCelebration({
           0%, 100% { transform: scale(1); filter: drop-shadow(0 0 28px var(--celeb-glow)); }
           50%      { transform: scale(1.08); filter: drop-shadow(0 0 44px var(--celeb-glow)); }
         }
-        @keyframes bi-celeb-shimmer {
-          0%   { background-position: 0% 50%; }
-          100% { background-position: 200% 50%; }
-        }
+        @keyframes bi-celeb-halo { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes bi-celeb-shimmer { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
         @keyframes bi-celeb-confetti {
           0%   { opacity: 0; transform: translate(0, -10vh) rotate(var(--rot-start)); }
           10%  { opacity: 1; }
@@ -152,16 +175,8 @@ export function AchievementCelebration({
         }
       `}</style>
 
-      {/* Confetti layer — sits over the backdrop, behind the card */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: 0,
-          overflow: "hidden",
-          pointerEvents: "none",
-        }}
-      >
+      {/* Confetti layer — over the backdrop, behind the card */}
+      <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
         {confetti.map((c, i) => (
           <span
             key={i}
@@ -185,75 +200,129 @@ export function AchievementCelebration({
       {/* Card */}
       <div
         onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+        onMouseEnter={() => { pausedRef.current = true; }}
+        onMouseLeave={() => { pausedRef.current = false; }}
         style={{
           ["--celeb-glow" as string]: accentGlow,
           position: "relative",
-          width: "min(440px, calc(100vw - 32px))",
-          padding: "28px 28px 24px",
-          borderRadius: 20,
-          background: `linear-gradient(160deg, ${islandTheme.color.panelBg} 0%, rgba(15, 23, 42, 0.85) 100%)`,
+          width: `min(${cardWidth}px, calc(100vw - 32px))`,
+          padding: "30px 30px 0",
+          borderRadius: 22,
+          overflow: "hidden",
+          background: `radial-gradient(120% 90% at 50% -10%, ${isMilestone ? "rgba(251,191,36,0.16)" : "rgba(163,230,53,0.14)"}, transparent 60%), linear-gradient(160deg, ${islandTheme.color.panelBg} 0%, rgba(15, 23, 42, 0.9) 100%)`,
           border: `2px solid ${accent}`,
-          boxShadow: `0 0 48px ${accentGlow}, 0 24px 64px rgba(0, 0, 0, 0.55)`,
+          boxShadow: `0 0 ${isMilestone ? 64 : 48}px ${accentGlow}, 0 24px 64px rgba(0, 0, 0, 0.55)`,
           color: islandTheme.color.textPrimary,
           textAlign: "center",
-          animation: "bi-celeb-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
+          animation: anim("bi-celeb-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both"),
           cursor: "pointer",
         } as React.CSSProperties}
       >
+        {/* Queue chip */}
+        {extraInQueue > 0 && (
+          <div
+            className="island-mono"
+            style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              padding: "3px 9px",
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              color: accentSoft,
+              background: "rgba(15,23,42,0.6)",
+              border: `1px solid ${accent}`,
+            }}
+          >
+            +{extraInQueue} MORE
+          </div>
+        )}
+
         {/* Eyebrow */}
         <div
           className="island-mono"
           style={{
             fontSize: 10,
-            letterSpacing: "0.22em",
+            letterSpacing: "0.24em",
             textTransform: "uppercase",
-            color: accent,
             fontWeight: 800,
-            marginBottom: 4,
-            background: `linear-gradient(90deg, ${accent}, #fff, ${accent})`,
+            marginBottom: 2,
+            color: accent,
+            background: reducedMotion ? undefined : `linear-gradient(90deg, ${accent}, #fff, ${accent})`,
             backgroundSize: "200% 100%",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            animation: "bi-celeb-shimmer 2400ms linear infinite",
+            WebkitBackgroundClip: reducedMotion ? undefined : "text",
+            WebkitTextFillColor: reducedMotion ? undefined : "transparent",
+            backgroundClip: reducedMotion ? undefined : "text",
+            animation: anim("bi-celeb-shimmer 2400ms linear infinite"),
           }}
         >
           ✦ {isMilestone ? "Rank Reached" : "Achievement Unlocked"} ✦
         </div>
 
-        {/* Big badge */}
-        <div
-          style={{
-            margin: "10px auto 14px",
-            width: 124,
-            height: 124,
-            borderRadius: 999,
-            background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18), transparent 60%), ${islandTheme.color.panelMutedBg}`,
-            border: `3px solid ${accent}`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 64,
-            lineHeight: 1,
-            animation: "bi-celeb-badge-pulse 1600ms ease-in-out infinite",
-          }}
-        >
-          {current.emoji || "🏆"}
+        {/* Badge with rotating conic halo */}
+        <div style={{ position: "relative", width: isMilestone ? 140 : 120, height: isMilestone ? 140 : 120, margin: "16px auto 16px" }}>
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: -8,
+              borderRadius: 999,
+              background: `conic-gradient(from 0deg, transparent, ${accent}, transparent 55%)`,
+              filter: "blur(2px)",
+              opacity: 0.7,
+              animation: anim("bi-celeb-halo 6s linear infinite"),
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              borderRadius: 999,
+              background: `radial-gradient(circle at 30% 28%, rgba(255,255,255,0.2), transparent 60%), ${islandTheme.color.panelMutedBg}`,
+              border: `3px solid ${accent}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: isMilestone ? 70 : 60,
+              lineHeight: 1,
+              animation: anim("bi-celeb-badge-pulse 1600ms ease-in-out infinite"),
+            }}
+          >
+            {badgeGlyph}
+          </div>
         </div>
 
         {/* Title */}
         <div
           className="island-display"
-          style={{
-            fontSize: 26,
-            fontWeight: 800,
-            letterSpacing: "0.04em",
-            lineHeight: 1.15,
-            marginBottom: 6,
-          }}
+          style={{ fontSize: isMilestone ? 28 : 24, fontWeight: 800, letterSpacing: "0.03em", lineHeight: 1.15, marginBottom: 6 }}
         >
           {current.title}
         </div>
+
+        {/* Item-type chip (achievements) */}
+        {!isMilestone && current.itemType && (
+          <div
+            className="island-mono"
+            style={{
+              display: "inline-block",
+              padding: "3px 10px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: accentSoft,
+              background: "rgba(163,230,53,0.12)",
+              border: `1px solid rgba(163,230,53,0.4)`,
+              marginBottom: 10,
+            }}
+          >
+            {current.itemType}
+          </div>
+        )}
 
         {/* Description */}
         <div
@@ -261,30 +330,28 @@ export function AchievementCelebration({
             fontSize: 14,
             color: islandTheme.color.textSubtle,
             lineHeight: 1.5,
-            marginBottom: isMilestone && current.bonus ? 14 : 18,
+            margin: "0 auto",
             maxWidth: 360,
-            marginLeft: "auto",
-            marginRight: "auto",
           }}
         >
           {current.description}
         </div>
 
-        {/* Bonus pill (milestones only) */}
+        {/* Bonus pill (milestones) */}
         {isMilestone && current.bonus && current.bonus > 0 && (
           <div
             className="island-mono"
             style={{
               display: "inline-block",
-              padding: "6px 14px",
+              padding: "8px 18px",
               borderRadius: 999,
               background: "rgba(34, 197, 94, 0.18)",
               color: "#86efac",
               border: "1px solid rgba(34, 197, 94, 0.45)",
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              marginBottom: 16,
+              fontSize: 15,
+              fontWeight: 800,
+              letterSpacing: "0.04em",
+              marginTop: 16,
             }}
           >
             +₦{current.bonus.toLocaleString()} bonus paid
@@ -299,10 +366,24 @@ export function AchievementCelebration({
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: islandTheme.color.textMuted,
-            opacity: 0.85,
+            opacity: 0.8,
+            margin: "18px 0 22px",
           }}
         >
-          Tap anywhere to dismiss
+          Tap to dismiss · hover to hold
+        </div>
+
+        {/* Countdown progress bar */}
+        <div aria-hidden="true" style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 4, background: "rgba(255,255,255,0.08)" }}>
+          <div
+            style={{
+              height: "100%",
+              width: `${progress * 100}%`,
+              background: `linear-gradient(90deg, ${accent}, ${accentSoft})`,
+              boxShadow: `0 0 10px ${accentGlow}`,
+              transition: "width 60ms linear",
+            }}
+          />
         </div>
       </div>
     </div>,

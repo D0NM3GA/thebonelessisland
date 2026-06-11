@@ -1,4 +1,5 @@
 import { db } from "../db/client.js";
+import { broadcast } from "./eventBus.js";
 
 export type ActivityEventInput = {
   eventType: string;
@@ -46,6 +47,14 @@ export async function recordEvent(input: ActivityEventInput): Promise<void> {
         JSON.stringify(input.payload ?? {})
       ]
     );
+    // Nudge connected SSE clients to refetch the activity feed so the Home feed
+    // and the achievement/milestone celebration overlay fire the moment an event
+    // is recorded (in lockstep with the Discord announcement), rather than on the
+    // next slow poll. Carry the eventType + actor so a client can decide quickly.
+    broadcast("activity-changed", {
+      eventType: input.eventType,
+      actorDiscordUserId: input.actorDiscordUserId ?? null
+    });
   } catch (error) {
     console.error("[activityEvents] recordEvent failed", error);
   }
