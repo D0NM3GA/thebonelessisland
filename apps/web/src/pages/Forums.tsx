@@ -715,6 +715,8 @@ function FeedRow({
         background: "transparent",
         border: "none",
         borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
+        // Category accent edge: scan the feed by color without reading labels.
+        borderLeft: `3px solid ${thread.categoryAccent}`,
         cursor: "pointer",
         font: "inherit",
         color: islandTheme.color.textPrimary,

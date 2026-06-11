@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { apiFetch } from "../api/client.js";
 import { ConfettiBurst } from "../system/celebration.js";
 import { LOGO_BG_URL } from "../assets.js";
-import { IslandCard, IslandEmptyState, IslandTag, islandInputStyle } from "../islandUi.js";
+import { IslandCard, IslandEmptyState, IslandSkeleton, IslandTag, islandInputStyle } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
 import { NuggieCoin } from "../components/NuggieCoin.js";
 import { islandTheme } from "../theme.js";
@@ -452,9 +452,34 @@ function CrewTrending({
       />
       <IslandCard style={{ display: "flex", flexDirection: "column", gap: 8, padding: 14 }}>
         {loading ? (
-          <div style={{ fontSize: 13, color: islandTheme.color.textMuted, padding: "8px 4px" }}>
-            Reading the tide charts…
-          </div>
+          // Skeleton mirrors the final row layout (rank · art · text · stats)
+          // so the card doesn't reflow when data lands.
+          <>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                aria-hidden="true"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "18px 92px minmax(0, 1fr) auto",
+                  gap: 12,
+                  alignItems: "center",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  background: islandTheme.color.panelMutedBg,
+                  border: `1px solid ${islandTheme.color.cardBorder}`
+                }}
+              >
+                <IslandSkeleton width={14} height={16} />
+                <IslandSkeleton width={92} height={43} radius={8} />
+                <div style={{ display: "grid", gap: 6 }}>
+                  <IslandSkeleton width="55%" height={12} />
+                  <IslandSkeleton width="35%" height={10} />
+                </div>
+                <IslandSkeleton width={48} height={26} />
+              </div>
+            ))}
+          </>
         ) : (
           (games ?? []).map((game, i) => <TrendingRow key={game.appId} game={game} rank={i + 1} />)
         )}
