@@ -126,10 +126,9 @@ recommendationRouter.get("/featured", async (req, res) => {
   const meta = await db.query<{
     header_image_url: string | null;
     tags: string[];
-    max_players: number;
-    median_session_minutes: number;
+    mp_max_players_approx: number | null;
   }>(
-    `SELECT header_image_url, tags, max_players, median_session_minutes FROM games WHERE app_id = $1`,
+    `SELECT header_image_url, tags, mp_max_players_approx FROM games WHERE app_id = $1`,
     [top.appId]
   );
   const metaRow = meta.rows[0];
@@ -146,8 +145,11 @@ recommendationRouter.get("/featured", async (req, res) => {
       reason: blurb ?? top.reason,
       headerImageUrl: metaRow?.header_image_url ?? null,
       tags: metaRow?.tags ?? [],
-      maxPlayers: metaRow?.max_players ?? null,
-      medianSessionMinutes: metaRow?.median_session_minutes ?? null
+      // Per locked passthrough rule: keep the maxPlayers / medianSessionMinutes
+      // keys, but source maxPlayers from mp_max_players_approx (often null) and
+      // always null the average-session stat (it was always fabricated).
+      maxPlayers: metaRow?.mp_max_players_approx ?? null,
+      medianSessionMinutes: null
     },
     scope: resolvedScope,
     scopeMemberCount: memberIds.length

@@ -85,8 +85,15 @@ export type CrewOwner = {
 export type CrewOwnedGame = {
   appId: number;
   name: string;
-  maxPlayers: number;
-  medianSessionMinutes: number;
+  isSinglePlayer: boolean;
+  isOnlineCoop: boolean;
+  isLanCoop: boolean;
+  isSharedSplitCoop: boolean;
+  isOnlinePvp: boolean;
+  isMmo: boolean;
+  mpMaxPlayersApprox: number | null;
+  maxPlayers: number | null;
+  medianSessionMinutes: number | null;
   developers: string[];
   tags: string[];
   headerImageUrl: string | null;
@@ -97,8 +104,18 @@ export type CrewOwnedGame = {
 export type CrewWishlistGame = {
   appId: number;
   name: string;
-  maxPlayers: number;
-  medianSessionMinutes: number;
+  isSinglePlayer: boolean;
+  isOnlineCoop: boolean;
+  isLanCoop: boolean;
+  isSharedSplitCoop: boolean;
+  isOnlinePvp: boolean;
+  isMmo: boolean;
+  mpMaxPlayersApprox: number | null;
+  maxPlayers: number | null;
+  medianSessionMinutes: number | null;
+  priceFinalCents: number | null;
+  priceDiscountPct: number | null;
+  isFree: boolean;
   developers: string[];
   tags: string[];
   headerImageUrl: string | null;

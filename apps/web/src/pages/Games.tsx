@@ -57,7 +57,6 @@ type ComposerPick = {
   headerImageUrl: string | null;
   tags: string[];
   maxPlayers: number | null;
-  medianSessionMinutes: number | null;
 };
 
 function GamesPageImpl(props: GamesPageProps) {
@@ -141,8 +140,7 @@ function buildComposerPick(props: GamesPageProps): ComposerPick | null {
       scopeSize: selectedMemberIds.length,
       headerImageUrl: meta?.headerImageUrl ?? null,
       tags: meta?.tags ?? [],
-      maxPlayers: meta?.maxPlayers ?? null,
-      medianSessionMinutes: meta?.medianSessionMinutes ?? null
+      maxPlayers: meta?.maxPlayers ?? null
     };
   }
 
@@ -157,8 +155,7 @@ function buildComposerPick(props: GamesPageProps): ComposerPick | null {
       scopeSize: featuredRecommendation.scopeMemberCount,
       headerImageUrl: featuredRecommendation.headerImageUrl,
       tags: featuredRecommendation.tags,
-      maxPlayers: featuredRecommendation.maxPlayers,
-      medianSessionMinutes: featuredRecommendation.medianSessionMinutes
+      maxPlayers: featuredRecommendation.maxPlayers
     };
   }
 
@@ -171,9 +168,6 @@ function pickStats(pick: ComposerPick): Array<{ k: string; v: string }> {
   ];
   if (typeof pick.maxPlayers === "number") {
     stats.push({ k: "max players", v: `${pick.maxPlayers}` });
-  }
-  if (typeof pick.medianSessionMinutes === "number" && pick.medianSessionMinutes > 0) {
-    stats.push({ k: "avg session", v: `${pick.medianSessionMinutes}m` });
   }
   if (pick.tags.length > 0) {
     stats.push({ k: "tag", v: pick.tags[0].toLowerCase() });

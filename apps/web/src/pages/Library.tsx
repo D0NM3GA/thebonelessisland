@@ -12,7 +12,7 @@ type LibraryPageProps = {
 
 type LibCategory = "co-op" | "horror" | "puzzle" | "party" | "solo";
 type LibFilter = "all" | "mine" | LibCategory;
-type SortMode = "owned" | "title" | "session";
+type SortMode = "owned" | "title";
 
 const CATEGORY_TAG_HINTS: Array<{ category: LibCategory; tokens: string[] }> = [
   { category: "co-op", tokens: ["co-op", "coop", "co op", "online co-op", "multiplayer"] },
@@ -72,10 +72,34 @@ function ownerInitials(name: string): string {
   return (name || "??").trim().slice(0, 2).toUpperCase();
 }
 
-function playerCountLabel(maxPlayers: number): string {
-  if (maxPlayers <= 1) return "1p";
-  if (maxPlayers >= 8) return "8p+";
-  return `1-${maxPlayers}p`;
+const GENERIC_MULTIPLAYER_TOKENS = ["multi-player", "multiplayer", "co-op", "coop", "co op"];
+
+function hasGenericMultiplayerTag(game: CrewOwnedGame): boolean {
+  return game.tags.some((tag) => {
+    const lower = tag.toLowerCase();
+    return GENERIC_MULTIPLAYER_TOKENS.some((token) => lower.includes(token));
+  });
+}
+
+function capabilityPills(game: CrewOwnedGame): string[] {
+  const pills: string[] = [];
+  if (game.isSinglePlayer) pills.push("Single-player");
+  if (game.isOnlineCoop) pills.push("Online co-op");
+  if (game.isLanCoop) pills.push("LAN co-op");
+  if (game.isSharedSplitCoop) pills.push("Split-screen");
+  if (game.isOnlinePvp) pills.push("PvP");
+  if (game.isMmo) pills.push("MMO");
+
+  const hasSpecificMultiplayer =
+    game.isOnlineCoop || game.isLanCoop || game.isSharedSplitCoop || game.isOnlinePvp || game.isMmo;
+  if (!hasSpecificMultiplayer && hasGenericMultiplayerTag(game)) {
+    pills.push("Multiplayer");
+  }
+
+  if (typeof game.mpMaxPlayersApprox === "number" && game.mpMaxPlayersApprox > 1) {
+    pills.push(`Up to ${game.mpMaxPlayersApprox}`);
+  }
+  return pills;
 }
 
 function tagLabel(game: CrewOwnedGame, category: LibCategory): string {
@@ -140,12 +164,6 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
       out.sort((a, b) => b.game.ownerCount - a.game.ownerCount || a.game.name.localeCompare(b.game.name));
     } else if (sort === "title") {
       out.sort((a, b) => a.game.name.localeCompare(b.game.name));
-    } else if (sort === "session") {
-      out.sort(
-        (a, b) =>
-          (a.game.medianSessionMinutes || 0) - (b.game.medianSessionMinutes || 0) ||
-          a.game.name.localeCompare(b.game.name)
-      );
     }
     return out;
   }, [enriched, search, filter, sort]);
@@ -227,7 +245,6 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
         >
           <option value="owned">Most owned</option>
           <option value="title">Alphabetical</option>
-          <option value="session">Shortest session</option>
         </select>
       </IslandCard>
 
@@ -259,7 +276,7 @@ function LibraryPageImpl({ crewGames, currentDiscordUserId, onNavigate, onPlan }
 
 export const LibraryPage = memo(LibraryPageImpl);
 
-const COLUMNS = "60px 1.4fr 1fr 80px 80px auto";
+const COLUMNS = "60px 1.4fr 1fr 80px minmax(140px, 1.1fr) auto";
 
 function HeaderRow() {
   return (
@@ -282,7 +299,7 @@ function HeaderRow() {
       <Cell>Title</Cell>
       <Cell>Owners</Cell>
       <Cell>Count</Cell>
-      <Cell>Players</Cell>
+      <Cell>Modes</Cell>
       <Cell />
     </div>
   );
@@ -348,9 +365,7 @@ function LibRow({
       <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
         {game.ownerCount} own
       </span>
-      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-        {playerCountLabel(game.maxPlayers)}
-      </span>
+      <CapabilityPills game={game} />
       <div style={{ display: "flex", gap: 6 }}>
         <button
           type="button"
@@ -389,6 +404,41 @@ function LibRow({
           DETAILS
         </button>
       </div>
+    </div>
+  );
+}
+
+function CapabilityPills({ game }: { game: CrewOwnedGame }) {
+  const pills = capabilityPills(game);
+  if (pills.length === 0) {
+    return (
+      <span className="island-mono" style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+        —
+      </span>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+      {pills.map((pill) => (
+        <span
+          key={pill}
+          className="island-mono"
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+            padding: "2px 6px",
+            borderRadius: 999,
+            border: `1px solid ${islandTheme.color.cardBorder}`,
+            color: islandTheme.color.textSubtle,
+            background: islandTheme.color.panelMutedBg,
+            whiteSpace: "nowrap"
+          }}
+        >
+          {pill}
+        </span>
+      ))}
     </div>
   );
 }

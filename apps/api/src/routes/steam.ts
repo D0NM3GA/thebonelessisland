@@ -840,8 +840,13 @@ type CrewGameOwnerJson = {
 type CrewGameRow = {
   app_id: number;
   name: string;
-  max_players: number;
-  median_session_minutes: number;
+  is_single_player: boolean;
+  is_online_coop: boolean;
+  is_lan_coop: boolean;
+  is_shared_split_coop: boolean;
+  is_online_pvp: boolean;
+  is_mmo: boolean;
+  mp_max_players_approx: number | null;
   developers: string[];
   tags: string[];
   header_image_url: string | null;
@@ -864,8 +869,13 @@ steamRouter.get("/crew-games", async (req, res) => {
         SELECT
           g.app_id,
           g.name,
-          g.max_players,
-          g.median_session_minutes,
+          g.is_single_player,
+          g.is_online_coop,
+          g.is_lan_coop,
+          g.is_shared_split_coop,
+          g.is_online_pvp,
+          g.is_mmo,
+          g.mp_max_players_approx,
           g.developers,
           g.tags,
           g.header_image_url,
@@ -892,8 +902,13 @@ steamRouter.get("/crew-games", async (req, res) => {
         GROUP BY
           g.app_id,
           g.name,
-          g.max_players,
-          g.median_session_minutes,
+          g.is_single_player,
+          g.is_online_coop,
+          g.is_lan_coop,
+          g.is_shared_split_coop,
+          g.is_online_pvp,
+          g.is_mmo,
+          g.mp_max_players_approx,
           g.developers,
           g.tags,
           g.header_image_url
@@ -912,8 +927,15 @@ steamRouter.get("/crew-games", async (req, res) => {
     games: rows.map((row) => ({
       appId: row.app_id,
       name: row.name,
-      maxPlayers: row.max_players,
-      medianSessionMinutes: row.median_session_minutes,
+      isSinglePlayer: row.is_single_player,
+      isOnlineCoop: row.is_online_coop,
+      isLanCoop: row.is_lan_coop,
+      isSharedSplitCoop: row.is_shared_split_coop,
+      isOnlinePvp: row.is_online_pvp,
+      isMmo: row.is_mmo,
+      mpMaxPlayersApprox: row.mp_max_players_approx,
+      maxPlayers: row.mp_max_players_approx,
+      medianSessionMinutes: null,
       developers: row.developers,
       tags: row.tags,
       headerImageUrl: row.header_image_url,
@@ -945,8 +967,16 @@ steamRouter.get("/crew-games", async (req, res) => {
 type CrewWishlistRow = {
   app_id: number;
   name: string;
-  max_players: number;
-  median_session_minutes: number;
+  is_single_player: boolean;
+  is_online_coop: boolean;
+  is_lan_coop: boolean;
+  is_shared_split_coop: boolean;
+  is_online_pvp: boolean;
+  is_mmo: boolean;
+  mp_max_players_approx: number | null;
+  price_final_cents: number | null;
+  price_discount_pct: number | null;
+  is_free: boolean;
   developers: string[];
   tags: string[];
   header_image_url: string | null;
@@ -970,8 +1000,16 @@ steamRouter.get("/crew-wishlist", async (req, res) => {
         SELECT
           g.app_id,
           g.name,
-          g.max_players,
-          g.median_session_minutes,
+          g.is_single_player,
+          g.is_online_coop,
+          g.is_lan_coop,
+          g.is_shared_split_coop,
+          g.is_online_pvp,
+          g.is_mmo,
+          g.mp_max_players_approx,
+          g.price_final_cents,
+          g.price_discount_pct,
+          g.is_free,
           g.developers,
           g.tags,
           g.header_image_url,
@@ -999,8 +1037,16 @@ steamRouter.get("/crew-wishlist", async (req, res) => {
         GROUP BY
           g.app_id,
           g.name,
-          g.max_players,
-          g.median_session_minutes,
+          g.is_single_player,
+          g.is_online_coop,
+          g.is_lan_coop,
+          g.is_shared_split_coop,
+          g.is_online_pvp,
+          g.is_mmo,
+          g.mp_max_players_approx,
+          g.price_final_cents,
+          g.price_discount_pct,
+          g.is_free,
           g.developers,
           g.tags,
           g.header_image_url
@@ -1019,8 +1065,18 @@ steamRouter.get("/crew-wishlist", async (req, res) => {
     games: rows.map((row) => ({
       appId: row.app_id,
       name: row.name,
-      maxPlayers: row.max_players,
-      medianSessionMinutes: row.median_session_minutes,
+      isSinglePlayer: row.is_single_player,
+      isOnlineCoop: row.is_online_coop,
+      isLanCoop: row.is_lan_coop,
+      isSharedSplitCoop: row.is_shared_split_coop,
+      isOnlinePvp: row.is_online_pvp,
+      isMmo: row.is_mmo,
+      mpMaxPlayersApprox: row.mp_max_players_approx,
+      maxPlayers: row.mp_max_players_approx,
+      medianSessionMinutes: null,
+      priceFinalCents: row.price_final_cents,
+      priceDiscountPct: row.price_discount_pct,
+      isFree: row.is_free,
       developers: row.developers,
       tags: row.tags,
       headerImageUrl: row.header_image_url,
