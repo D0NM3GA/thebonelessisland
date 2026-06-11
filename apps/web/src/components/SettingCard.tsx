@@ -4,16 +4,19 @@ import { IslandButton, IslandCard, islandInputStyle, islandTagStyle } from "../i
 import { islandTheme } from "../theme.js";
 import type { ServerSetting } from "../types.js";
 import type { SettingMeta } from "../pages/admin/settingMeta.js";
+import { AiModelSelect } from "./AiModelSelect.js";
 
 type SettingCardProps = {
   setting: ServerSetting;
   meta: SettingMeta;
   onSave: (key: string, value: string) => Promise<void> | void;
+  /** Current ai_provider value, threaded so the ai_model card can list provider models. */
+  aiProvider?: string;
 };
 
 const UNDO_WINDOW_MS = 30_000;
 
-export function SettingCard({ setting, meta, onSave }: SettingCardProps) {
+export function SettingCard({ setting, meta, onSave, aiProvider }: SettingCardProps) {
   const [draft, setDraft] = useState<string>(setting.value);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,6 +135,7 @@ export function SettingCard({ setting, meta, onSave }: SettingCardProps) {
         setting={setting}
         draft={draft}
         onChange={setDraft}
+        aiProvider={aiProvider}
       />
 
       {/* Typed confirm (high-risk only) */}
@@ -226,13 +230,19 @@ function SettingInput({
   meta,
   setting,
   draft,
-  onChange
+  onChange,
+  aiProvider
 }: {
   meta: SettingMeta;
   setting: ServerSetting;
   draft: string;
   onChange: (v: string) => void;
+  aiProvider?: string;
 }) {
+  if (meta.key === "ai_model") {
+    return <AiModelSelect value={draft} provider={aiProvider ?? ""} onChange={onChange} />;
+  }
+
   if (meta.type === "boolean") {
     const isOn = draft === "true";
     return (

@@ -188,6 +188,9 @@ function SettingsContent({
   const lowRisk = filtered.filter((m) => m.dangerLevel === "low");
   const highRisk = filtered.filter((m) => m.dangerLevel === "high");
 
+  // Current ai_provider value, threaded to the ai_model card so it can list provider models.
+  const aiProvider = settings.find((s) => s.key === "ai_provider")?.value ?? "";
+
   return (
     <div style={{ display: "grid", gap: 14 }}>
       {/* Search box */}
@@ -219,7 +222,7 @@ function SettingsContent({
       {/* Low-risk settings */}
       {lowRisk.map((meta) => {
         const setting = lookupSetting(settings, meta);
-        return <SettingCard key={meta.key} setting={setting} meta={meta} onSave={onSave} />;
+        return <SettingCard key={meta.key} setting={setting} meta={meta} onSave={onSave} aiProvider={aiProvider} />;
       })}
 
       {/* Danger Zone */}
@@ -235,7 +238,7 @@ function SettingsContent({
           </div>
           {highRisk.map((meta) => {
             const setting = lookupSetting(settings, meta);
-            return <SettingCard key={meta.key} setting={setting} meta={meta} onSave={onSave} />;
+            return <SettingCard key={meta.key} setting={setting} meta={meta} onSave={onSave} aiProvider={aiProvider} />;
           })}
         </div>
       )}
