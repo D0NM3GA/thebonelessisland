@@ -28,6 +28,7 @@ import { NuggiesSignalProvider } from "./system/nuggiesSignal.js";
 import { AchievementCelebration, useCelebrationQueue } from "./system/celebration.js";
 import { islandCopy, islandTheme } from "./theme.js";
 import { Topbar } from "./components/Topbar.js";
+import { MobileTabBar } from "./components/MobileTabBar.js";
 import { QuickSwitcher } from "./components/QuickSwitcher.js";
 import {
   isSteamOnboardingSkipped,
@@ -1840,6 +1841,7 @@ export function App() {
       `}</style>
 
       </main>
+      <MobileTabBar page={page} onNavigate={setPage} />
       <ToastHost toasts={toastQueue.toasts} onDismiss={toastQueue.dismiss} />
       <AchievementCelebration current={celebrationQueue.current} onDismiss={celebrationQueue.dismiss} remaining={celebrationQueue.remaining} />
     </ToastQueueProvider>
