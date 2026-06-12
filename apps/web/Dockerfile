@@ -12,7 +12,9 @@
 # Changing the API URL requires a rebuild, not just a restart.
 
 # ── Stage 1: build the static bundle ────────────────────────────────────────
-FROM node:20-alpine AS build
+# Node 22 LTS: required by rollup-plugin-visualizer (ANALYZE builds) and the
+# precompression plugins.
+FROM node:22-alpine AS build
 
 WORKDIR /app
 

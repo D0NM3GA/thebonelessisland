@@ -4,6 +4,7 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { App } from "./App.js";
 import { IslandSceneShell } from "./scene/IslandSceneShell.js";
+import { reportWebVitals } from "./lib/vitals.js";
 
 // Legacy hash-URL shim. Old permalinks shared in Discord use the pre-router
 // grammar (#/forums/thread/123, #/admin/news, #/library?f=co-op). Fragments
@@ -34,3 +35,6 @@ createRoot(document.getElementById("root")!).render(
     <RouterProvider router={router} />
   </React.StrictMode>
 );
+
+// Real-user Core Web Vitals → API logs (best-effort, never blocks render).
+reportWebVitals();

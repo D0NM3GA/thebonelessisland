@@ -246,6 +246,22 @@ app.get("/events", requireSession, (req, res) => {
   });
 });
 
+// Real-user Core Web Vitals beacons from the SPA (sent as text/plain to avoid a
+// CORS preflight that sendBeacon can't perform). Logged for trend visibility,
+// not stored. requireSession keeps it from being an open logging sink.
+app.post(
+  "/vitals",
+  defaultLimiter,
+  requireSession,
+  express.text({ type: "*/*", limit: "4kb" }),
+  (req, res) => {
+    if (typeof req.body === "string" && req.body.length > 0) {
+      console.log("[web-vitals]", req.body.slice(0, 500));
+    }
+    res.status(204).end();
+  }
+);
+
 // Rate limits are scoped to specific risk classes; everything else gets the
 // generous defaultLimiter. The /internal router stays unlimited because the
 // bot is trusted and uses a shared-secret auth header — caller is us.

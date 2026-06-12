@@ -57,18 +57,23 @@ bonelessisland.com {
 	root * /srv
 	encode zstd gzip
 
-	# Client-side app: serve real files when they exist, otherwise fall back
-	# to index.html so deep links / OAuth return URLs resolve. The app's nav
-	# is state-based today, but this keeps query-param returns (?authError=…)
-	# and any future routes working.
+	# Client-side app: serve real files when they exist, otherwise fall back to
+	# index.html so deep links (real React Router paths) and OAuth return URLs
+	# resolve. Serve precompressed .br/.gz sidecars (emitted by
+	# vite-plugin-compression2) directly — Caddy can't brotli on the fly.
 	try_files {path} /index.html
-	file_server
+	file_server {
+		precompressed br zstd gzip
+	}
 
-	# Long-cache the fingerprinted Vite assets; never cache the HTML shell.
+	# Fingerprinted assets are immutable → cache a year. no-transform stops
+	# Cloudflare from re-compressing (which would discard our brotli). Everything
+	# else is the HTML shell, served for every route via try_files, and must
+	# revalidate so a deploy takes effect immediately (no stale shell).
 	@assets path /assets/*
-	header @assets Cache-Control "public, max-age=31536000, immutable"
-	@html path / /index.html
-	header @html Cache-Control "no-cache"
+	header @assets Cache-Control "public, max-age=31536000, immutable, no-transform"
+	@notassets not path /assets/*
+	header @notassets Cache-Control "no-cache"
 }
 
 # ── www → apex redirect ─────────────────────────────────────────────────────
