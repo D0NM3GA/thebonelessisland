@@ -39,8 +39,9 @@ USER node
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Set cwd so runMigrations.ts can find src/db/migrations relative to its
-# `resolve("src/db/migrations")` call.
+# Run from the app workspace. Migrations + dotenv both resolve relative to
+# their own modules now, so nothing depends on this cwd — it just keeps the
+# CMD path short and matches how the app is run locally.
 WORKDIR /app/apps/api
 
 ENTRYPOINT ["/sbin/tini", "--"]

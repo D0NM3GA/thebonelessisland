@@ -93,8 +93,17 @@ app.use(
   })
 );
 
+// Set when runMigrations() throws during a dev boot (prod exits instead).
+// Surfaced on /health so a drifted schema is visible to anyone checking the
+// endpoint, not just whoever happens to scroll the boot logs.
+let migrationFailure: string | null = null;
+
 app.get("/health", (_req, res) => {
-  res.json({ ok: true });
+  if (migrationFailure !== null) {
+    res.json({ ok: false, migrations: "failed", migrationError: migrationFailure });
+    return;
+  }
+  res.json({ ok: true, migrations: "ok" });
 });
 
 // Server-sent events stream for push freshness (members + game nights).
@@ -162,11 +171,36 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
 
 // Run migrations + load settings before accepting requests
 async function bootstrap() {
+  // Migrations are load-bearing: serving with a drifted schema turns missing
+  // tables into request-time 500s while the process looks healthy. In prod,
+  // refuse to start — docker restart policy + the old container's image make
+  // a crash loop the visible, recoverable failure mode. In dev, keep the
+  // server up (the failure may be the very thing being worked on) but make
+  // the breakage impossible to miss: banner + /health degradation.
   try {
     const { applied, skipped } = await runMigrations();
     console.log(`[boot] migrations: ${applied} applied, ${skipped} skipped`);
   } catch (err) {
-    console.error("[boot] migration runner failed:", err);
+    if (process.env.NODE_ENV === "production") {
+      console.error("[boot] FATAL: migration runner failed — refusing to serve with a drifted schema:", err);
+      process.exit(1);
+    }
+    migrationFailure = err instanceof Error ? err.message : String(err);
+    const bannerLines = [
+      "[boot] MIGRATIONS FAILED — schema is drifted",
+      "Endpoints touching unapplied migrations will 500.",
+      "/health now reports { ok: false, migrations: 'failed' }.",
+      "Fix the error below, then restart (or run npm run db:migrate).",
+    ];
+    console.error(
+      [
+        "",
+        `╔${"═".repeat(68)}╗`,
+        ...bannerLines.map((line) => `║  ${line.padEnd(64)}  ║`),
+        `╚${"═".repeat(68)}╝`,
+      ].join("\n"),
+      err
+    );
   }
   try {
     await loadSettings();
