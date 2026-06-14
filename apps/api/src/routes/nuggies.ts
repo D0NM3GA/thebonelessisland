@@ -18,6 +18,7 @@ import {
   hasClaimedDailyToday,
 } from "../lib/nuggiesLedger.js";
 import { checkBankRun, checkGameNightAttendance, checkNerfed } from "../lib/nuggiesAchievements.js";
+import { recordEvent } from "../lib/activityEvents.js";
 
 export const nuggiesRouter = Router();
 
@@ -311,8 +312,14 @@ nuggiesRouter.post("/daily", requireBotOrSession, async (_req, res) => {
   if (!isEnabled()) { res.status(503).json({ error: "Nuggies disabled" }); return; }
 
   try {
-    const result = await claimDaily(String(res.locals.userId));
+    const discordUserId = String(res.locals.userId);
+    const result = await claimDaily(discordUserId);
     res.json(result);
+    void recordEvent({
+      eventType: "nuggies.daily_claimed",
+      actorDiscordUserId: discordUserId,
+      payload: { amount: result.amount }
+    });
   } catch (err) {
     if (err instanceof AlreadyClaimedError) { res.status(409).json({ error: err.message }); return; }
     if (err instanceof OptedOutError) { res.status(403).json({ error: err.message }); return; }
@@ -711,6 +718,12 @@ nuggiesRouter.post("/loan/:id/accept", requireBotOrSession, async (req, res) => 
 
     await client.query("COMMIT");
     res.json({ ok: true, principal, dueAt: loan.rows[0].due_at });
+    void recordEvent({
+      eventType: "nuggies.loan_accepted",
+      actorDiscordUserId: discordUserId,
+      targetDiscordUserId: lenderDId ?? null,
+      payload: { loanId, principal }
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -742,6 +755,12 @@ nuggiesRouter.post("/loan/:id/repay", requireBotOrSession, async (req, res) => {
   const collateral = parseInt(loan.rows[0].collateral, 10);
   const lenderId = loan.rows[0].lender_user_id;
   const dueAtIso = loan.rows[0].due_at;
+  const lenderDiscord = (
+    await db.query<{ discord_user_id: string }>(
+      "SELECT discord_user_id FROM users WHERE id = $1",
+      [lenderId]
+    )
+  ).rows[0]?.discord_user_id ?? null;
 
   const client = await db.connect();
   try {
@@ -805,6 +824,12 @@ nuggiesRouter.post("/loan/:id/repay", requireBotOrSession, async (req, res) => {
     void checkBankRun(discordUserId, dueAtIso);
 
     res.json({ ok: true, amountPaid: amountDue, collateralReturned: collateral });
+    void recordEvent({
+      eventType: "nuggies.loan_repaid",
+      actorDiscordUserId: discordUserId,
+      targetDiscordUserId: lenderDiscord,
+      payload: { loanId, amount: amountDue }
+    });
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

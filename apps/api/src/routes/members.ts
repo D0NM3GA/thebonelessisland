@@ -490,6 +490,37 @@ function summarizeEvent(eventType: string, payload: Record<string, unknown>): st
   if (eventType.startsWith("news.")) {
     return gameName ? `${gameName} news` : "Patch notes";
   }
+  if (eventType === "forum_thread_created") {
+    const title = typeof payload.title === "string" ? payload.title : null;
+    return title ? `Started "${title}"` : "Started a forum thread";
+  }
+  if (eventType === "forum_reply_created") {
+    const title = typeof payload.threadTitle === "string" ? payload.threadTitle : null;
+    return title ? `Replied to "${title}"` : "Replied in the forums";
+  }
+  if (eventType === "forum.reactions_milestone") {
+    const count = typeof payload.count === "number" ? payload.count : 0;
+    return `A post hit ${count} reactions`;
+  }
+  if (eventType === "member.joined") {
+    return "Joined the island 🌴";
+  }
+  if (eventType === "nuggies.daily_claimed") {
+    const amount = typeof payload.amount === "number" ? payload.amount : 0;
+    return `Claimed daily ₦${amount.toLocaleString()}`;
+  }
+  if (eventType === "casino.big_win") {
+    const net = typeof payload.net === "number" ? payload.net : 0;
+    return `Won big — +₦${net.toLocaleString()}`;
+  }
+  if (eventType === "nuggies.loan_accepted") {
+    const principal = typeof payload.principal === "number" ? payload.principal : 0;
+    return `Took a ₦${principal.toLocaleString()} loan`;
+  }
+  if (eventType === "nuggies.loan_repaid") {
+    const amount = typeof payload.amount === "number" ? payload.amount : 0;
+    return `Repaid a ₦${amount.toLocaleString()} loan`;
+  }
   return "Activity on the island";
 }
 
@@ -749,7 +780,9 @@ membersRouter.get("/:discordUserId/profile", requireSession, async (req, res) =>
     recentActivity: activityResult.rows.map((row) => ({
       eventType: row.event_type,
       createdAt: row.created_at,
-      summary: summarizeEvent(row.event_type, row.payload ?? {})
+      summary: summarizeEvent(row.event_type, row.payload ?? {}),
+      // Raw payload so the client can deep-link rows (e.g. forum threadId/postId).
+      payload: row.payload ?? {}
     })),
     nuggies: {
       balance,

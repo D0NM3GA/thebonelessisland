@@ -1,9 +1,11 @@
 import { useState, useEffect, memo } from "react";
+import { Link, useNavigate } from "react-router";
 import { apiFetch } from "../api/client.js";
 import { IslandCard, IslandSkeletonRow, accentHex, islandTagStyle } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
 import { islandTheme } from "../theme.js";
-import type { ActivityEvent, GameNight, GuildMember, NuggiesLeaderboardEntry, PageId } from "../types.js";
+import { activityHref, pathForIslander } from "../lib/routes.js";
+import type { ActivityActor, ActivityEvent, GameNight, GuildMember, NuggiesLeaderboardEntry, PageId } from "../types.js";
 
 type CommunityPageProps = {
   isAdmin: boolean;
@@ -341,6 +343,19 @@ function communityRelativeAgo(iso: string): string {
 
 type CommunityActivityCopy = { action: string; target: string; detail: string };
 
+function communityCasinoLabel(game: string): string {
+  switch (game) {
+    case "coinflip":
+      return "Coinflip";
+    case "blackjack":
+      return "Blackjack";
+    case "guessnumber":
+      return "Guess the Number";
+    default:
+      return game;
+  }
+}
+
 function describeCommunityEvent(event: ActivityEvent): CommunityActivityCopy {
   const payload = event.payload as Record<string, unknown>;
   const gameName = event.game?.name ?? null;
@@ -378,6 +393,51 @@ function describeCommunityEvent(event: ActivityEvent): CommunityActivityCopy {
         detail: `${synced} game${synced === 1 ? "" : "s"} on the boat`
       };
     }
+    case "forum_thread_created":
+      return {
+        action: "started",
+        target: typeof payload.title === "string" ? payload.title : "a new thread",
+        detail: "New forum thread"
+      };
+    case "forum_reply_created":
+      return {
+        action: "replied to",
+        target: typeof payload.threadTitle === "string" ? payload.threadTitle : "a thread",
+        detail: "Forum reply"
+      };
+    case "news.card_published":
+      return {
+        action: "posted",
+        target: typeof payload.title === "string" ? payload.title : "an update",
+        detail: "Drift log"
+      };
+    case "forum.reactions_milestone": {
+      const count = typeof payload.count === "number" ? payload.count : 0;
+      return {
+        action: "earned",
+        target: `${count} reactions`,
+        detail: typeof payload.threadTitle === "string" ? payload.threadTitle : "A popular post"
+      };
+    }
+    case "member.joined":
+      return { action: "joined", target: "the crew", detail: "New islander 🌴 — welcome aboard" };
+    case "nuggies.daily_claimed": {
+      const amount = typeof payload.amount === "number" ? payload.amount : 0;
+      return { action: "claimed their daily", target: `₦${amount.toLocaleString()}`, detail: "Daily Nuggies" };
+    }
+    case "casino.big_win": {
+      const net = typeof payload.net === "number" ? payload.net : 0;
+      const g = typeof payload.game === "string" ? payload.game : "the casino";
+      return { action: "won big at", target: communityCasinoLabel(g), detail: `+₦${net.toLocaleString()}` };
+    }
+    case "nuggies.loan_accepted": {
+      const principal = typeof payload.principal === "number" ? payload.principal : 0;
+      return { action: "took a loan of", target: `₦${principal.toLocaleString()}`, detail: "Loan accepted" };
+    }
+    case "nuggies.loan_repaid": {
+      const amount = typeof payload.amount === "number" ? payload.amount : 0;
+      return { action: "repaid", target: `₦${amount.toLocaleString()}`, detail: "Loan repaid" };
+    }
     default:
       return { action: "fired", target: event.eventType, detail: "Crew activity" };
   }
@@ -404,43 +464,95 @@ function ActivitySection({ events }: { events: ActivityEvent[] }) {
   );
 }
 
+function CommunityActorName({ actor }: { actor: ActivityActor | null }) {
+  const name = actor?.displayName ?? "A crew member";
+  if (!actor?.discordUserId) return <strong>{name}</strong>;
+  return (
+    <Link
+      to={pathForIslander(actor.discordUserId)}
+      onClick={(e) => e.stopPropagation()}
+      style={{ fontWeight: 700, color: "inherit", textDecoration: "none" }}
+      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+    >
+      {name}
+    </Link>
+  );
+}
+
 function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: boolean }) {
+  const navigate = useNavigate();
   const copy = describeCommunityEvent(event);
   const actorName = event.actor?.displayName ?? "A crew member";
+  const actorId = event.actor?.discordUserId ?? null;
   const avatar = event.actor?.avatarUrl ?? null;
   const ago = communityRelativeAgo(event.createdAt);
+  const href = activityHref(event);
+  const avatarCircle = (
+    <div
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 999,
+        background: avatar
+          ? `center / cover no-repeat url(${JSON.stringify(avatar)})`
+          : communityColorFor(actorId),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 800,
+        color: islandTheme.color.textInverted,
+        fontSize: 12
+      }}
+    >
+      {avatar ? null : communityInitialsFor(actorName)}
+    </div>
+  );
   return (
     <div
+      onClick={href ? () => navigate(href) : undefined}
+      role={href ? "link" : undefined}
+      tabIndex={href ? 0 : undefined}
+      aria-label={href ? "View details for this activity" : undefined}
+      onKeyDown={
+        href
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(href);
+              }
+            }
+          : undefined
+      }
+      onMouseEnter={href ? (e) => (e.currentTarget.style.background = islandTheme.color.panelMutedBg) : undefined}
+      onMouseLeave={href ? (e) => (e.currentTarget.style.background = "transparent") : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: "36px 1fr auto",
         gap: 12,
         padding: "14px 16px",
         alignItems: "center",
-        borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`
+        borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
+        cursor: href ? "pointer" : "default",
+        background: "transparent",
+        transition: "background 140ms ease"
       }}
     >
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 999,
-          background: avatar
-            ? `center / cover no-repeat url(${JSON.stringify(avatar)})`
-            : communityColorFor(event.actor?.discordUserId ?? null),
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 800,
-          color: islandTheme.color.textInverted,
-          fontSize: 12
-        }}
-      >
-        {avatar ? null : communityInitialsFor(actorName)}
-      </div>
+      {actorId ? (
+        <Link
+          to={pathForIslander(actorId)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`${actorName} profile`}
+          style={{ display: "block", borderRadius: 999, textDecoration: "none" }}
+        >
+          {avatarCircle}
+        </Link>
+      ) : (
+        avatarCircle
+      )}
       <div>
         <div style={{ fontSize: 14 }}>
-          <strong>{actorName}</strong> {copy.action} <strong>{copy.target}</strong>
+          <CommunityActorName actor={event.actor} /> {copy.action} <strong>{copy.target}</strong>
         </div>
         <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>{copy.detail}</div>
       </div>

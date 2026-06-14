@@ -26,7 +26,14 @@ type ActivityRow = {
   target_game_night_id: string | null;
 };
 
-type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";
+type ActivityCategory =
+  | "all"
+  | "friends"
+  | "achievements"
+  | "milestones"
+  | "patches"
+  | "forums"
+  | "nuggies";
 
 function categorize(eventType: string): ActivityCategory {
   // Note: order matters — most-specific prefixes first.
@@ -34,6 +41,9 @@ function categorize(eventType: string): ActivityCategory {
     return "achievements";
   }
   if (eventType.startsWith("milestone.")) return "milestones";
+  if (eventType.startsWith("forum")) return "forums";
+  if (eventType.startsWith("casino.") || eventType.startsWith("nuggies.")) return "nuggies";
+  if (eventType.startsWith("member.")) return "friends";
   if (eventType.startsWith("game_night.")) return "friends";
   if (eventType.startsWith("steam.")) return "milestones";
   if (eventType.startsWith("news.")) return "patches";

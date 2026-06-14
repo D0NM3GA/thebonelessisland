@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { IslandButton, IslandCard, IslandEmptyState, IslandTag, islandInputStyle, memberColor } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
@@ -94,17 +94,45 @@ function LibraryPageImpl({ crewGames, guildMembers, currentDiscordUserId, onNavi
     const s = searchParams.get("s");
     return s === "title" || s === "tonight" ? s : "owned";
   });
-  const [openAppId, setOpenAppId] = useState<number | null>(null);
+  // The game-detail drawer is URL-driven (/library?game=<appId>) so activity-feed
+  // rows and shared links can deep-link straight into a game.
+  const openAppId = useMemo(() => {
+    const g = Number(searchParams.get("game"));
+    return Number.isInteger(g) && g > 0 ? g : null;
+  }, [searchParams]);
+  const setOpenAppId = useCallback(
+    (id: number | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id) next.set("game", String(id));
+          else next.delete("game");
+          return next;
+        },
+        { replace: true, preventScrollReset: true }
+      );
+    },
+    [setSearchParams]
+  );
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (filter !== "all") params.set("f", filter);
-    if (sort !== "owned") params.set("s", sort);
-    if (search.trim()) params.set("q", search.trim());
-    // replace + preventScrollReset: filtering shouldn't spam history or jump scroll.
-    setSearchParams(params, { replace: true, preventScrollReset: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, sort, search]);
+    // Functional update preserves the `game` param so filtering doesn't close
+    // an open drawer.
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (filter !== "all") params.set("f", filter);
+        else params.delete("f");
+        if (sort !== "owned") params.set("s", sort);
+        else params.delete("s");
+        if (search.trim()) params.set("q", search.trim());
+        else params.delete("q");
+        return params;
+      },
+      // replace + preventScrollReset: filtering shouldn't spam history or jump scroll.
+      { replace: true, preventScrollReset: true }
+    );
+  }, [filter, sort, search, setSearchParams]);
 
   // Crew members reachable right now — online-ish presence or in voice.
   const onlineIds = useMemo(

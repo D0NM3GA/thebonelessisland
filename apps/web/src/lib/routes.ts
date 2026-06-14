@@ -73,3 +73,60 @@ export function pathForIslander(discordUserId: string): string {
 export function pathForForumThread(threadId: number, postId?: number | null): string {
   return `/forums/thread/${threadId}${postId ? `/post/${postId}` : ""}`;
 }
+
+// Opens the crew Library with a game's detail drawer pre-opened (Library reads
+// the `game` query param). Used by inline game links in activity feeds.
+export function pathForGame(appId: number): string {
+  return `/library?game=${appId}`;
+}
+
+// Minimal structural shape an activity row needs to resolve a destination.
+// Kept structural (not the full ActivityEvent type) so every feed surface
+// — Home, Community, and the leaner per-user profile feed — can call this.
+type ActivityHrefInput = {
+  eventType: string;
+  payload?: Record<string, unknown> | null;
+  actor?: { discordUserId: string | null } | null;
+};
+
+// Coerce a payload field to a positive integer id, or null.
+function asId(value: unknown): number | null {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// Primary click destination for an activity-feed row. Returns null when the
+// event has nowhere meaningful to go (row stays non-interactive).
+export function activityHref(event: ActivityHrefInput): string | null {
+  const type = event.eventType;
+  const payload = event.payload ?? {};
+
+  // Any forum event with a thread id deep-links to the thread, plus the exact
+  // post when one is carried (replies, reaction milestones).
+  if (type.startsWith("forum")) {
+    const threadId = asId(payload.threadId);
+    return threadId ? pathForForumThread(threadId, asId(payload.postId)) : null;
+  }
+  if (type.startsWith("game_night.")) return pathForPage("tide-check");
+  if (type.startsWith("news.")) return pathForPage("games-news");
+  // New member → their profile (id lives in the payload since they may have no
+  // account row yet).
+  if (type === "member.joined") {
+    const id =
+      (typeof payload.discordUserId === "string" && payload.discordUserId) ||
+      event.actor?.discordUserId ||
+      null;
+    return id ? pathForIslander(id) : null;
+  }
+  // Person-centric events → the actor's profile.
+  if (
+    type.startsWith("achievement.") ||
+    type.startsWith("milestone.") ||
+    type.startsWith("steam.") ||
+    type.startsWith("casino.") ||
+    type.startsWith("nuggies.")
+  ) {
+    return event.actor?.discordUserId ? pathForIslander(event.actor.discordUserId) : null;
+  }
+  return null;
+}

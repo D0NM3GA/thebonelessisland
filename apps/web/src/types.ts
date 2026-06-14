@@ -279,7 +279,14 @@ export type GeneralNewsItem = {
   downvotes: number;
 };
 
-export type ActivityCategory = "all" | "friends" | "achievements" | "milestones" | "patches";
+export type ActivityCategory =
+  | "all"
+  | "friends"
+  | "achievements"
+  | "milestones"
+  | "patches"
+  | "forums"
+  | "nuggies";
 
 export type ActivityActor = {
   discordUserId: string | null;

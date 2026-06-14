@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router";
 import { apiFetch } from "../api/client.js";
+import { activityHref, pathForGame, pathForIslander } from "../lib/routes.js";
 import { ConfettiBurst } from "../system/celebration.js";
 import { LOGO_BG_URL } from "../assets.js";
 import { IslandCard, IslandEmptyState, IslandSkeleton, IslandTag, islandInputStyle, useCountUp } from "../islandUi.js";
@@ -9,6 +11,7 @@ import { islandTheme } from "../theme.js";
 import { GameCover, steamArt } from "../steamArt.js";
 import { useRefetchActivity } from "../system/activityContext.js";
 import type {
+  ActivityActor,
   ActivityCategory,
   ActivityEvent,
   GeneralNewsItem,
@@ -1181,6 +1184,8 @@ function Target({ children }: { children: ReactNode }) {
 const ACTIVITY_TABS: Array<{ id: ActivityCategory; label: string }> = [
   { id: "all", label: "All" },
   { id: "friends", label: "Friends" },
+  { id: "forums", label: "Forums" },
+  { id: "nuggies", label: "Nuggies" },
   { id: "achievements", label: "Achievements" },
   { id: "milestones", label: "Milestones" },
   { id: "patches", label: "Patch notes" }
@@ -1225,8 +1230,39 @@ type ActivityRendered = {
   metaText: string;
 };
 
+// Actor name that links to the islander's profile (when we have their id).
+// stopPropagation so it wins over the whole-row click without double-firing.
+function ActorLink({ actor }: { actor: ActivityActor | null }) {
+  const name = actor?.displayName ?? "A crew member";
+  if (!actor?.discordUserId) return <strong>{name}</strong>;
+  return (
+    <Link
+      to={pathForIslander(actor.discordUserId)}
+      onClick={(e) => e.stopPropagation()}
+      style={{ fontWeight: 700, color: "inherit", textDecoration: "none" }}
+      onMouseEnter={(e) => (e.currentTarget.style.textDecoration = "underline")}
+      onMouseLeave={(e) => (e.currentTarget.style.textDecoration = "none")}
+    >
+      {name}
+    </Link>
+  );
+}
+
+function casinoGameLabel(game: string): string {
+  switch (game) {
+    case "coinflip":
+      return "Coinflip";
+    case "blackjack":
+      return "Blackjack";
+    case "guessnumber":
+      return "Guess the Number";
+    default:
+      return game;
+  }
+}
+
 function describeEvent(event: ActivityEvent): ActivityRendered | null {
-  const actorName = event.actor?.displayName ?? "A crew member";
+  const actorNode = <ActorLink actor={event.actor} />;
   const game = event.game;
   const ago = relativeAgo(event.createdAt);
   const payload = event.payload as Record<string, unknown>;
@@ -1239,7 +1275,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> scheduled <Target>{title}</Target>.
+            {actorNode} scheduled <Target>{title}</Target>.
           </>
         )
       };
@@ -1250,7 +1286,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> RSVP'd to the next <Target>game night</Target>.
+            {actorNode} RSVP'd to the next <Target>game night</Target>.
           </>
         )
       };
@@ -1260,7 +1296,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> stepped off the dock for the next session.
+            {actorNode} stepped off the dock for the next session.
           </>
         )
       };
@@ -1270,7 +1306,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> locked in <Target>{game?.name ?? "a game"}</Target> for the next session.
+            {actorNode} locked in <Target>{game?.name ?? "a game"}</Target> for the next session.
           </>
         )
       };
@@ -1280,7 +1316,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> wired up their <Target>Steam library</Target>.
+            {actorNode} wired up their <Target>Steam library</Target>.
           </>
         )
       };
@@ -1290,7 +1326,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> unhooked their Steam library.
+            {actorNode} unhooked their Steam library.
           </>
         )
       };
@@ -1302,7 +1338,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> unlocked <Target>{name}</Target>.
+            {actorNode} unlocked <Target>{name}</Target>.
           </>
         )
       };
@@ -1315,7 +1351,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> unlocked {delta} achievement{delta === 1 ? "" : "s"} in{" "}
+            {actorNode} unlocked {delta} achievement{delta === 1 ? "" : "s"} in{" "}
             <Target>{gameName}</Target>.
           </>
         )
@@ -1330,8 +1366,136 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> hit <Target>{label}</Target>
+            {actorNode} hit <Target>{label}</Target>
             {threshold !== null ? ` (₦${threshold.toLocaleString()})` : ""}.
+          </>
+        )
+      };
+    }
+    case "forum_thread_created": {
+      const title = typeof payload.title === "string" ? payload.title : "a new thread";
+      return {
+        icon: "💬",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} started <Target>{title}</Target> in the forums.
+          </>
+        )
+      };
+    }
+    case "forum_reply_created": {
+      const title = typeof payload.threadTitle === "string" ? payload.threadTitle : "a thread";
+      return {
+        icon: "💬",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} replied to <Target>{title}</Target>.
+          </>
+        )
+      };
+    }
+    case "news.card_published": {
+      const title = typeof payload.title === "string" ? payload.title : "an update";
+      return {
+        icon: "📰",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} posted <Target>{title}</Target> to the drift log.
+          </>
+        )
+      };
+    }
+    case "forum.reactions_milestone": {
+      const title = typeof payload.threadTitle === "string" ? payload.threadTitle : "a post";
+      const count = typeof payload.count === "number" ? payload.count : 0;
+      return {
+        icon: "🔥",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode}'s post in <Target>{title}</Target> hit <strong>{count} reactions</strong>.
+          </>
+        )
+      };
+    }
+    case "member.joined": {
+      const name =
+        typeof payload.displayName === "string" && payload.displayName
+          ? payload.displayName
+          : event.actor?.displayName ?? "A new islander";
+      return {
+        icon: "🌴",
+        metaText: ago,
+        body: (
+          <>
+            <strong>{name}</strong> washed ashore — welcome aboard!
+          </>
+        )
+      };
+    }
+    case "nuggies.daily_claimed": {
+      const amount = typeof payload.amount === "number" ? payload.amount : 0;
+      return {
+        icon: "🍗",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} claimed their daily <Target>₦{amount.toLocaleString()}</Target>.
+          </>
+        )
+      };
+    }
+    case "casino.big_win": {
+      const net = typeof payload.net === "number" ? payload.net : 0;
+      const g = typeof payload.game === "string" ? payload.game : "the casino";
+      return {
+        icon: "🎰",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} won big at <Target>{casinoGameLabel(g)}</Target> —{" "}
+            <strong>+₦{net.toLocaleString()}</strong>.
+          </>
+        )
+      };
+    }
+    case "nuggies.loan_accepted": {
+      const principal = typeof payload.principal === "number" ? payload.principal : 0;
+      return {
+        icon: "🤝",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} took a <Target>₦{principal.toLocaleString()}</Target> loan
+            {event.target ? (
+              <>
+                {" "}
+                from <ActorLink actor={event.target} />
+              </>
+            ) : null}
+            .
+          </>
+        )
+      };
+    }
+    case "nuggies.loan_repaid": {
+      const amount = typeof payload.amount === "number" ? payload.amount : 0;
+      return {
+        icon: "💸",
+        metaText: ago,
+        body: (
+          <>
+            {actorNode} repaid a <Target>₦{amount.toLocaleString()}</Target> loan
+            {event.target ? (
+              <>
+                {" "}
+                to <ActorLink actor={event.target} />
+              </>
+            ) : null}
+            .
           </>
         )
       };
@@ -1342,7 +1506,7 @@ function describeEvent(event: ActivityEvent): ActivityRendered | null {
         metaText: ago,
         body: (
           <>
-            <strong>{actorName}</strong> · {event.eventType}
+            {actorNode} · {event.eventType}
           </>
         )
       };
@@ -1362,6 +1526,31 @@ const ACTIVITY_DATE_WINDOWS: Record<Exclude<ActivityDateRange, "all">, number> =
   "30d": 30 * 24 * 60 * 60 * 1000
 };
 
+const ACTIVITY_LAST_SEEN_KEY = "bi:activity:last-seen";
+
+function readActivityLastSeen(): number {
+  try {
+    const v = localStorage.getItem(ACTIVITY_LAST_SEEN_KEY);
+    const n = v ? Number(v) : 0;
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeActivityLastSeen(ts: number): void {
+  try {
+    localStorage.setItem(ACTIVITY_LAST_SEEN_KEY, String(ts));
+  } catch {
+    // localStorage unavailable (private mode) — the "new" marker just stays off.
+  }
+}
+
+function eventTs(iso: string): number {
+  const n = new Date(iso).getTime();
+  return Number.isFinite(n) ? n : 0;
+}
+
 function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityEvent[]; onNavigate: (page: PageId) => void }) {
   const [tab, setTab] = useState<ActivityCategory>("all");
   const [search, setSearch] = useState("");
@@ -1373,6 +1562,23 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [reachedEnd, setReachedEnd] = useState(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // "New since last visit": baseline captured once on mount so the markers
+  // persist for this view; the newest seen timestamp is persisted so the next
+  // visit starts clean. 0 baseline (first-ever visit) shows no markers.
+  const [lastSeenBaseline] = useState(() => readActivityLastSeen());
+  useEffect(() => {
+    if (events.length === 0) return;
+    const newest = events.reduce((m, e) => Math.max(m, eventTs(e.createdAt)), 0);
+    if (newest > 0) writeActivityLastSeen(newest);
+  }, [events]);
+  const newCount = useMemo(
+    () =>
+      lastSeenBaseline > 0
+        ? events.filter((e) => eventTs(e.createdAt) > lastSeenBaseline).length
+        : 0,
+    [events, lastSeenBaseline]
+  );
 
   // Adopt parent refresh only when it has at least as much data as our local
   // copy, so paginated extras aren't wiped by a periodic refresh.
@@ -1456,6 +1662,8 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
     const c: Record<ActivityCategory, number> = {
       all: events.length,
       friends: 0,
+      forums: 0,
+      nuggies: 0,
       achievements: 0,
       milestones: 0,
       patches: 0,
@@ -1509,7 +1717,11 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
     <section id="activity" style={{ display: "grid", gap: 14 }}>
       <SectionHead
         title="Activity feed"
-        meta="Latest from your crew — RSVPs, game picks, and library syncs."
+        meta={
+          newCount > 0
+            ? `${newCount} new since your last visit`
+            : "Latest from your crew — RSVPs, game picks, and library syncs."
+        }
         action="Open community →"
         onAction={() => onNavigate("community")}
       />
@@ -1669,7 +1881,13 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
             </div>
           ) : (
             grouped.map((item, i) => (
-              <ActivityRow key={item.event.id} event={item.event} repeat={item.repeat} firstRow={i === 0} />
+              <ActivityRow
+                key={item.event.id}
+                event={item.event}
+                repeat={item.repeat}
+                firstRow={i === 0}
+                isNew={lastSeenBaseline > 0 && eventTs(item.event.createdAt) > lastSeenBaseline}
+              />
             ))
           )}
 
@@ -1770,7 +1988,9 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
 // Tiny glyph keyed off the event type family — scannable feed without reading.
 function activityIcon(eventType: string): string {
   if (eventType.startsWith("forum")) return "💬";
-  if (eventType.includes("nuggie") || eventType.includes("daily") || eventType.includes("casino")) return "🍗";
+  if (eventType.startsWith("casino.")) return "🎰";
+  if (eventType.startsWith("member.")) return "🌴";
+  if (eventType.includes("nuggie") || eventType.includes("daily") || eventType.includes("casino") || eventType.includes("loan")) return "🍗";
   if (eventType.includes("game_night") || eventType.includes("rsvp")) return "🎮";
   if (eventType.includes("achievement") || eventType.includes("milestone") || eventType.includes("rank")) return "🏆";
   if (eventType.includes("steam") || eventType.includes("library") || eventType.includes("sync")) return "🔄";
@@ -1778,40 +1998,90 @@ function activityIcon(eventType: string): string {
   return "🌊";
 }
 
-function ActivityRow({ event, repeat = 1, firstRow }: { event: ActivityEvent; repeat?: number; firstRow: boolean }) {
+function ActivityRow({
+  event,
+  repeat = 1,
+  firstRow,
+  isNew = false
+}: {
+  event: ActivityEvent;
+  repeat?: number;
+  firstRow: boolean;
+  isNew?: boolean;
+}) {
+  const navigate = useNavigate();
   const rendered = describeEvent(event);
   if (!rendered) return null;
   const actorAvatar = event.actor?.avatarUrl ?? null;
+  const actorId = event.actor?.discordUserId ?? null;
+  const href = activityHref(event);
+  // Subtle tint + left accent for events newer than the last visit.
+  const baseBg = isNew ? "var(--bi-primary)14" : "transparent";
+  const avatarCircle = (
+    <div
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 999,
+        background: actorAvatar
+          ? `center / cover no-repeat url(${JSON.stringify(actorAvatar)})`
+          : colorForActor(actorId),
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 14,
+        fontWeight: 800,
+        color: islandTheme.color.textDark
+      }}
+    >
+      {actorAvatar ? null : initialsFor(event.actor?.displayName ?? null)}
+    </div>
+  );
   return (
     <div
+      onClick={href ? () => navigate(href) : undefined}
+      role={href ? "link" : undefined}
+      tabIndex={href ? 0 : undefined}
+      aria-label={href ? `View details for this activity` : undefined}
+      onKeyDown={
+        href
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(href);
+              }
+            }
+          : undefined
+      }
+      onMouseEnter={href ? (e) => (e.currentTarget.style.background = islandTheme.color.panelMutedBg) : undefined}
+      onMouseLeave={href ? (e) => (e.currentTarget.style.background = baseBg) : undefined}
       style={{
         display: "grid",
         gridTemplateColumns: "40px 1fr auto",
         gap: 12,
         padding: "12px 10px",
         borderTop: firstRow ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
-        alignItems: "start"
+        alignItems: "start",
+        cursor: href ? "pointer" : "default",
+        background: baseBg,
+        boxShadow: isNew ? `inset 3px 0 0 ${islandTheme.color.primaryGlow}` : "none",
+        borderRadius: 10,
+        transition: "background 140ms ease"
       }}
     >
       <div style={{ position: "relative", width: 40, height: 40 }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 999,
-            background: actorAvatar
-              ? `center / cover no-repeat url(${JSON.stringify(actorAvatar)})`
-              : colorForActor(event.actor?.discordUserId ?? null),
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 14,
-            fontWeight: 800,
-            color: islandTheme.color.textDark
-          }}
-        >
-          {actorAvatar ? null : initialsFor(event.actor?.displayName ?? null)}
-        </div>
+        {actorId ? (
+          <Link
+            to={pathForIslander(actorId)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`${event.actor?.displayName ?? "Crew member"} profile`}
+            style={{ display: "block", borderRadius: 999, textDecoration: "none" }}
+          >
+            {avatarCircle}
+          </Link>
+        ) : (
+          avatarCircle
+        )}
         <span
           aria-hidden="true"
           style={{
@@ -1848,9 +2118,31 @@ function ActivityRow({ event, repeat = 1, firstRow }: { event: ActivityEvent; re
               ×{repeat}
             </span>
           ) : null}
+          {isNew ? (
+            <span
+              title="New since your last visit"
+              style={{
+                marginLeft: 8,
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: "0.06em",
+                padding: "1px 7px",
+                borderRadius: 999,
+                background: islandTheme.color.primaryGlow,
+                color: islandTheme.color.textDark,
+                whiteSpace: "nowrap",
+                verticalAlign: "middle"
+              }}
+            >
+              NEW
+            </span>
+          ) : null}
         </div>
         {event.game?.headerImageUrl ? (
-          <div
+          <Link
+            to={pathForGame(event.game.appId)}
+            onClick={(e) => e.stopPropagation()}
+            aria-label={`Open ${event.game.name}`}
             style={{
               marginTop: 8,
               display: "grid",
@@ -1860,8 +2152,13 @@ function ActivityRow({ event, repeat = 1, firstRow }: { event: ActivityEvent; re
               padding: "8px 10px",
               borderRadius: 10,
               background: islandTheme.color.panelMutedBg,
-              border: `1px solid ${islandTheme.color.cardBorder}`
+              border: `1px solid ${islandTheme.color.cardBorder}`,
+              color: "inherit",
+              textDecoration: "none",
+              transition: "border-color 140ms ease"
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = islandTheme.color.primaryGlow)}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = islandTheme.color.cardBorder)}
           >
             <div
               style={{
@@ -1877,7 +2174,7 @@ function ActivityRow({ event, repeat = 1, firstRow }: { event: ActivityEvent; re
                 Featured game
               </div>
             </div>
-          </div>
+          </Link>
         ) : null}
         <div
           className="island-mono"

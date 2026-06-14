@@ -1,8 +1,10 @@
 import { memo, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { apiFetch } from "../api/client.js";
 import { IslandCard, IslandTag, accentHex, memberColor } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import { coverUrl } from "../steamArt.js";
+import { activityHref } from "../lib/routes.js";
 import type { PageId } from "../types.js";
 
 type ProfileTopGame = {
@@ -17,6 +19,7 @@ type ProfileActivity = {
   eventType: string;
   createdAt: string;
   summary: string;
+  payload?: Record<string, unknown> | null;
 };
 
 type ProfileShowcase = {
@@ -519,36 +522,53 @@ function IslanderProfilePageImpl({ targetDiscordUserId, onNavigate }: IslanderPr
           <div style={{ fontSize: 13, color: islandTheme.color.textMuted }}>No recent drift on the shore.</div>
         ) : (
           <div style={{ display: "grid", gap: 4 }}>
-            {profile.recentActivity.map((event, i) => (
-              <div
-                key={`${event.eventType}-${event.createdAt}-${i}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "7px 10px",
-                  borderRadius: 8,
-                  background: islandTheme.color.panelMutedBg,
-                  fontSize: 13
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      color: islandTheme.color.textSecondary
-                    }}
-                  >
-                    {event.summary}
+            {profile.recentActivity.map((event, i) => {
+              // Self-events (achievement/milestone/steam) resolve to this very
+              // profile, so only treat content events (forum/game-night/news) as
+              // navigable here.
+              const href = activityHref({ eventType: event.eventType, payload: event.payload });
+              const key = `${event.eventType}-${event.createdAt}-${i}`;
+              const rowStyle = {
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "7px 10px",
+                borderRadius: 8,
+                background: islandTheme.color.panelMutedBg,
+                fontSize: 13
+              } as const;
+              const inner = (
+                <>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        color: islandTheme.color.textSecondary
+                      }}
+                    >
+                      {event.summary}
+                    </div>
                   </div>
+                  <span
+                    className="island-mono"
+                    style={{ fontSize: 12, color: islandTheme.color.textMuted, flexShrink: 0 }}
+                  >
+                    {relTime(event.createdAt)}
+                  </span>
+                </>
+              );
+              return href ? (
+                <Link key={key} to={href} style={{ ...rowStyle, color: "inherit", textDecoration: "none" }}>
+                  {inner}
+                </Link>
+              ) : (
+                <div key={key} style={rowStyle}>
+                  {inner}
                 </div>
-                <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, flexShrink: 0 }}>
-                  {relTime(event.createdAt)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </IslandCard>

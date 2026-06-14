@@ -947,6 +947,39 @@ forumsRouter.post("/posts/:id/react", requireSession, async (req, res) => {
     [postId, userId, reaction]
   );
   res.json({ reacted: true, reaction });
+
+  // Activity feed: announce a post the first time its reactions reach the
+  // configured milestone. Fires once (count === threshold), post-response.
+  void (async () => {
+    const milestone = getSetting("forums_reaction_milestone", 5);
+    if (milestone <= 0) return;
+    const cnt = await db.query<{ c: string }>(
+      "SELECT COUNT(*)::text AS c FROM forum_post_reactions WHERE post_id = $1",
+      [postId]
+    );
+    if (parseInt(cnt.rows[0]?.c ?? "0", 10) !== milestone) return;
+    const info = await db.query<{ author_discord: string | null; thread_id: string; thread_title: string }>(
+      `SELECT u.discord_user_id AS author_discord, t.id AS thread_id, t.title AS thread_title
+       FROM forum_posts p
+       JOIN forum_threads t ON t.id = p.thread_id
+       LEFT JOIN users u ON u.id = p.user_id
+       WHERE p.id = $1`,
+      [postId]
+    );
+    const row = info.rows[0];
+    if (!row) return;
+    await recordEvent({
+      eventType: "forum.reactions_milestone",
+      actorDiscordUserId: row.author_discord,
+      payload: {
+        threadId: parseInt(row.thread_id, 10),
+        postId,
+        threadTitle: row.thread_title,
+        count: milestone,
+        reaction
+      }
+    });
+  })().catch(() => undefined);
 });
 
 // ── POST /forums/uploads ───────────────────────────────────────────────────
