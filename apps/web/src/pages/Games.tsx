@@ -996,6 +996,25 @@ function RosterPanel({
   );
 }
 
+const VISUALLY_HIDDEN: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+  border: 0
+};
+
+const LIBRARY_IDLE_CAP = 8;
+const LIBRARY_MAX_RENDER = 200;
+
+// Command-palette-style crew-library picker. The idle box reframes the first few
+// rows as "Popular with the crew" (owner-count sorted) with a visible total +
+// "Show all N" affordance, so users never read the sample as the whole catalog.
+// (No ⌘K binding here — QuickSwitcher owns that shortcut globally.)
 function LibraryResults({
   crewGames,
   query,
@@ -1009,11 +1028,41 @@ function LibraryResults({
   selectedAppId: number | null;
   onPick: (appId: number) => void;
 }) {
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = q ? crewGames.filter((g) => g.name.toLowerCase().includes(q)) : crewGames;
-    return list.slice(0, 8);
-  }, [crewGames, query]);
+  const [showAll, setShowAll] = useState(false);
+  const [genre, setGenre] = useState<string | null>(null);
+  const total = crewGames.length;
+
+  // Genre facets from tags → top buckets by count (skip the neutral default).
+  const genres = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const g of crewGames) {
+      const label = gameAccent(g.tags).label;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .filter(([label]) => label !== "game")
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [crewGames]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    let list = crewGames;
+    if (genre) list = list.filter((g) => gameAccent(g.tags).label === genre);
+    if (q) list = list.filter((g) => g.name.toLowerCase().includes(q));
+    return [...list].sort((a, b) => b.ownerCount - a.ownerCount || a.name.localeCompare(b.name));
+  }, [crewGames, genre, q]);
+
+  const isIdle = !q && !genre;
+  const cap = showAll ? LIBRARY_MAX_RENDER : LIBRARY_IDLE_CAP;
+  const visible = filtered.slice(0, cap);
+  const hiddenCount = filtered.length - visible.length;
+  const sectionLabel = isIdle ? "⭐ Popular with the crew" : genre && !q ? `${genre} games` : "Results";
+  const statusText =
+    q || genre
+      ? `${filtered.length} ${filtered.length === 1 ? "game" : "games"} match`
+      : `${total} games in the crew library · showing ${visible.length}`;
+
   return (
     <div
       style={{
@@ -1025,20 +1074,94 @@ function LibraryResults({
         background: islandTheme.color.panelMutedBg
       }}
     >
-      <input
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Search the crew library…"
-        style={{ ...islandInputStyle, fontSize: 13, borderRadius: islandTheme.radius.control }}
-      />
-      {results.length ? (
-        <div style={{ display: "grid", gap: 4, maxHeight: 200, overflowY: "auto" }}>
-          {results.map((g) => {
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "0 10px",
+          border: `1px solid ${islandTheme.color.cardBorder}`,
+          borderRadius: islandTheme.radius.control,
+          background: islandTheme.color.panelBg
+        }}
+      >
+        <span aria-hidden="true" style={{ fontSize: 13, opacity: 0.7 }}>🔍</span>
+        <input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder={`Search ${total} crew games…`}
+          aria-label="Search the crew library"
+          role="searchbox"
+          style={{ ...islandInputStyle, flex: 1, fontSize: 13, border: "none", background: "transparent", padding: "8px 0" }}
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => onQueryChange("")}
+            aria-label="Clear search"
+            style={{ background: "transparent", border: "none", color: islandTheme.color.textMuted, cursor: "pointer", fontSize: 15, font: "inherit" }}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+
+      {genres.length ? (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {genres.map(([label, count]) => {
+            const active = genre === label;
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setGenre(active ? null : label)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  cursor: "pointer",
+                  font: "inherit",
+                  border: active ? "none" : `1px solid ${islandTheme.color.cardBorder}`,
+                  background: active ? islandTheme.color.primary : "transparent",
+                  color: active ? islandTheme.color.primaryText : islandTheme.color.textSubtle
+                }}
+              >
+                {label}
+                <span style={{ opacity: 0.7 }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span
+          className="island-mono"
+          style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.06em", color: islandTheme.color.textMuted }}
+        >
+          {sectionLabel}
+        </span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: islandTheme.color.textMuted }}>{statusText}</span>
+      </div>
+      <span aria-live="polite" role="status" style={VISUALLY_HIDDEN}>
+        {statusText}
+      </span>
+
+      {visible.length ? (
+        <div role="listbox" aria-label="Crew games" style={{ display: "grid", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+          {visible.map((g) => {
             const selected = g.appId === selectedAppId;
             return (
               <button
                 key={g.appId}
                 type="button"
+                role="option"
+                aria-selected={selected}
                 onClick={() => onPick(g.appId)}
                 style={{
                   display: "grid",
@@ -1073,8 +1196,37 @@ function LibraryResults({
           })}
         </div>
       ) : (
-        <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textMuted }}>No crew-owned games match.</p>
+        <p style={{ margin: 0, fontSize: 12, color: islandTheme.color.textMuted }}>
+          {total === 0
+            ? "No crew libraries synced yet."
+            : `No crew-owned games match “${query.trim()}”. Try another name.`}
+        </p>
       )}
+
+      {!showAll && hiddenCount > 0 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          style={{
+            background: "transparent",
+            border: `1px solid ${islandTheme.color.cardBorder}`,
+            color: islandTheme.color.primaryGlow,
+            padding: "6px 12px",
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            font: "inherit"
+          }}
+        >
+          Show all {filtered.length} {genre ? `${genre} ` : ""}games →
+        </button>
+      ) : null}
+      {showAll && filtered.length > LIBRARY_MAX_RENDER ? (
+        <span style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
+          Showing first {LIBRARY_MAX_RENDER} — keep typing to narrow.
+        </span>
+      ) : null}
     </div>
   );
 }
