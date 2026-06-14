@@ -430,10 +430,16 @@ function PlanNightCard(props: GamesPageProps) {
 
   const accent = gameAccent(pick?.tags);
   const goingCount = selectedMemberIds.length + 1; // host always joins
+  const goingLabel = goingCount <= 1 ? "just you so far" : `${goingCount} going`;
   const canLock = Boolean(newNightScheduledFor);
 
   return (
     <div ref={cardRef} style={{ scrollMarginTop: 90 }}>
+      <style>{`
+        .bi-plan-hero { box-shadow: 0 6px 18px rgba(0,0,0,0.35); transition: transform 220ms ease, box-shadow 220ms ease; }
+        @media (hover: hover) { .bi-plan-hero:hover { transform: translateY(-5px); box-shadow: 0 18px 38px rgba(0,0,0,0.5); } }
+        @media (prefers-reduced-motion: reduce) { .bi-plan-hero { transition: none; } .bi-plan-hero:hover { transform: none; } }
+      `}</style>
       <IslandCard style={{ padding: 0, overflow: "hidden", position: "relative" }}>
         <ConfettiBurst trigger={lockNonce} />
 
@@ -519,7 +525,7 @@ function PlanNightCard(props: GamesPageProps) {
               {" · "}
               {whenLabel(newNightScheduledFor)}
               {" · "}
-              <strong style={{ color: islandTheme.color.textPrimary }}>{goingCount} going</strong>
+              <strong style={{ color: islandTheme.color.textPrimary }}>{goingLabel}</strong>
             </span>
           </span>
           <button
@@ -685,9 +691,10 @@ function PlanHero({ pick, accent }: { pick: PickView | null; accent: ReturnType<
 
   return (
     <div
+      className="bi-plan-hero"
       style={{
         position: "relative",
-        minHeight: 150,
+        minHeight: 176,
         borderRadius: 12,
         overflow: "hidden",
         border: `1px solid ${accent.accent}`,
@@ -749,7 +756,7 @@ function PlanHero({ pick, accent }: { pick: PickView | null; accent: ReturnType<
             src={steamArt.logo(pick.appId as number)}
             alt={pick.name}
             onError={() => setLogoBroken(true)}
-            style={{ maxWidth: "60%", maxHeight: 56, objectFit: "contain", filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))" }}
+            style={{ maxWidth: "80%", maxHeight: 96, objectFit: "contain", filter: "drop-shadow(0 3px 9px rgba(0,0,0,0.7))" }}
           />
         ) : (
           <>
@@ -1009,7 +1016,6 @@ const VISUALLY_HIDDEN: React.CSSProperties = {
 };
 
 const LIBRARY_IDLE_CAP = 8;
-const LIBRARY_MAX_RENDER = 200;
 
 // Command-palette-style crew-library picker. The idle box reframes the first few
 // rows as "Popular with the crew" (owner-count sorted) with a visible total +
@@ -1054,8 +1060,7 @@ function LibraryResults({
   }, [crewGames, genre, q]);
 
   const isIdle = !q && !genre;
-  const cap = showAll ? LIBRARY_MAX_RENDER : LIBRARY_IDLE_CAP;
-  const visible = filtered.slice(0, cap);
+  const visible = showAll ? filtered : filtered.slice(0, LIBRARY_IDLE_CAP);
   const hiddenCount = filtered.length - visible.length;
   const sectionLabel = isIdle ? "⭐ Popular with the crew" : genre && !q ? `${genre} games` : "Results";
   const statusText =
@@ -1221,11 +1226,6 @@ function LibraryResults({
         >
           Show all {filtered.length} {genre ? `${genre} ` : ""}games →
         </button>
-      ) : null}
-      {showAll && filtered.length > LIBRARY_MAX_RENDER ? (
-        <span style={{ fontSize: 11, color: islandTheme.color.textMuted }}>
-          Showing first {LIBRARY_MAX_RENDER} — keep typing to narrow.
-        </span>
       ) : null}
     </div>
   );
