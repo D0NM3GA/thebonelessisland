@@ -1440,7 +1440,7 @@ export function App() {
     }
   }
 
-  async function createGameNight() {
+  async function createGameNight(joinAsHost = true) {
     setStatus("Creating game night...");
     try {
       const iso = newNightScheduledFor ? new Date(newNightScheduledFor).toISOString() : "";
@@ -1452,6 +1452,7 @@ export function App() {
           title: newNightTitle,
           scheduledFor: iso,
           selectedAppId: draftAppId,
+          joinAsHost,
           attendeeIds: selectedMemberIds.length ? selectedMemberIds : undefined
         })
       });
@@ -1740,6 +1741,8 @@ export function App() {
           composerScrollNonce={composerScrollNonce}
           draftAppId={draftAppId}
           lockNonce={lockNonce}
+          currentDiscordUserId={profileData?.discordUserId ?? null}
+          isAdmin={isAdmin}
           onSelectNight={(id, title) => void selectNight(id, title)}
           onNewNightTitleChange={setNewNightTitle}
           onNewNightScheduledForChange={setNewNightScheduledFor}

@@ -13,7 +13,10 @@ const createGameNightSchema = z.object({
   title: z.string().trim().min(1).max(120),
   scheduledFor: z.iso.datetime(),
   attendeeIds: z.array(z.string().trim().min(1)).optional(),
-  selectedAppId: z.number().int().positive().nullish()
+  selectedAppId: z.number().int().positive().nullish(),
+  // Default: the host joins as an attendee. A parent-role admin may set this
+  // false to create a night for others without being counted as a player.
+  joinAsHost: z.boolean().optional()
 });
 
 const setNightGameSchema = z.object({
@@ -281,7 +284,11 @@ gameNightRouter.post("/", requireSession, async (req, res) => {
 
   const gameNightId = created.rows[0]?.id;
   if (gameNightId) {
-    const attendeeIds = Array.from(new Set([...(body.attendeeIds ?? []), discordUserId]));
+    // Host auto-joins as an attendee unless a parent-role admin opted out.
+    const hostOptsOut = body.joinAsHost === false && (await isParentRole(discordUserId));
+    const attendeeIds = Array.from(
+      new Set([...(body.attendeeIds ?? []), ...(hostOptsOut ? [] : [discordUserId])])
+    );
     await addAttendeesByDiscordIds(gameNightId, attendeeIds);
     void recordEvent({
       eventType: "game_night.created",

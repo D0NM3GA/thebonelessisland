@@ -36,11 +36,13 @@ type GamesPageProps = {
   composerScrollNonce: number;
   draftAppId: number | null;
   lockNonce: number;
+  currentDiscordUserId: string | null;
+  isAdmin: boolean;
   onSelectNight: (id: number, title: string) => void;
   onNewNightTitleChange: (value: string) => void;
   onNewNightScheduledForChange: (value: string) => void;
   onToggleSelectedMember: (discordUserId: string) => void;
-  onCreateGameNight: () => void;
+  onCreateGameNight: (joinAsHost: boolean) => void;
   onSetNightGame: (nightId: number, appId: number | null) => void;
   onDraftAppIdChange: (appId: number | null) => void;
   onJoinSelectedNight: () => void;
@@ -372,12 +374,15 @@ function PlanNightCard(props: GamesPageProps) {
     onNewNightScheduledForChange,
     onCreateGameNight,
     composerScrollNonce,
-    lockNonce
+    lockNonce,
+    currentDiscordUserId,
+    isAdmin
   } = props;
 
   const [source, setSource] = useState<GameSource>("ai");
   const [librarySearch, setLibrarySearch] = useState("");
   const [showCustomTime, setShowCustomTime] = useState(false);
+  const [joinAsHost, setJoinAsHost] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
 
   const aiPick = useMemo(() => buildComposerPick(props), [props]);
@@ -429,8 +434,19 @@ function PlanNightCard(props: GamesPageProps) {
   }, [source, aiPick, crewGames, draftAppId, selectedMemberIds]);
 
   const accent = gameAccent(pick?.tags);
-  const goingCount = selectedMemberIds.length + 1; // host always joins
-  const goingLabel = goingCount <= 1 ? "just you so far" : `${goingCount} going`;
+  // You always host, so you're never in the invitable roster — you auto-join
+  // unless you're an admin who toggled off "I'm playing too".
+  const rosterMembers = useMemo(
+    () => props.filteredGuildMembers.filter((m) => m.discordUserId !== currentDiscordUserId),
+    [props.filteredGuildMembers, currentDiscordUserId]
+  );
+  const goingCount = selectedMemberIds.length + (joinAsHost ? 1 : 0);
+  const goingLabel =
+    goingCount === 0
+      ? "no one yet"
+      : joinAsHost && selectedMemberIds.length === 0
+        ? "just you so far"
+        : `${goingCount} going`;
   const canLock = Boolean(newNightScheduledFor);
 
   return (
@@ -500,11 +516,31 @@ function PlanNightCard(props: GamesPageProps) {
           </FieldRow>
 
           <FieldRow label="Who">
-            <RosterPanel
-              members={props.filteredGuildMembers}
-              selectedMemberIds={selectedMemberIds}
-              onToggle={props.onToggleSelectedMember}
-            />
+            <div style={{ display: "grid", gap: 8 }}>
+              {isAdmin ? (
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 12,
+                    color: islandTheme.color.textSubtle,
+                    cursor: "pointer"
+                  }}
+                >
+                  <input type="checkbox" checked={joinAsHost} onChange={(e) => setJoinAsHost(e.target.checked)} />
+                  I'm playing too
+                  {!joinAsHost ? (
+                    <span style={{ color: islandTheme.color.textMuted }}>· hosting only, not a player</span>
+                  ) : null}
+                </label>
+              ) : null}
+              <RosterPanel
+                members={rosterMembers}
+                selectedMemberIds={selectedMemberIds}
+                onToggle={props.onToggleSelectedMember}
+              />
+            </div>
           </FieldRow>
         </div>
 
@@ -530,7 +566,7 @@ function PlanNightCard(props: GamesPageProps) {
           </span>
           <button
             type="button"
-            onClick={onCreateGameNight}
+            onClick={() => onCreateGameNight(joinAsHost)}
             disabled={!canLock}
             style={{
               marginLeft: "auto",
