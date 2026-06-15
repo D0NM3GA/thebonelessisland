@@ -9,7 +9,7 @@
 # Run (env injection at deploy time — never bake secrets into the image):
 #   docker run -d --env-file .env -p 3000:3000 boneless-api:latest
 
-FROM node:22-alpine
+FROM node:26-alpine
 
 # tini is a minimal init process that reaps zombies and forwards signals
 # correctly — Node alone misbehaves as PID 1 (Ctrl+C / SIGTERM gets ignored).
