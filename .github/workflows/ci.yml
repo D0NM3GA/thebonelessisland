@@ -49,6 +49,9 @@ jobs:
           # aren't part of the service's attack surface. Scope them out — the
           # app's own node_modules and the OS layer are still scanned.
           skip-dirs: usr/local/lib/node_modules/npm
+          # Accepted-risk waivers live in .trivyignore, each with a documented
+          # reason + revisit condition. Real, fixable CVEs still block merges.
+          trivyignores: .trivyignore
 
       - name: Trivy scan — bot
         uses: aquasecurity/trivy-action@master
@@ -63,6 +66,9 @@ jobs:
           # aren't part of the service's attack surface. Scope them out — the
           # app's own node_modules and the OS layer are still scanned.
           skip-dirs: usr/local/lib/node_modules/npm
+          # Accepted-risk waivers live in .trivyignore, each with a documented
+          # reason + revisit condition. Real, fixable CVEs still block merges.
+          trivyignores: .trivyignore
 
       - name: Trivy scan — web
         uses: aquasecurity/trivy-action@master
@@ -77,3 +83,6 @@ jobs:
           # aren't part of the service's attack surface. Scope them out — the
           # app's own node_modules and the OS layer are still scanned.
           skip-dirs: usr/local/lib/node_modules/npm
+          # Accepted-risk waivers live in .trivyignore, each with a documented
+          # reason + revisit condition. Real, fixable CVEs still block merges.
+          trivyignores: .trivyignore
