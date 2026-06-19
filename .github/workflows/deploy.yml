@@ -89,13 +89,19 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Deploy to box via SSM
+        # `docker system prune -af` runs BEFORE the pull: every deploy adds three
+        # SHA-tagged images (api/bot/web) that the trailing `docker image prune -f`
+        # never reaps (they aren't dangling), so the box's disk leaks until a pull
+        # dies with "no space left on device". Pruning first reclaims old images
+        # (running containers' images are protected; named volumes are untouched, so
+        # Postgres data is safe) and lets the pull always have room.
         run: |
           set -euo pipefail
           CMD_ID=$(aws ssm send-command \
             --instance-ids "${{ vars.INSTANCE_ID }}" \
             --document-name AWS-RunShellScript \
             --comment "deploy ${GITHUB_SHA::7}" \
-            --parameters commands='["set -e","export HOME=/root","cd /home/ssm-user/thebonelessisland","git config --global --add safe.directory /home/ssm-user/thebonelessisland","git fetch origin main","git reset --hard origin/main","export IMAGE_TAG=${{ github.sha }}","docker compose -f infra/docker-compose.yml --profile prod pull","docker compose -f infra/docker-compose.yml --profile prod up -d","docker image prune -f"]' \
+            --parameters commands='["set -e","export HOME=/root","cd /home/ssm-user/thebonelessisland","git config --global --add safe.directory /home/ssm-user/thebonelessisland","git fetch origin main","git reset --hard origin/main","export IMAGE_TAG=${{ github.sha }}","docker system prune -af","docker compose -f infra/docker-compose.yml --profile prod pull","docker compose -f infra/docker-compose.yml --profile prod up -d","docker image prune -f"]' \
             --query "Command.CommandId" --output text)
           echo "SSM command id: $CMD_ID"
           aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" || true
