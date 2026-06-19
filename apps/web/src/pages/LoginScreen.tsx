@@ -210,10 +210,7 @@ export function LoginScreen({ loading, authError, exiting }: LoginScreenProps) {
         overflow: "hidden",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        // Day-mode sky + ocean gradient matching the island scene
-        background:
-          "linear-gradient(180deg, #0c4a6e 0%, #0369a1 15%, #0ea5e9 40%, #38bdf8 62%, #7dd3fc 78%, #bae6fd 90%, #e0f2fe 100%)"
+        justifyContent: "center"
       }}
     >
       <style>{STYLES}</style>
@@ -292,13 +289,12 @@ export function LoginScreen({ loading, authError, exiting }: LoginScreenProps) {
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div
             style={{
-              width: 64,
-              height: 64,
+              width: 72,
+              height: 72,
               borderRadius: 999,
-              background: 'url("/boneless-island-logo.png") center/cover',
-              border: `2px solid ${islandTheme.color.cardBorder}`,
-              boxShadow:
-                "0 0 0 1px rgba(255,255,255,0.12), 0 8px 24px rgba(0,0,0,0.45)",
+              // Zoom past 100% to crop the black ring baked into the PNG artwork.
+              background: 'url("/boneless-island-logo.png") center / 126%',
+              boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
               margin: "0 auto 14px"
             }}
           />

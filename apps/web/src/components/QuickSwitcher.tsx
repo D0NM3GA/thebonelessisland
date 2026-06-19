@@ -262,6 +262,7 @@ export function QuickSwitcher({
           <span>↑↓ navigate</span>
           <span>↵ open</span>
           <span>esc close</span>
+          <span>Ctrl+K toggle</span>
         </div>
       </div>
     </div>,

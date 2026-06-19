@@ -550,6 +550,8 @@ export function IslandNewsPlaceholderCard({ title, meta, style, ...props }: Isla
         borderRadius: islandTheme.radius.control,
         padding: "0.7rem",
         background: islandTheme.color.panelMutedBg,
+        backdropFilter: islandTheme.glass.blur,
+        WebkitBackdropFilter: islandTheme.glass.blur,
         ...style
       }}
     >
@@ -585,6 +587,8 @@ export function IslandActiveMemberRow({
         alignItems: "center",
         gap: 10,
         background: islandTheme.color.panelMutedBg,
+        backdropFilter: islandTheme.glass.blur,
+        WebkitBackdropFilter: islandTheme.glass.blur,
         ...style
       }}
     >
@@ -1238,7 +1242,7 @@ export function ActionCard({ icon, title, subtitle, count, tone = "primary", onC
         borderRadius: islandTheme.radius.card,
         background: light
           ? hov ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.72)"
-          : hov ? "rgba(28,40,66,.9)" : "rgba(20,30,52,.72)",
+          : "var(--bi-panel-bg)",
         backdropFilter: islandTheme.glass.blur,
         WebkitBackdropFilter: islandTheme.glass.blur,
         transform: hov ? "translateY(-3px)" : "none",

@@ -4,27 +4,9 @@ import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { requireBotSecret, requireSession } from "../lib/auth.js";
 import { broadcast } from "../lib/eventBus.js";
+import { activityText } from "../lib/presence.js";
 
 const PRESENCE_STATUSES = new Set(["online", "idle", "dnd", "offline"]);
-
-// Discord activity type -> verb. 0 Playing, 1 Streaming, 2 Listening, 3 Watching,
-// 5 Competing. (Type 4 Custom Status is filtered out at the bot before push.)
-function activityText(name: string | null, type: number | null): string | null {
-  if (!name) return null;
-  switch (type) {
-    case 1:
-      return `Streaming ${name}`;
-    case 2:
-      return `Listening to ${name}`;
-    case 3:
-      return `Watching ${name}`;
-    case 5:
-      return `Competing in ${name}`;
-    case 0:
-    default:
-      return `Playing ${name}`;
-  }
-}
 
 // Per-user GET /users/:id (bot token) — the only endpoint that returns a user's
 // global banner + accent_color. Used for lazy backfill on profile view.

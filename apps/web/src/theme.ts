@@ -219,11 +219,15 @@ type ThemeColorVars = {
   "--bi-tool-accent": string;
 };
 
+// Target alpha ranges — keep surfaces translucent so the video backdrop shows through.
+// Panels ~0.55–0.60 (night) / ~0.70 (day); body ~0.42 (night) / ~0.58 (day); menus ~0.90.
+// RULE: every translucent surface MUST pair low alpha with backdrop-filter blur —
+// low alpha without blur = unreadable text over moving video. Never ship an opaque slab.
 export const nightThemeVars: ThemeColorVars = {
-  "--bi-app-bg": "rgba(10, 24, 44, 0.62)",
-  "--bi-panel-bg": "rgba(15, 32, 54, 0.74)",
-  "--bi-menu-bg": "rgba(10, 22, 40, 0.97)",
-  "--bi-panel-muted-bg": "#0b1220",
+  "--bi-app-bg": "rgba(10, 24, 44, 0.42)",
+  "--bi-panel-bg": "rgba(15, 32, 54, 0.58)",
+  "--bi-menu-bg": "rgba(10, 22, 40, 0.90)",
+  "--bi-panel-muted-bg": "rgba(11, 18, 32, 0.62)",
   "--bi-text-primary": "#e5e7eb",
   "--bi-text-secondary": "#e2e8f0",
   "--bi-text-muted": "#a3b2c7",
@@ -242,10 +246,10 @@ export const nightThemeVars: ThemeColorVars = {
 };
 
 export const dayThemeVars: ThemeColorVars = {
-  "--bi-app-bg": "rgba(255, 255, 255, 0.78)",
-  "--bi-panel-bg": "rgba(255, 255, 255, 0.86)",
-  "--bi-menu-bg": "rgba(255, 252, 245, 0.97)",
-  "--bi-panel-muted-bg": "rgba(243, 233, 208, 0.92)",
+  "--bi-app-bg": "rgba(255, 255, 255, 0.58)",
+  "--bi-panel-bg": "rgba(255, 255, 255, 0.70)",
+  "--bi-menu-bg": "rgba(255, 252, 245, 0.92)",
+  "--bi-panel-muted-bg": "rgba(243, 233, 208, 0.78)",
   "--bi-text-primary": "#1e293b",
   "--bi-text-secondary": "#334155",
   "--bi-text-muted": "#566273",

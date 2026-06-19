@@ -4,6 +4,7 @@ import { db } from "../db/client.js";
 import { getGuildId } from "../lib/serverSettings.js";
 import { requireSession } from "../lib/auth.js";
 import { getEquippedItemsByUserId } from "../lib/nuggiesLedger.js";
+import { composePresenceText } from "../lib/presence.js";
 
 const patchSchema = z.object({
   steamVisibility: z.enum(["private", "members", "public"]).optional(),
@@ -46,6 +47,8 @@ profileRouter.get("/me", async (req, res) => {
     role_names: string[] | null;
     in_voice: boolean | null;
     rich_presence_text: string | null;
+    activity_name: string | null;
+    activity_type: number | null;
     joined_at_guild: string | null;
     premium_since: string | null;
     balance: string | null;
@@ -77,6 +80,8 @@ profileRouter.get("/me", async (req, res) => {
         gm.role_names,
         gm.in_voice,
         gm.rich_presence_text,
+        gm.activity_name,
+        gm.activity_type,
         gm.joined_at_guild,
         gm.premium_since,
         nb.balance
@@ -130,7 +135,12 @@ profileRouter.get("/me", async (req, res) => {
         : null,
       roleNames: row.role_names ?? [],
       inVoice: Boolean(row.in_voice),
-      richPresenceText: row.rich_presence_text ?? "Presence unavailable",
+      richPresenceText: composePresenceText({
+        activityName: row.activity_name,
+        activityType: row.activity_type,
+        steamGameInfo: row.steam_game_extra_info,
+        richPresenceText: row.rich_presence_text
+      }),
       nuggieBalance: parseInt(row.balance ?? "0", 10),
       nuggiesOptedOut: row.nuggies_opted_out,
       equippedItems,

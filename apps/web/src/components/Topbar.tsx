@@ -94,7 +94,7 @@ export function Topbar({ page, onNavigate, profile, isAdmin, tagline, onLogout, 
             }}
           >
             <SearchIcon />
-            <span className="island-mono" style={{ fontSize: 12, letterSpacing: "0.04em" }}>Ctrl K</span>
+            <span style={{ fontSize: 13 }}>Search</span>
           </button>
         ) : null}
         {profile && onOpenForumThread ? (
@@ -155,12 +155,12 @@ function Brand({ tagline }: { tagline?: string }) {
     >
       <div
         style={{
-          width: 38,
-          height: 38,
+          width: 44,
+          height: 44,
           borderRadius: 999,
-          background: 'url("/boneless-island-logo.png") center/cover',
-          border: `1px solid ${islandTheme.color.cardBorder}`,
-          boxShadow: "0 0 0 1px rgba(255,255,255,0.04), 0 6px 16px rgba(0,0,0,0.3)",
+          // Zoom past 100% to crop the black ring baked into the PNG artwork.
+          background: 'url("/boneless-island-logo.png") center / 126%',
+          boxShadow: "0 4px 12px rgba(0,0,0,0.28)",
           flexShrink: 0
         }}
       />

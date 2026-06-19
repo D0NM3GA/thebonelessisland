@@ -27,9 +27,11 @@ function SceneBackdrop() {
   const day = mode === "day";
   const src = day ? "/scene-day.mp4" : "/scene.mp4";
   const fallbackBg = day ? "#bfe0f0" : "#0a1424";
+  // Scrim sits over the video to preserve topbar text legibility at the top edge.
+  // Tune these values in the review phase — they're the primary lever for "how much video shows".
   const scrim = day
-    ? "linear-gradient(180deg, rgba(255,255,255,.10) 0%, transparent 22%, transparent 70%, rgba(20,40,66,.18) 100%)"
-    : "linear-gradient(180deg, rgba(6,14,28,.32) 0%, rgba(6,14,28,.10) 26%, rgba(6,14,28,.20) 64%, rgba(6,14,28,.5) 100%), radial-gradient(130% 90% at 50% 36%, transparent 54%, rgba(6,12,24,.42) 100%)";
+    ? "linear-gradient(180deg, rgba(255,255,255,.06) 0%, transparent 22%, transparent 70%, rgba(20,40,66,.12) 100%)"
+    : "linear-gradient(180deg, rgba(6,14,28,.22) 0%, rgba(6,14,28,.07) 26%, rgba(6,14,28,.14) 64%, rgba(6,14,28,.36) 100%), radial-gradient(130% 90% at 50% 36%, transparent 54%, rgba(6,12,24,.28) 100%)";
 
   useEffect(() => {
     const v = videoRef.current;

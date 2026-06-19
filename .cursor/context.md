@@ -48,7 +48,7 @@ IDENTITY PHILOSOPHY:
 INFORMATION ARCHITECTURE (current):
 Top nav: a MegaMenu (`MegaMenu.tsx`) with three hover-expand groups — **Games** (Library, Gaming News), **Community** (Members, Sunday Tide Check, Forums, Leaderboard, Crew Achievements), **Nuggies** (Balance & Shop, The Arcade, History, Milestones) — plus an **Admin** link gated to the "Parent" role. There is no "Home" nav item: Home is the root route (`/`), reached via the brand logo. "Crew Achievements" lives nested under Community (route `/achievements`); the Nuggies economy is its own group (route `/nuggies`). Page↔path map lives in `apps/web/src/lib/routes.ts`.
 Topbar uses `position: fixed` (not sticky) so it stays locked to the viewport during overscroll/rubber-band. A 62px spacer div in App.tsx compensates for the removed document-flow space.
-User menu (avatar dropdown): Discord profile + rich presence + Steam-linked dot + theme toggle (Day/Night) + Profile + Sign out. (No status picker or stat strip — the design mocked them but they were never built; UserMenu is otherwise fully real.)
+User menu (avatar dropdown): Discord profile + rich presence (Discord activity → Steam in-game → legacy voice text → hidden when null; composed in `/profile/me` via `composePresenceText()` in `lib/presence.ts`) + Steam-linked dot + theme toggle (Day/Night) + Profile + Sign out.
 Sub-pages: Games → Library + Gaming News; Nuggies group → economy page (fully live); Community group → Members, Forums, Leaderboard, Crew Achievements, Sunday Tide Check; Admin → persistent-sidebar operations pages.
 Admin: rebuilt (2026-06) as a persistent left sidebar over 18 deep-linkable `/admin/*` pages (registry in `apps/web/src/pages/admin/adminNav.ts`): dashboard, members, forums, library, game-nights, recommender, news, patch-sources, drift-log, economy, shop, economy-rules, ai, persona, guild, bridge, sync, audit. Settings are colocated on their feature page (one control per fact); high-risk settings sit in a per-page "danger zone" behind a confirm phrase. `Admin.tsx` is now a ~133-line routing shell. See `DESIGN_NOTES.md` for the IA rationale.
 
@@ -118,7 +118,7 @@ VISUAL SYSTEM:
   - Toggle in user menu; sun/moon does an arc-dip transition (1.1s drop, 1.5s rise) during switch
 - Palm trees frame the viewport (left + right SVG silhouettes with chunky trunks, rings clipped to trunk, 12 fronds, coconut cluster) with sway loop + scroll parallax (rise + scale + fade)
 - Theme color tokens are CSS variables (`--bi-app-bg`, `--bi-panel-bg`, etc.) swapped via `:root[data-theme="day"]` so components stay token-driven
-- Translucent glass panels (`backdrop-filter`) sit over the scene
+- Translucent glass panels (`backdrop-filter`) sit over the scene. Target alpha: panels ~0.58 (night) / ~0.70 (day); body ~0.42 (night) / ~0.58 (day); menus ~0.90. RULE: every translucent surface MUST pair low alpha with backdrop-filter blur or text becomes unreadable over the moving video. The scrim in `IslandSceneShell.tsx` is the global video-visibility lever — tune in-browser.
 - Fonts: Bricolage Grotesque (display), Inter (body), JetBrains Mono (mono)
 - `.island-display` and `.island-mono` global utility classes available
 

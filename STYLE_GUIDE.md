@@ -74,6 +74,32 @@ Static accent values for scene + branded components.
 - Keep contrast accessible.
 - Avoid default SaaS placeholders ("No data available", "Enter value"). Use thematic empty states.
 
+## Translucency — Mandatory Rules
+The scene video is the primary background. Surfaces must stay translucent enough to let it show through.
+
+**Target alpha ranges:**
+- `appBg` / body: ~0.42 (night) / ~0.58 (day)
+- `panelBg` / cards: ~0.55–0.60 (night) / ~0.70 (day)
+- `panelMutedBg` / inner panels: ~0.62 (night) / ~0.78 (day)
+- `menuBg` / dropdowns: ~0.90 (both modes)
+
+**Rule: every translucent surface MUST pair low alpha with `backdrop-filter` blur** (`glass.blur` / `glass.blurStrong` / `glass.blurMenu`). Low alpha without blur = unreadable text over the moving video. Never ship an opaque slab over the scene.
+
+**Scrim lever:** the overlay gradient in `IslandSceneShell.tsx` (`scrim` variable) is the global lever for "how much video shows." Reduce scrim values for more video; raise them for more contrast over the topbar. Tune in the browser — do not guess.
+
+## Brand Mark Spec
+- Logo in the topbar: ~44px, no border ring, soft drop shadow only (`0 4px 12px rgba(0,0,0,0.28)`).
+- The mark must be recognizable, not boxed. No `border` or inset ring-shadow on the logo circle.
+
+## Affordance Copy Rule
+- Label interactive affordances with a plain word (`Search`, `Filter`, `Share`) — not a raw keycap (`Ctrl K`).
+- Put the keyboard shortcut in the `title` attribute (hover tooltip) and in the opened surface's footer hint row (e.g. QuickSwitcher footer).
+
+## Spacing Rhythm
+- Breathable but not empty: trim dead vertical gaps between stacked info sections.
+- Equalize 2-column hero rows so neither column leaves a dead gutter (Home Featured+Friends, Games composer+patches).
+- If a card or row is too short to fill its column, let it shrink — don't pad it artificially.
+
 ## Component Defaults
 - Primary button: `primary` background + `primaryText`.
 - Secondary button: `secondary` background + neutral border.
@@ -82,7 +108,7 @@ Static accent values for scene + branded components.
 
 ## Information Architecture
 - Top nav: a **MegaMenu** with three hover groups — **Games** · **Community** · **Nuggies** — plus an **Admin** link (gated to Parent role). Home is the root route reached via the brand logo (no "Home" nav item); "Crew Achievements" lives under Community.
-- User menu (avatar dropdown): banner gradient, large avatar with presence dot, name/handle/Discord ID, custom status, rich presence card (when in voice), 3-stat strip, status picker (online/idle/dnd/hidden), View profile, Steam link state, Theme toggle row, Sign out
+- User menu (avatar dropdown): banner gradient, large avatar with presence dot, name/handle, rich presence card showing live Discord activity (Playing/Streaming/Listening) → Steam in-game title → legacy voice text → hidden when absent, View profile, Steam link state, Theme toggle row, Sign out
 - Sub-routes:
   - **Library** under Games (full Steam library with co-ownership)
   - **Admin** has 18 deep-linkable pages (Dashboard, Members & Roles, Forum Moderation, Game Library, Game Nights, Recommendation Engine, Gaming News, Patch Sources, Drift Log, Economy Operations, Shop Items, Economy Rules, AI Provider, Nuggie Persona, Guild Identity, Discord Bridge, Data Sync, Audit Log)

@@ -112,7 +112,7 @@ export type MeProfile = {
   steam: SteamSummary | null;
   roleNames: string[];
   inVoice: boolean;
-  richPresenceText: string;
+  richPresenceText: string | null;
   nuggieBalance: number;
   nuggiesOptedOut: boolean;
   equippedItems: EquippedItem[];
