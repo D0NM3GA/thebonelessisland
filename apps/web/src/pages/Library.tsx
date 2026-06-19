@@ -172,7 +172,7 @@ function LibraryPageImpl({ crewGames, guildMembers, currentDiscordUserId, onNavi
         >
           ★ Games · Library
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           Steam library
         </h1>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
@@ -345,7 +345,7 @@ function LibraryPoster({
             padding: "5px 12px",
             borderRadius: 999,
             fontSize: islandTheme.text.sm,
-            fontWeight: 800,
+            fontWeight: 700,
             cursor: "pointer",
             font: "inherit",
             flexShrink: 0

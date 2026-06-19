@@ -512,7 +512,7 @@ function MemberMultiSelect({
                         justifyContent: "center",
                         color: islandTheme.color.textInverted,
                         fontSize: 12,
-                        fontWeight: 800,
+                        fontWeight: 700,
                         flexShrink: 0
                       }}
                     >

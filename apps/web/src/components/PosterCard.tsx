@@ -2,7 +2,7 @@
 // wishlist so both render the identical tall-capsule poster treatment.
 
 import type { ReactNode } from "react";
-import { IslandTag, memberColor } from "../islandUi.js";
+import { IslandTag, SpecStrip, memberColor, type SpecItem } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import { GameCover } from "../steamArt.js";
 import type { CrewOwner } from "../types.js";
@@ -56,25 +56,25 @@ export type GameCapabilities = {
   tags: string[];
 };
 
-function capabilityPills(game: GameCapabilities): string[] {
-  const pills: string[] = [];
-  if (game.isSinglePlayer) pills.push("Single-player");
-  if (game.isOnlineCoop) pills.push("Online co-op");
-  if (game.isLanCoop) pills.push("LAN co-op");
-  if (game.isSharedSplitCoop) pills.push("Split-screen");
-  if (game.isOnlinePvp) pills.push("PvP");
-  if (game.isMmo) pills.push("MMO");
+function capabilitySpecItems(game: GameCapabilities): SpecItem[] {
+  const items: SpecItem[] = [];
+  if (game.isSinglePlayer) items.push({ icon: "single", label: "Single-player", color: "#2dd4bf" });
+  if (game.isOnlineCoop) items.push({ icon: "coop", label: "Online co-op", color: "#a3e635" });
+  if (game.isLanCoop) items.push({ icon: "coop", label: "LAN co-op", color: "#a3e635" });
+  if (game.isSharedSplitCoop) items.push({ icon: "split", label: "Split-screen", color: "#ffd166" });
+  if (game.isOnlinePvp) items.push({ icon: "pvp", label: "PvP", color: "#ff7a59" });
+  if (game.isMmo) items.push({ icon: "players", label: "MMO", color: "#f472b6" });
 
   const hasSpecificMultiplayer =
     game.isOnlineCoop || game.isLanCoop || game.isSharedSplitCoop || game.isOnlinePvp || game.isMmo;
   if (!hasSpecificMultiplayer && hasGenericMultiplayerTag(game)) {
-    pills.push("Multiplayer");
+    items.push({ icon: "players", label: "Multiplayer", color: "#a78bfa" });
   }
 
   if (typeof game.mpMaxPlayersApprox === "number" && game.mpMaxPlayersApprox > 1) {
-    pills.push(`Up to ${game.mpMaxPlayersApprox}`);
+    items.push({ icon: "players", label: `Up to ${game.mpMaxPlayersApprox}`, color: "#a78bfa" });
   }
-  return pills;
+  return items;
 }
 
 const POSTER_WALL_CSS = `
@@ -205,7 +205,7 @@ export function PosterCard({
       >
         <div
           style={{
-            fontSize: islandTheme.text.md,
+            fontSize: islandTheme.text.base,
             fontWeight: 700,
             color: "#f8fafc",
             overflow: "hidden",
@@ -265,38 +265,15 @@ export function PosterCard({
 }
 
 function CapabilityPills({ game }: { game: GameCapabilities }) {
-  const pills = capabilityPills(game);
-  if (pills.length === 0) {
+  const items = capabilitySpecItems(game);
+  if (items.length === 0) {
     return (
       <span className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         —
       </span>
     );
   }
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-      {pills.map((pill) => (
-        <span
-          key={pill}
-          className="island-mono"
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.04em",
-            padding: "2px 6px",
-            borderRadius: 999,
-            border: `1px solid ${islandTheme.color.cardBorder}`,
-            color: islandTheme.color.textSubtle,
-            background: islandTheme.color.panelMutedBg,
-            whiteSpace: "nowrap"
-          }}
-        >
-          {pill}
-        </span>
-      ))}
-    </div>
-  );
+  return <SpecStrip items={items} style={{ flexWrap: "wrap" }} />;
 }
 
 export function OwnerStack({ owners }: { owners: CrewOwner[] }) {
@@ -349,7 +326,7 @@ function OwnerBadge({ owner }: { owner: CrewOwner }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        fontWeight: 800,
+        fontWeight: 700,
         color: islandTheme.color.textDark,
         fontSize: 12
       }}

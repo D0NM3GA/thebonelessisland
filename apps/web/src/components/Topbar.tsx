@@ -168,7 +168,7 @@ function Brand({ tagline }: { tagline?: string }) {
         <div
           className="island-display"
           style={{
-            fontWeight: 800,
+            fontWeight: 700,
             fontSize: 17,
             letterSpacing: "-0.01em",
             color: islandTheme.color.textPrimary,
@@ -270,7 +270,7 @@ export function UserAvatar({ profile, initials, size }: UserAvatarProps) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontWeight: 800,
+        fontWeight: 700,
         color: "#3a1d10",
         fontSize: Math.max(11, Math.round(size * 0.4))
       }}

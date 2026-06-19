@@ -304,7 +304,7 @@ function IslanderProfilePageImpl({ targetDiscordUserId, onNavigate }: IslanderPr
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontWeight: 800,
+                fontWeight: 700,
                 color: islandTheme.color.textDark,
                 fontSize: 28,
                 border: `3px solid ${accent ?? islandTheme.color.panelBg}`
@@ -314,7 +314,7 @@ function IslanderProfilePageImpl({ targetDiscordUserId, onNavigate }: IslanderPr
             </span>
           )}
           <div style={{ flex: "1 1 220px", minWidth: 0, display: "grid", gap: 6, paddingBottom: 2 }}>
-            <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(22px, 4vw, 32px)", fontWeight: 800 }}>
+            <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(22px, 4vw, 32px)", fontWeight: 700 }}>
               {profile.displayName}
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -650,7 +650,7 @@ function SummaryStat({ label, value, accent }: { label: string; value: string; a
       <span
         style={{
           fontSize: 20,
-          fontWeight: 800,
+          fontWeight: 700,
           color: accent ? islandTheme.color.primaryGlow : islandTheme.color.textPrimary
         }}
       >

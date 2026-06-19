@@ -329,7 +329,7 @@ function NavItem({ icon, children, active, danger, badge, badgeColor, onClick, r
             background: `${badgeColor ?? islandTheme.color.primaryGlow}22`,
             color: badgeColor ?? islandTheme.color.primaryGlow,
             fontSize: 12,
-            fontWeight: 800,
+            fontWeight: 700,
             letterSpacing: "0.06em",
             flexShrink: 0
           }}

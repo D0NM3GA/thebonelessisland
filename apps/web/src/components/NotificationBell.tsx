@@ -84,13 +84,14 @@ export function NotificationBell({ onOpenThread }: { onOpenThread: (threadId: nu
     <div ref={wrapRef} style={{ position: "relative", flexShrink: 0 }}>
       <button
         type="button"
+        className="island-btn"
         aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ""}`}
         onClick={() => { setOpen((o) => !o); if (!open) void load(); }}
         style={{
           position: "relative",
           width: 38,
           height: 38,
-          borderRadius: 999,
+          borderRadius: islandTheme.radius.pill,
           border: `1px solid ${islandTheme.color.cardBorder}`,
           background: islandTheme.color.panelMutedBg,
           color: islandTheme.color.textPrimary,
@@ -115,7 +116,7 @@ export function NotificationBell({ onOpenThread }: { onOpenThread: (threadId: nu
               background: islandTheme.color.dangerAccent,
               color: "#fff",
               fontSize: 10,
-              fontWeight: 800,
+              fontWeight: 700,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

@@ -90,7 +90,7 @@ export default function NuggiesHistoryPage({ onNavigate }: NuggiesHistoryPagePro
         >
           ₦ Nuggies · History
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           Transaction Log
         </h1>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
@@ -158,7 +158,7 @@ function SummaryStat({ label, value, tone }: { label: string; value: string; ton
       >
         {label}
       </div>
-      <div className="island-display" style={{ fontWeight: 800, fontSize: 20, color }}>
+      <div className="island-display" style={{ fontWeight: 700, fontSize: 20, color }}>
         {value}
       </div>
     </IslandCard>
@@ -188,7 +188,7 @@ function TransactionRow({ tx, firstRow }: { tx: NuggieTransaction; firstRow: boo
           {tx.type} · {relativeAgo(tx.createdAt)}
         </div>
       </div>
-      <span className="island-mono" style={{ fontWeight: 800, fontSize: 15, color: amountColor, whiteSpace: "nowrap" }}>
+      <span className="island-mono" style={{ fontWeight: 700, fontSize: 15, color: amountColor, whiteSpace: "nowrap" }}>
         {isEarn ? "+" : "-"}₦{Math.abs(tx.amount).toLocaleString()}
       </span>
     </div>

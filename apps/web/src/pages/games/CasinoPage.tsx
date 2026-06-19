@@ -188,7 +188,7 @@ export function CasinoPage() {
         >
           <NuggieCoin size={14} /> Nuggies · The Arcade
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           The Arcade
         </h1>
         <p
@@ -251,7 +251,7 @@ function BalanceStrip({ balance, maxBet, cooldownSecs }: { balance: number | nul
         <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Balance
         </div>
-        <div className="island-display" style={{ fontSize: 22, fontWeight: 800, color: islandTheme.color.nuggieGold }}>
+        <div className="island-display" style={{ fontSize: 22, fontWeight: 700, color: islandTheme.color.nuggieGold }}>
           ₦{balance == null ? "—" : balance.toLocaleString()}
         </div>
       </div>
@@ -348,7 +348,7 @@ function GameTile({ card, onClick, disabled }: { card: typeof GAME_CARDS[number]
       >
         {card.emoji}
       </div>
-      <div className="island-display" style={{ fontSize: 16, fontWeight: 800 }}>
+      <div className="island-display" style={{ fontSize: 16, fontWeight: 700 }}>
         {card.title}
       </div>
       <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.45 }}>

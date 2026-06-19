@@ -53,7 +53,7 @@ export function NuggieCoin({ face = "heads", size = 24, style, title }: Props) {
         <text
           fontFamily="var(--island-mono, monospace)"
           fontSize={isHeads ? 13 : 12}
-          fontWeight="800"
+          fontWeight="700"
           fill={rimDark}
           letterSpacing={isHeads ? "2.5" : "1.8"}
         >
@@ -79,7 +79,7 @@ export function NuggieCoin({ face = "heads", size = 24, style, title }: Props) {
                 y="138"
                 fontSize="8"
                 fontFamily="var(--island-mono, monospace)"
-                fontWeight="800"
+                fontWeight="700"
                 fill={rimDark}
                 textAnchor="middle"
                 letterSpacing="0.5"
@@ -91,7 +91,7 @@ export function NuggieCoin({ face = "heads", size = 24, style, title }: Props) {
                 y="148"
                 fontSize="8"
                 fontFamily="var(--island-mono, monospace)"
-                fontWeight="800"
+                fontWeight="700"
                 fill={rimDark}
                 textAnchor="middle"
                 letterSpacing="0.5"
@@ -109,7 +109,7 @@ export function NuggieCoin({ face = "heads", size = 24, style, title }: Props) {
           y="178"
           fontFamily="var(--island-mono, monospace)"
           fontSize="14"
-          fontWeight="800"
+          fontWeight="700"
           fill={rimDark}
           textAnchor="middle"
           letterSpacing="3"

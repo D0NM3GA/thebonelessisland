@@ -358,7 +358,7 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
             <div style={{ fontSize: 12, fontFamily: islandTheme.font.mono, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted, marginBottom: 4, display: "inline-flex", alignItems: "center", gap: 6 }}>
               <NuggieCoin size={16} /> Nuggies Balance
             </div>
-            <div style={{ fontSize: "clamp(2rem, 5vw, 3rem)", fontWeight: 800, lineHeight: 1, color: islandTheme.color.textPrimary }}>
+            <div style={{ fontSize: "clamp(2rem, 5vw, 3rem)", fontWeight: 700, lineHeight: 1, color: islandTheme.color.textPrimary }}>
               ₦{fmt(animatedBalance)}
               <span style={{ fontSize: "0.45em", fontWeight: 400, color: islandTheme.color.textMuted, marginLeft: "0.4em" }}>Nuggies</span>
             </div>

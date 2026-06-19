@@ -58,7 +58,7 @@ export function CoinflipGame({ startBalance, maxBet, onResolved, onBack }: Props
     <IslandCard style={{ display: "grid", gap: 14, padding: 18 }}>
       <div style={headerStyle}>
         <div>
-          <div className="island-display" style={{ fontSize: 18, fontWeight: 800 }}>Coinflip</div>
+          <div className="island-display" style={{ fontSize: 18, fontWeight: 700 }}>Coinflip</div>
           <div style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
             1.9× on win · 5% house edge · max bet {maxBet}
           </div>
@@ -336,7 +336,7 @@ const chipPresetStyle: React.CSSProperties = {
   border: "1px solid rgba(250, 204, 21, 0.35)",
   background: "rgba(250, 204, 21, 0.08)",
   color: "#fde68a",
-  fontWeight: 800,
+  fontWeight: 700,
   fontSize: 12,
   fontFamily: "var(--island-mono, monospace)",
   cursor: "pointer",

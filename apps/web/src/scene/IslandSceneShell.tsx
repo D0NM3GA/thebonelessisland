@@ -20,6 +20,27 @@ export function IslandSceneShell({ children }: IslandSceneShellProps) {
 
 function SceneBackdrop() {
   const { mode } = useDayNight();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const reducedMotion = useRef(
+    typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  ).current;
+  const day = mode === "day";
+  const src = day ? "/scene-day.mp4" : "/scene.mp4";
+  const fallbackBg = day ? "#bfe0f0" : "#0a1424";
+  const scrim = day
+    ? "linear-gradient(180deg, rgba(255,255,255,.10) 0%, transparent 22%, transparent 70%, rgba(20,40,66,.18) 100%)"
+    : "linear-gradient(180deg, rgba(6,14,28,.32) 0%, rgba(6,14,28,.10) 26%, rgba(6,14,28,.20) 64%, rgba(6,14,28,.5) 100%), radial-gradient(130% 90% at 50% 36%, transparent 54%, rgba(6,12,24,.42) 100%)";
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (reducedMotion) {
+      v.pause();
+    } else {
+      v.play().catch(() => {});
+    }
+  }, [src, reducedMotion]);
+
   return (
     <div
       aria-hidden="true"
@@ -30,25 +51,35 @@ function SceneBackdrop() {
         zIndex: -10,
         overflow: "hidden",
         pointerEvents: "none",
-        transition: "background 1200ms ease",
-        background:
-          mode === "day"
-            ? "radial-gradient(ellipse 70% 50% at 50% 0%, #fef3c7 0%, transparent 55%), linear-gradient(180deg, #87ceeb 0%, #a8d6ee 30%, #c8e3f1 55%, #e8d4a8 78%, #d4b677 100%)"
-            : "radial-gradient(ellipse 80% 60% at 70% 0%, rgba(96,165,250,0.18), transparent 60%), radial-gradient(ellipse 80% 50% at 20% 5%, rgba(192,132,252,0.14), transparent 60%), linear-gradient(180deg, #0b1d3a 0%, #0f172a 35%, #08111f 70%, #06101c 100%)"
+        background: fallbackBg
       }}
     >
-      <Stars active={mode === "night"} />
-      <Clouds active={mode === "day"} />
-      <Birds active={mode === "day"} />
-      <Celestial mode={mode} />
-      <OceanBand mode={mode} />
-      <CelestialReflection mode={mode} />
-      <GoldenHourWash />
-      <BeachBand mode={mode} />
-      <BeachProps mode={mode} />
-      <Fireflies active={mode === "night"} />
+      <video
+        ref={videoRef}
+        key={src}
+        src={src}
+        muted
+        loop
+        autoPlay={!reducedMotion}
+        playsInline
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover"
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: scrim,
+          pointerEvents: "none"
+        }}
+      />
       <CelebrationFlourish />
-      <SceneVignette mode={mode} />
     </div>
   );
 }
@@ -991,22 +1022,56 @@ function SceneGlobalStyles() {
           100% { opacity: 0; transform: translate(180px, 60px) rotate(18deg); }
         }
 
+        /* ── Motion primitives (StatusDot pulse, button shine, NuggieChip flip) ── */
+        @keyframes re-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 var(--dotc); }
+          70% { box-shadow: 0 0 0 6px transparent; }
+        }
+        @keyframes re-shine {
+          from { transform: translateX(-120%) skewX(-18deg); }
+          to   { transform: translateX(320%) skewX(-18deg); }
+        }
+        @keyframes re-flip {
+          0%   { transform: rotateY(0); }
+          100% { transform: rotateY(1800deg); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .re-pulse-el { animation: none !important; }
+          .re-flip-el  { animation: none !important; }
+        }
+
+        /* ── Tabular figures — prevents counter jitter on live numbers ── */
+        .island-tnum {
+          font-variant-numeric: tabular-nums lining-nums slashed-zero;
+        }
+
         /* ── Button base states ── */
         .island-btn {
-          transition: filter 140ms ease, transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+          transition: transform 160ms cubic-bezier(.2,.8,.2,1), box-shadow 200ms ease, filter 200ms ease, opacity 140ms ease;
         }
         .island-btn:hover:not(:disabled) {
-          filter: brightness(1.14);
-          transform: translateY(-1px);
-          box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+          transform: translateY(-2px);
         }
         .island-btn:active:not(:disabled) {
-          filter: brightness(0.95);
-          transform: translateY(0);
-          box-shadow: none;
+          transform: translateY(1px) scale(.985);
+        }
+        .island-btn .bi-sheen { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+        .island-btn:hover .bi-sheen::after {
+          content: "";
+          position: absolute;
+          top: 0; bottom: 0;
+          width: 34%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+          animation: re-shine .7s ease forwards;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .island-btn:hover .bi-sheen::after { animation: none; }
         }
         .island-btn:focus-visible {
-          outline: 2px solid var(--bi-primary-glow);
+          outline: 2.5px solid #8fb4ff;
           outline-offset: 2px;
         }
         .island-btn:disabled {
@@ -1029,7 +1094,7 @@ function SceneGlobalStyles() {
            class; default UA outlines are nearly invisible on glass panels.
            One rule makes every focusable element keyboard-discoverable. */
         :focus-visible {
-          outline: 2px solid var(--bi-primary-glow);
+          outline: 2.5px solid #8fb4ff;
           outline-offset: 2px;
           border-radius: 6px;
         }

@@ -219,7 +219,7 @@ export function BridgeAdminPage({
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 18 }}>{tier.emblem}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="island-mono" style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.05em" }}>
+                    <div className="island-mono" style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.05em" }}>
                       {tier.label}
                     </div>
                     <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>

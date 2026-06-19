@@ -106,7 +106,7 @@ export function AdminLayout({ renderPage }: AdminLayoutProps) {
           >
             ★ Admin · Parent
           </span>
-          <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 800 }}>
+          <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 700 }}>
             {page === "dashboard" ? "Admin" : current.label}
           </h1>
         </div>

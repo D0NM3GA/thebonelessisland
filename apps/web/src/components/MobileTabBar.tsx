@@ -81,8 +81,10 @@ export function MobileTabBar({ page }: { page: PageId; onNavigate?: (page: PageI
           flex-direction: column;
           align-items: center;
           gap: 3px;
-          padding: 6px 2px;
+          min-height: 56px;
+          padding: 8px 2px 6px;
           border: none;
+          border-top: 2px solid transparent;
           border-radius: ${islandTheme.radius.control}px;
           background: transparent;
           color: var(--bi-text-muted);
@@ -92,10 +94,18 @@ export function MobileTabBar({ page }: { page: PageId; onNavigate?: (page: PageI
           font-weight: 700;
           letter-spacing: 0.02em;
           cursor: pointer;
+          transition: color 140ms ease, border-color 140ms ease;
+        }
+        .bi-tabbar-btn:hover {
+          color: var(--bi-text-primary);
         }
         .bi-tabbar-btn[aria-current="page"] {
           color: var(--bi-primary-glow);
-          background: var(--bi-panel-muted-bg);
+          border-top-color: var(--bi-primary-glow);
+          background: transparent;
+        }
+        .bi-tabbar-btn[aria-current="page"] span:first-child {
+          filter: drop-shadow(0 0 5px var(--bi-primary-glow));
         }
       `}</style>
     </>

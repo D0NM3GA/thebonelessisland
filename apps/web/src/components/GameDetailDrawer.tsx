@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client.js";
-import { IslandTag, memberColor } from "../islandUi.js";
+import { IslandTag, SpecStrip, memberColor, type SpecItem } from "../islandUi.js";
 import { islandTheme } from "../theme.js";
 import { GameCover } from "../steamArt.js";
 
@@ -108,18 +108,18 @@ function memberInitials(name: string): string {
   return (name || "??").trim().slice(0, 2).toUpperCase();
 }
 
-function capabilityPills(store: GameStore): string[] {
-  const pills: string[] = [];
-  if (store.isSinglePlayer) pills.push("Single-player");
-  if (store.isOnlineCoop) pills.push("Online co-op");
-  if (store.isLanCoop) pills.push("LAN co-op");
-  if (store.isSharedSplitCoop) pills.push("Split-screen");
-  if (store.isOnlinePvp) pills.push("PvP");
-  if (store.isMmo) pills.push("MMO");
+function capabilitySpecItems(store: GameStore): SpecItem[] {
+  const items: SpecItem[] = [];
+  if (store.isSinglePlayer) items.push({ icon: "single", label: "Single-player", color: "#2dd4bf" });
+  if (store.isOnlineCoop) items.push({ icon: "coop", label: "Online co-op", color: "#a3e635" });
+  if (store.isLanCoop) items.push({ icon: "coop", label: "LAN co-op", color: "#a3e635" });
+  if (store.isSharedSplitCoop) items.push({ icon: "split", label: "Split-screen", color: "#ffd166" });
+  if (store.isOnlinePvp) items.push({ icon: "pvp", label: "PvP", color: "#ff7a59" });
+  if (store.isMmo) items.push({ icon: "players", label: "MMO", color: "#f472b6" });
   if (typeof store.mpMaxPlayersApprox === "number" && store.mpMaxPlayersApprox > 1) {
-    pills.push(`Up to ${store.mpMaxPlayersApprox}`);
+    items.push({ icon: "players", label: `Up to ${store.mpMaxPlayersApprox}`, color: "#a78bfa" });
   }
-  return pills;
+  return items;
 }
 
 export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerProps) {
@@ -174,7 +174,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
 
   if (appId === null) return null;
 
-  const pills = detail ? capabilityPills(detail.store) : [];
+  const specItems = detail ? capabilitySpecItems(detail.store) : [];
   const discount =
     detail && typeof detail.store.priceDiscountPct === "number" && detail.store.priceDiscountPct > 0
       ? detail.store.priceDiscountPct
@@ -275,11 +275,11 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
             />
 
             <div style={{ display: "grid", gap: 6 }}>
-              <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 800, paddingRight: 36 }}>
+              <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 700, paddingRight: 36 }}>
                 {detail.name}
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 16, fontWeight: 800, color: islandTheme.color.primaryGlow }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: islandTheme.color.primaryGlow }}>
                   {formatPrice(detail.store)}
                 </span>
                 {discount && typeof detail.store.priceInitialCents === "number" ? (
@@ -309,28 +309,9 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
               </div>
             </div>
 
-            {pills.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {pills.map((pill) => (
-                  <span
-                    key={pill}
-                    className="island-mono"
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                      padding: "3px 8px",
-                      borderRadius: 999,
-                      border: `1px solid ${islandTheme.color.cardBorder}`,
-                      color: islandTheme.color.textSubtle,
-                      background: islandTheme.color.panelMutedBg,
-                      whiteSpace: "nowrap"
-                    }}
-                  >
-                    {pill}
-                  </span>
-                ))}
+            {specItems.length > 0 && (
+              <div>
+                <SpecStrip items={specItems} />
               </div>
             )}
 
@@ -353,7 +334,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                       padding: "3px 9px",
                       borderRadius: 6,
                       fontSize: 13,
-                      fontWeight: 800,
+                      fontWeight: 700,
                       textDecoration: "none",
                       color: "#0b1220",
                       background: metacriticColor(detail.store.metacriticScore)
@@ -521,7 +502,7 @@ export default function GameDetailDrawer({ appId, onClose }: GameDetailDrawerPro
                             display: "inline-flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontWeight: 800,
+                            fontWeight: 700,
                             color: islandTheme.color.textDark,
                             fontSize: 12
                           }}

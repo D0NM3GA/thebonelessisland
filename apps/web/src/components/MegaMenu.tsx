@@ -350,7 +350,7 @@ function MobileOverlay({
             borderBottom: `1px solid ${islandTheme.color.cardBorder}`
           }}
         >
-          <span className="island-display" style={{ fontSize: 16, fontWeight: 800 }}>
+          <span className="island-display" style={{ fontSize: 16, fontWeight: 700 }}>
             Navigation
           </span>
           <button
@@ -507,15 +507,22 @@ function navButtonStyle(active: boolean): React.CSSProperties {
     alignItems: "center",
     gap: 4,
     border: "none",
-    background: active ? "rgba(37, 99, 235, 0.22)" : "transparent",
-    color: active ? islandTheme.color.textPrimary : islandTheme.color.textSubtle,
+    background: active
+      ? "linear-gradient(180deg, rgba(91,139,255,.22) 0%, rgba(47,99,239,.14) 100%)"
+      : "transparent",
+    color: active ? "#f3f7ff" : "var(--bi-text-muted)",
     fontSize: 14,
-    fontWeight: 500,
+    fontWeight: active ? 700 : 500,
     padding: "8px 12px",
     borderRadius: 999,
     cursor: "pointer",
-    transition: `background ${islandTheme.motion.dur.fast} ease, color ${islandTheme.motion.dur.fast} ease`,
-    font: "inherit"
+    transition: `background ${islandTheme.motion.dur.fast} ease, color ${islandTheme.motion.dur.fast} ease, box-shadow ${islandTheme.motion.dur.fast} ease`,
+    font: "inherit",
+    textDecoration: "none",
+    outline: "none",
+    boxShadow: active
+      ? "0 0 0 1px rgba(91,139,255,.55) inset, 0 0 12px -4px rgba(91,139,255,.5)"
+      : "none",
   };
 }
 

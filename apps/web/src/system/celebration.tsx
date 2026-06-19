@@ -254,7 +254,7 @@ export function AchievementCelebration({
             fontSize: 12,
             letterSpacing: "0.24em",
             textTransform: "uppercase",
-            fontWeight: 800,
+            fontWeight: 700,
             marginBottom: 2,
             color: accent,
             background: reducedMotion ? undefined : `linear-gradient(90deg, ${accent}, #fff, ${accent})`,
@@ -304,7 +304,7 @@ export function AchievementCelebration({
         {/* Title */}
         <div
           className="island-display"
-          style={{ fontSize: isMilestone ? 28 : 24, fontWeight: 800, letterSpacing: "0.03em", lineHeight: 1.15, marginBottom: 6 }}
+          style={{ fontSize: isMilestone ? 28 : 24, fontWeight: 700, letterSpacing: "0.03em", lineHeight: 1.15, marginBottom: 6 }}
         >
           {current.title}
         </div>
@@ -356,7 +356,7 @@ export function AchievementCelebration({
               color: "#86efac",
               border: "1px solid rgba(34, 197, 94, 0.45)",
               fontSize: 15,
-              fontWeight: 800,
+              fontWeight: 700,
               letterSpacing: "0.04em",
               marginTop: 16,
             }}

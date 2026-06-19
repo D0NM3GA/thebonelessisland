@@ -43,7 +43,7 @@ export default function CommunityLeaderboardPage({ onNavigate }: CommunityLeader
         >
           ★ Community · Leaderboard
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           Top Islanders
         </h1>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
@@ -123,14 +123,14 @@ function Podium({ top }: { top: NuggiesLeaderboardEntry[] }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontWeight: 800,
+                  fontWeight: 700,
                   color: islandTheme.color.textMuted
                 }}
               >
                 {entry.username.slice(0, 2).toUpperCase()}
               </div>
             )}
-            <div style={{ fontWeight: 800, fontSize: slot.rank === 1 ? 15 : 13, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div style={{ fontWeight: 700, fontSize: slot.rank === 1 ? 15 : 13, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {entry.username}
             </div>
             <span className="island-mono" style={{ fontSize: 12, fontWeight: 700, color: islandTheme.color.nuggieGold }}>
@@ -150,7 +150,7 @@ function Podium({ top }: { top: NuggiesLeaderboardEntry[] }) {
                 justifyContent: "center"
               }}
             >
-              <span className="island-display" style={{ fontSize: 20, fontWeight: 800, color: slot.color }}>
+              <span className="island-display" style={{ fontSize: 20, fontWeight: 700, color: slot.color }}>
                 {slot.rank}
               </span>
             </div>
@@ -177,7 +177,7 @@ function LeaderRow({ entry, firstRow }: { entry: NuggiesLeaderboardEntry; firstR
       <div
         className="island-display"
         style={{
-          fontWeight: 800,
+          fontWeight: 700,
           fontSize: 18,
           textAlign: "center",
           color: entry.rank <= 3 ? islandTheme.palette.sandWarmAccent : islandTheme.color.textMuted
@@ -197,7 +197,7 @@ function LeaderRow({ entry, firstRow }: { entry: NuggiesLeaderboardEntry; firstR
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontWeight: 800,
+            fontWeight: 700,
             color: islandTheme.color.textMuted,
             fontSize: 13
           }}

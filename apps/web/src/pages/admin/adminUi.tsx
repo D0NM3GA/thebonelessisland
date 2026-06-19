@@ -16,7 +16,7 @@ export function SubsectionTitle({ children, style }: { children: ReactNode; styl
         margin: 0,
         marginBottom: 10,
         fontSize: 14,
-        fontWeight: 800,
+        fontWeight: 700,
         textTransform: "uppercase",
         letterSpacing: "0.08em",
         color: islandTheme.color.textMuted,
@@ -230,7 +230,7 @@ export function AdminStatusBanner({ accent, icon, kicker, title, subtitle, contr
           >
             {kicker}
           </div>
-          <div className="island-display" style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
+          <div className="island-display" style={{ fontWeight: 700, fontSize: 18 }}>{title}</div>
           {subtitle ? (
             <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 2 }}>
               {subtitle}

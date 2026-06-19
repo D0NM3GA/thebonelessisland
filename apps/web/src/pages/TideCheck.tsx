@@ -126,7 +126,7 @@ function TideCheckPageImpl({ onNavigate }: TideCheckPageProps) {
         >
           ★ Home · Tide Check
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           Sunday Tide Check
         </h1>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
@@ -315,7 +315,7 @@ function SummaryStat({ label, value, accent }: { label: string; value: string; a
       <span
         style={{
           fontSize: 20,
-          fontWeight: 800,
+          fontWeight: 700,
           color: accent ? islandTheme.color.primaryGlow : islandTheme.color.textPrimary
         }}
       >

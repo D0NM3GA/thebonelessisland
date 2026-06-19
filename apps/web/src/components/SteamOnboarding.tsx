@@ -129,7 +129,7 @@ export function SteamOnboardingModal({ open, onClose, onSkip }: SteamOnboardingM
           <h2
             id="steam-onboarding-title"
             className="island-display"
-            style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#ffffff", lineHeight: 1.2 }}
+            style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#ffffff", lineHeight: 1.2 }}
           >
             Bring your library to the island.
           </h2>

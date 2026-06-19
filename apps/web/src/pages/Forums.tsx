@@ -168,7 +168,7 @@ function ForumHeader() {
       >
         💬 Community · Forums
       </span>
-      <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+      <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
         Forums
       </h1>
       <p
@@ -467,7 +467,7 @@ function ForumHero({
         }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="island-display" style={{ fontSize: 17, fontWeight: 800 }}>Share something with the crew</div>
+          <div className="island-display" style={{ fontSize: 17, fontWeight: 700 }}>Share something with the crew</div>
           <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 4 }}>{statsLine}</div>
         </div>
         <IslandButton variant="primary" onClick={onShare} disabled={!canCompose}>+ Share something</IslandButton>
@@ -503,7 +503,7 @@ function ForumHero({
           onError={(e) => { e.currentTarget.style.display = "none"; }}
         />
         <div style={{ flex: 1, minWidth: 220 }}>
-          <h2 className="island-display" style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>👋 Welcome to the boards</h2>
+          <h2 className="island-display" style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>👋 Welcome to the boards</h2>
           <p style={{ margin: "4px 0 0", fontSize: 13.5, color: islandTheme.color.textSubtle, lineHeight: 1.5, maxWidth: "60ch" }}>
             This is the crew's living room — post <strong>memories</strong> from our adventures, drop <strong>recommendations</strong>,
             and share <strong>resources</strong> worth knowing about. Pick a lane to get started:
@@ -533,7 +533,7 @@ function ForumHero({
             }}
           >
             <span style={{ fontSize: 22 }} aria-hidden="true">{t.emoji}</span>
-            <span style={{ fontSize: 14, fontWeight: 800 }}>{t.label}</span>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>{t.label}</span>
             <span style={{ fontSize: 12, color: islandTheme.color.textMuted, lineHeight: 1.4 }}>{t.blurb}</span>
           </button>
         ))}
@@ -557,7 +557,7 @@ function ForumHero({
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: 12,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   background: it.done ? islandTheme.color.successAccent : "transparent",
                   color: it.done ? "#06281a" : islandTheme.color.textMuted,
                   border: it.done ? "none" : `1.5px solid ${islandTheme.color.cardBorder}`
@@ -1109,7 +1109,7 @@ function CategoryTile({ category, onClick }: { category: ForumCategory; onClick:
           {category.icon}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="island-display" style={{ fontSize: 15, fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
+          <div className="island-display" style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
             {category.name}
             {category.isLocked ? <LockGlyph /> : null}
           </div>
@@ -1366,7 +1366,7 @@ function CategoryView({
             {category.icon}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
+            <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
               {category.name}
               {category.isLocked ? <LockGlyph /> : null}
             </h2>
@@ -1498,7 +1498,7 @@ function ThreadRow({
 function ColumnStat({ value, label }: { value: number; label: string }) {
   return (
     <div style={{ textAlign: "center" }}>
-      <div className="island-display" style={{ fontSize: 14, fontWeight: 800 }}>{value.toLocaleString()}</div>
+      <div className="island-display" style={{ fontSize: 14, fontWeight: 700 }}>{value.toLocaleString()}</div>
       <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, textTransform: "uppercase", letterSpacing: "0.1em" }}>
         {label}
       </div>
@@ -1800,7 +1800,7 @@ function ThreadView({
       >
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(20px, 3vw, 28px)", fontWeight: 800, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(20px, 3vw, 28px)", fontWeight: 700, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               {thread.isPinned ? <PinGlyph /> : null}
               {thread.isLocked ? <LockGlyph /> : null}
               <TypeChip type={thread.threadType} />
@@ -1956,7 +1956,7 @@ function PostCard({
           ) : (
             <div style={{ width: 64, height: 64, borderRadius: 999, background: islandTheme.color.panelBg }} />
           )}
-          <div style={{ fontSize: 13, fontWeight: 800, textAlign: "center", lineHeight: 1.2 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, textAlign: "center", lineHeight: 1.2 }}>
             {post.author.displayName}
           </div>
           <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
@@ -2088,7 +2088,7 @@ function PollCard({ poll, onVote }: { poll: ForumPoll; onVote: (optionIds: numbe
     <IslandCard style={{ display: "grid", gap: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span aria-hidden="true" style={{ fontSize: 16 }}>📊</span>
-        <span className="island-display" style={{ fontSize: 16, fontWeight: 800 }}>{poll.question}</span>
+        <span className="island-display" style={{ fontSize: 16, fontWeight: 700 }}>{poll.question}</span>
       </div>
       <div style={{ display: "grid", gap: 6 }}>
         {poll.options.map((o) => {
@@ -2829,7 +2829,7 @@ function ComposeView({
     <div style={{ display: "grid", gap: 12 }}>
       <BackLink onClick={onCancel} label={`← Back to ${categorySlug}`} />
       <IslandCard>
-        <h2 className="island-display" style={{ margin: 0, marginBottom: 12, fontSize: 20, fontWeight: 800 }}>
+        <h2 className="island-display" style={{ margin: 0, marginBottom: 12, fontSize: 20, fontWeight: 700 }}>
           {meta.emoji} New {meta.label.toLowerCase()}
         </h2>
         <div style={{ display: "grid", gap: 6, marginBottom: 14 }}>
@@ -2862,7 +2862,7 @@ function ComposeView({
                 >
                   <span style={{ fontSize: 18, lineHeight: 1.1 }} aria-hidden="true">{t.emoji}</span>
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: 800 }}>{t.label}</span>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 700 }}>{t.label}</span>
                     <span style={{ display: "block", fontSize: 11, color: islandTheme.color.textMuted, marginTop: 2, lineHeight: 1.35 }}>{t.blurb}</span>
                   </span>
                 </button>

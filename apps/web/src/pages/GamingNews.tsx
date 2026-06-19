@@ -39,7 +39,7 @@ export function GamingNewsPage({ generalNews }: GamingNewsPageProps) {
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <div>
-        <h1 className="island-display" style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>
           Gaming News
         </h1>
         <div
@@ -1288,7 +1288,7 @@ function NewsArticleModal({
 
         <h2
           className="island-display"
-          style={{ margin: "0 0 12px", fontSize: "clamp(20px, 3vw, 26px)", lineHeight: 1.15, fontWeight: 800 }}
+          style={{ margin: "0 0 12px", fontSize: "clamp(20px, 3vw, 26px)", lineHeight: 1.15, fontWeight: 700 }}
         >
           {item.aiTitle ?? item.title}
         </h2>

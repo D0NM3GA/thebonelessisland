@@ -103,7 +103,7 @@ export function BlackjackGame({ startBalance, maxBet, initialState, onResolved, 
     <IslandCard style={{ display: "grid", gap: 14, padding: 18 }}>
       <div style={headerStyle}>
         <div>
-          <div className="island-display" style={{ fontSize: 18, fontWeight: 800 }}>Blackjack</div>
+          <div className="island-display" style={{ fontSize: 18, fontWeight: 700 }}>Blackjack</div>
           <div style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
             Dealer stands on 17 · Blackjack pays 3:2 · Double on first 2 cards · auto-stand 60s · max bet {maxBet}
           </div>
@@ -147,7 +147,7 @@ export function BlackjackGame({ startBalance, maxBet, initialState, onResolved, 
       {/* Outcome banner */}
       {phase === "settled" && state?.result?.type === "blackjack" && (
         <div className="casino-result-enter" style={outcomeStyle(state.result.result)}>
-          <div style={{ fontSize: 14, fontWeight: 800 }}>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>
             {state.result.result === "blackjack" && "🃏✨ "}
             {blackjackResultLabel(state.result.result)}
           </div>
@@ -312,7 +312,7 @@ function ScoreChip({ total, isDealer }: { total: number; isDealer: boolean }) {
         padding: "6px 14px",
         borderRadius: 999,
         fontSize: 14,
-        fontWeight: 800,
+        fontWeight: 700,
         letterSpacing: "0.06em",
         textAlign: "center",
         color,
@@ -424,7 +424,7 @@ const chipPresetStyle: React.CSSProperties = {
   border: "1px solid rgba(250, 204, 21, 0.35)",
   background: "rgba(250, 204, 21, 0.08)",
   color: "#fde68a",
-  fontWeight: 800,
+  fontWeight: 700,
   fontSize: 12,
   fontFamily: "var(--island-mono, monospace)",
   cursor: "pointer",

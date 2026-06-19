@@ -79,7 +79,7 @@ function Hero() {
       >
         ★ Community
       </span>
-      <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+      <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
         Community
       </h1>
       <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
@@ -225,7 +225,7 @@ function CrewCard({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontWeight: 800,
+              fontWeight: 700,
               color: islandTheme.color.textInverted,
               fontSize: 18
             }}
@@ -500,7 +500,7 @@ function ActivityRow({ event, firstRow }: { event: ActivityEvent; firstRow: bool
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontWeight: 800,
+        fontWeight: 700,
         color: islandTheme.color.textInverted,
         fontSize: 12
       }}
@@ -628,7 +628,7 @@ function ForumRow({ entry, firstRow, onOpen }: { entry: ForumCategory; firstRow:
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontWeight: 800,
+          fontWeight: 700,
           color: accent,
           fontSize: 14
         }}
@@ -760,7 +760,7 @@ function EventRow({ night, firstRow }: { night: GameNight; firstRow: boolean }) 
         >
           {tile.month}
         </div>
-        <div className="island-display" style={{ fontWeight: 800, fontSize: 18 }}>
+        <div className="island-display" style={{ fontWeight: 700, fontSize: 18 }}>
           {tile.day}
         </div>
       </div>
@@ -800,7 +800,7 @@ function NuggiesLeaderRow({ entry, firstRow }: { entry: NuggiesLeaderboardEntry;
       <div
         className="island-display"
         style={{
-          fontWeight: 800,
+          fontWeight: 700,
           fontSize: 18,
           textAlign: "center",
           color: entry.rank <= 3 ? islandTheme.palette.sandWarmAccent : islandTheme.color.textMuted
@@ -820,7 +820,7 @@ function NuggiesLeaderRow({ entry, firstRow }: { entry: NuggiesLeaderboardEntry;
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontWeight: 800,
+            fontWeight: 700,
             color: islandTheme.color.textMuted,
             fontSize: 12
           }}
@@ -858,7 +858,7 @@ function SectionHead({ title, meta, action, onAction }: { title: string; meta: s
       }}
     >
       <div>
-        <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>
+        <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
           {title}
         </h2>
         <div

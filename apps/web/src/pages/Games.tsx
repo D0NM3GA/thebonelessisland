@@ -129,7 +129,7 @@ function GamesHero({ view, onViewChange }: { view: GamesView; onViewChange: (v: 
         >
           Plan a session · pick a game · invite the crew
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           Games
         </h1>
       </div>
@@ -471,7 +471,7 @@ function PlanNightCard(props: GamesPageProps) {
           }}
         >
           <span style={{ fontSize: 16 }} aria-hidden="true">🗓️</span>
-          <h2 className="island-display" style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
+          <h2 className="island-display" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
             Plan a night
           </h2>
           <SourceSegmented value={source} onChange={setSource} />
@@ -681,7 +681,7 @@ function MatchRing({ pct, accent }: { pct: number; accent: string }) {
         strokeDashoffset={offset}
         transform="rotate(-90 26 26)"
       />
-      <text x="26" y="28" textAnchor="middle" fontSize="13" fontWeight="800" fill="#f8fafc">
+      <text x="26" y="28" textAnchor="middle" fontSize="13" fontWeight="700" fill="#f8fafc">
         {clamped}
       </text>
       <text x="26" y="37" textAnchor="middle" fontSize="7" fill="rgba(226,232,240,0.7)">
@@ -800,14 +800,14 @@ function PlanHero({ pick, accent }: { pick: PickView | null; accent: ReturnType<
             {!heroUrl ? (
               <div
                 className="island-mono"
-                style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.1em", color: "rgba(255,255,255,0.55)", marginBottom: 2 }}
+                style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.55)", marginBottom: 2 }}
               >
                 {pickCoverInitials(pick.name)}
               </div>
             ) : null}
             <h3
               className="island-display"
-              style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "#f8fafc", textShadow: "0 2px 10px rgba(0,0,0,0.55)" }}
+              style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#f8fafc", textShadow: "0 2px 10px rgba(0,0,0,0.55)" }}
             >
               {pick.name}
             </h3>
@@ -1875,7 +1875,7 @@ function NightCard({
           ⏱ {countdown.text}
         </span>
       </div>
-      <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{night.title}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{night.title}</div>
       <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
         {formatNightDate(night.scheduledFor)}
       </div>
@@ -1947,7 +1947,7 @@ function AttendeeAvatars({
               alignItems: "center",
               justifyContent: "center",
               fontSize: 11,
-              fontWeight: 800,
+              fontWeight: 700,
               color: islandTheme.color.textSubtle,
               flexShrink: 0,
               opacity: dontOwn ? 0.45 : 1,
@@ -2190,7 +2190,7 @@ function LibrarySnapshot({ onNavigate }: { onNavigate: (page: PageId) => void })
         🗂
       </div>
       <div>
-        <div className="island-display" style={{ fontSize: 17, fontWeight: 800 }}>
+        <div className="island-display" style={{ fontSize: 17, fontWeight: 700 }}>
           Steam library
         </div>
         <div className="island-mono" style={{ fontSize: 12, color: islandTheme.color.textMuted, marginTop: 3 }}>
@@ -2331,7 +2331,7 @@ function StreamDrawer({ members }: { members: GuildMember[] }) {
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 12,
-                    fontWeight: 800
+                    fontWeight: 700
                   }}
                 >
                   {m.avatarUrl ? "" : (m.displayName[0] ?? "?").toUpperCase()}
@@ -2372,7 +2372,7 @@ function StreamDrawer({ members }: { members: GuildMember[] }) {
 function SectionHead({ title, meta }: { title: string; meta: string }) {
   return (
     <div>
-      <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>
+      <h2 className="island-display" style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
         {title}
       </h2>
       <div

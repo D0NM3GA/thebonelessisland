@@ -41,25 +41,49 @@ export const islandTheme = {
     voteMaybe: "#facc15",
     textDark: "#0f172a"
   },
-  // Semantic type scale (px). Use instead of inline fontSize literals so
-  // hierarchy stays consistent and globally tunable.
+  // Modular type scale (px). ~1.16 ratio low end (functional), ~1.26 high (expressive).
+  // "2xs" mono/uppercase eyebrows only; base up from 14 to 15.
   text: {
-    xs: 11,
-    sm: 12,
-    md: 13,
-    base: 14,
-    lg: 16,
-    xl: 20,
-    h2: 22,
-    display: "clamp(28px, 4vw, 38px)"
+    "2xs": 11,
+    xs: 12,
+    sm: 13,
+    base: 15,
+    lg: 17,
+    h4: 19,
+    h3: 23,
+    h2: 29,
+    h1: 36,
+    display: "clamp(44px, 5vw, 60px)"
+  },
+  lineHeight: {
+    tight: 1.05,
+    snug: 1.18,
+    normal: 1.40,
+    relaxed: 1.55
+  },
+  tracking: {
+    tighter: "-0.02em",
+    tight: "-0.01em",
+    normal: "0",
+    wide: "0.04em",
+    wider: "0.09em"
   },
   // 4px-base spacing scale. space[1]=4 … space[6]=32.
   space: [0, 4, 8, 12, 16, 24, 32],
   radius: {
-    control: 10,
-    card: 12,
-    surface: 14,
-    chip: 6
+    chip: 10,
+    control: 12,
+    card: 16,
+    surface: 18,
+    pill: 999
+  },
+  accent: {
+    gold: "#ffd166",
+    coral: "#ff7a59",
+    teal: "#2dd4bf",
+    violet: "#a78bfa",
+    pink: "#f472b6",
+    lime: "#a3e635"
   },
   spacing: {
     cardPadding: "0.95rem",
@@ -75,7 +99,14 @@ export const islandTheme = {
     menuMaxWidth: 320,
     menuMobileMaxWidth: 360,
     listMaxWidth: 560,
-    formMaxWidth: 480
+    formMaxWidth: 480,
+    measure: {
+      reading: 640,
+      list: 540,
+      form: 460,
+      hero: 1080,
+      prose: 720
+    }
   },
   prose: {
     readable: { maxWidth: "68ch", lineHeight: 1.45 },
@@ -111,7 +142,8 @@ export const islandTheme = {
   motion: {
     dur: {
       fast: "140ms",
-      med: "240ms",
+      base: "180ms",
+      med: "220ms",
       slow: "480ms",
       ambient: "8s"
     },
@@ -119,6 +151,11 @@ export const islandTheme = {
       out: "cubic-bezier(0.2, 0.8, 0.2, 1)",
       inOut: "cubic-bezier(0.4, 0, 0.2, 1)",
       spring: "cubic-bezier(0.5, 1.6, 0.4, 1)"
+    },
+    animation: {
+      pulse: "re-pulse 1.8s infinite",
+      shine: "re-shine .7s",
+      flip: "re-flip .9s"
     }
   },
   palette: {
@@ -154,7 +191,7 @@ export const islandTheme = {
     edge: "1px solid rgba(120, 180, 230, 0.18)"
   },
   font: {
-    display: '"Bricolage Grotesque", "Inter", system-ui, sans-serif',
+    display: '"Space Grotesk", "Inter", system-ui, sans-serif',
     body: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
     mono: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace'
   }

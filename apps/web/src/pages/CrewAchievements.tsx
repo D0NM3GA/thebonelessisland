@@ -97,7 +97,7 @@ function CrewAchievementsPageImpl({ onNavigate }: CrewAchievementsPageProps) {
         >
           ★ Community · Crew Achievements
         </span>
-        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}>
+        <h1 className="island-display" style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}>
           Crew achievements
         </h1>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: islandTheme.color.textSubtle, maxWidth: 640 }}>
@@ -185,7 +185,7 @@ function SummaryStat({ label, value, accent }: { label: string; value: string; a
       <span
         style={{
           fontSize: 20,
-          fontWeight: 800,
+          fontWeight: 700,
           color: accent ? islandTheme.color.successAccent : islandTheme.color.textPrimary
         }}
       >
@@ -237,7 +237,7 @@ function GameCard({ game }: { game: CrewAchievementGame }) {
         </div>
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: islandTheme.color.textPrimary }}>{game.name}</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: islandTheme.color.textPrimary }}>{game.name}</span>
             {fullyCleared ? (
               <IslandTag tone="success">★ 100% CLUB</IslandTag>
             ) : closestRace ? (
@@ -333,7 +333,7 @@ function MemberRow({ member }: { member: CrewAchievementMember }) {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            fontWeight: 800,
+            fontWeight: 700,
             color: islandTheme.color.textDark,
             fontSize: 12
           }}

@@ -4,7 +4,7 @@ import { apiFetch } from "../api/client.js";
 import { activityHref, pathForGame, pathForIslander } from "../lib/routes.js";
 import { ConfettiBurst } from "../system/celebration.js";
 import { LOGO_BG_URL } from "../assets.js";
-import { IslandCard, IslandEmptyState, IslandSkeleton, IslandTag, islandInputStyle, useCountUp } from "../islandUi.js";
+import { ActionCard, IslandCard, IslandEmptyState, IslandSkeleton, IslandTag, PresenceRow, StatusDot, islandInputStyle, useCountUp, type StatusTone } from "../islandUi.js";
 import { NuggieBadge } from "../components/NuggieBadge.js";
 import { NuggieCoin } from "../components/NuggieCoin.js";
 import { islandTheme } from "../theme.js";
@@ -101,7 +101,7 @@ function HomePageInner({
         <CrewTrending onNavigate={onNavigate} games={trending.games} loading={trending.loading} />
         <ActivityFeed events={activityEvents} onNavigate={onNavigate} />
         <DriftLog cards={newsCards} onNavigate={onNavigate} />
-        <BotAndRitualRow guildId={profile?.guildId ?? null} onNavigate={onNavigate} />
+        <QuickActions guildId={profile?.guildId ?? null} onNavigate={onNavigate} />
       </div>
     </div>
   );
@@ -150,25 +150,14 @@ function Hero({
       }}
     >
       <HeroCollage games={collageGames} />
-      <IslandTag tone="success" style={{ gap: 6 }}>
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: 999,
-            background: "#22c55e",
-            boxShadow: "0 0 0 3px rgba(34, 197, 94, 0.18)"
-          }}
-        />
-        {onlineCount} on the island right now
-      </IslandTag>
+      <StatusDot tone="online">{onlineCount} on the island right now</StatusDot>
 
       <h1
         className="island-display"
         style={{
           margin: 0,
           fontSize: "clamp(38px, 6vw, 68px)",
-          fontWeight: 800,
+          fontWeight: 700,
           lineHeight: 1.08,
           textShadow: "0 4px 28px rgba(0,0,0,0.45)"
         }}
@@ -521,7 +510,7 @@ function TrendingRow({ game, rank }: { game: TrendingGame; rank: number }) {
         aria-hidden="true"
         style={{
           fontSize: 15,
-          fontWeight: 800,
+          fontWeight: 700,
           textAlign: "center",
           color: TRENDING_RANK_COLORS[rank - 1] ?? islandTheme.color.textMuted
         }}
@@ -561,7 +550,7 @@ function TrendingRow({ game, rank }: { game: TrendingGame; rank: number }) {
         ) : null}
       </div>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.1 }}>
-        <span className="island-display" style={{ fontSize: 16, fontWeight: 800, color: islandTheme.color.nuggieGold }}>
+        <span className="island-display" style={{ fontSize: 16, fontWeight: 700, color: islandTheme.color.nuggieGold }}>
           {hours}h
           {showDelta ? (
             <span
@@ -777,8 +766,8 @@ function NuggiesSnapshot({ profile, onNavigate }: { profile: MeProfile | null; o
 
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
         <span
-          className="island-display"
-          style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1, color: islandTheme.color.nuggieGold }}
+          className="island-display island-tnum"
+          style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: islandTheme.color.nuggieGold }}
         >
           {balance !== undefined && !optedOut ? `₦${animatedBalance.toLocaleString()}` : "—"}
         </span>
@@ -1015,7 +1004,8 @@ function FriendsOnline({
         display: "flex",
         flexDirection: "column",
         gap: 8,
-        padding: 14
+        padding: 14,
+        maxWidth: islandTheme.layout.measure.list,
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -1064,106 +1054,27 @@ function FriendsOnline({
   );
 }
 
-function CrewRow({ member }: { member: GuildMember }) {
-  const status: "voice" | "online" | "idle" | "dnd" = member.inVoice
-    ? "voice"
-    : member.presenceStatus === "dnd"
-      ? "dnd"
-      : member.presenceStatus === "idle"
-        ? "idle"
-        : "online";
-  const presence =
-    member.richPresenceText ??
-    (member.inVoice
-      ? "In a voice channel"
-      : status === "dnd"
-        ? "Do not disturb"
-        : status === "idle"
-          ? "Idle"
-          : "Online");
-  const badgeColor =
-    status === "voice"
-      ? islandTheme.color.successAccent
-      : status === "dnd"
-        ? islandTheme.color.dangerAccent
-        : status === "idle"
-          ? islandTheme.color.warnAccent
-          : islandTheme.color.primaryGlow;
-  const badgeLabel =
-    status === "voice" ? "voice" : status === "dnd" ? "dnd" : status === "idle" ? "idle" : "online";
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "28px minmax(0, 1fr) auto",
-        gap: 8,
-        alignItems: "center",
-        padding: "5px 8px",
-        borderRadius: 10,
-        background: islandTheme.color.panelMutedBg,
-        border: `1px solid ${islandTheme.color.cardBorder}`
-      }}
-    >
-      <CrewAvatar member={member} />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {member.displayName}
-        </div>
-        <div
-          style={{
-            fontSize: 12,
-            color: islandTheme.color.textMuted,
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis"
-          }}
-        >
-          {presence}
-        </div>
-      </div>
-      <span
-        className="island-mono"
-        style={{
-          fontSize: 12,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          color: badgeColor
-        }}
-      >
-        {badgeLabel}
-      </span>
-    </div>
-  );
+function statusTone(member: GuildMember): StatusTone {
+  if (member.inVoice) return "playing";
+  if (member.presenceStatus === "dnd") return "offline";
+  if (member.presenceStatus === "idle") return "syncing";
+  return "online";
 }
 
-function CrewAvatar({ member }: { member: GuildMember }) {
-  const initials = (member.displayName || member.username || "??").slice(0, 2).toUpperCase();
-  if (member.avatarUrl) {
-    return (
-      <img
-        src={member.avatarUrl}
-        alt=""
-        style={{ width: 28, height: 28, borderRadius: 999, objectFit: "cover" }}
-      />
-    );
-  }
+function CrewRow({ member }: { member: GuildMember }) {
+  const tone = statusTone(member);
+  const presence =
+    member.richPresenceText ??
+    (member.inVoice ? "In voice" : member.presenceStatus === "dnd" ? "Do not disturb" : member.presenceStatus === "idle" ? "Idle" : "Online");
   return (
-    <div
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: 999,
-        background: pickColorFor(member.discordUserId),
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 12,
-        fontWeight: 800,
-        color: islandTheme.color.textDark
-      }}
-    >
-      {initials}
-    </div>
+    <PresenceRow
+      name={member.displayName ?? member.username ?? "?"}
+      avatarUrl={member.avatarUrl}
+      color={pickColorFor(member.discordUserId)}
+      presenceText={presence}
+      tone={tone}
+      inVoice={member.inVoice ?? false}
+    />
   );
 }
 
@@ -1749,36 +1660,45 @@ function ActivityFeed({ events: initialEvents, onNavigate }: { events: ActivityE
                 className="island-btn"
                 onClick={() => setTab(t.id)}
                 style={{
-                  border: "none",
-                  background: active ? "var(--bi-primary)33" : "transparent",
+                  border: active
+                    ? `1px solid color-mix(in oklab, ${islandTheme.accent.teal}, transparent 55%)`
+                    : `1px solid ${islandTheme.color.cardBorder}`,
+                  background: active
+                    ? `linear-gradient(135deg, color-mix(in oklab, ${islandTheme.accent.teal}, transparent 72%), color-mix(in oklab, ${islandTheme.accent.teal}, transparent 85%))`
+                    : "transparent",
                   color: active ? islandTheme.color.textPrimary : islandTheme.color.textSubtle,
                   fontSize: 13,
-                  fontWeight: 600,
-                  padding: "6px 12px",
-                  borderRadius: 999,
+                  fontWeight: active ? 600 : 500,
+                  padding: "5px 11px",
+                  borderRadius: islandTheme.radius.chip,
                   cursor: "pointer",
                   font: "inherit",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 6
+                  gap: 6,
+                  transition: `border-color ${islandTheme.motion.dur.fast} ease, background ${islandTheme.motion.dur.fast} ease, color ${islandTheme.motion.dur.fast} ease`
                 }}
               >
                 <span>{t.label}</span>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    padding: "1px 7px",
-                    borderRadius: 999,
-                    background: active ? "var(--bi-primary)55" : islandTheme.color.panelMutedBg,
-                    color: active ? islandTheme.color.textPrimary : islandTheme.color.textMuted,
-                    minWidth: 18,
-                    textAlign: "center"
-                  }}
-                >
-                  {count}
-                </span>
+                {count > 0 && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "1px 6px",
+                      borderRadius: 999,
+                      background: active
+                        ? `color-mix(in oklab, ${islandTheme.accent.teal}, transparent 55%)`
+                        : islandTheme.color.panelMutedBg,
+                      color: active ? islandTheme.color.textPrimary : islandTheme.color.textMuted,
+                      minWidth: 18,
+                      textAlign: "center"
+                    }}
+                  >
+                    {count}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -2030,7 +1950,7 @@ function ActivityRow({
         alignItems: "center",
         justifyContent: "center",
         fontSize: 14,
-        fontWeight: 800,
+        fontWeight: 700,
         color: islandTheme.color.textDark
       }}
     >
@@ -2106,7 +2026,7 @@ function ActivityRow({
               style={{
                 marginLeft: 8,
                 fontSize: 12,
-                fontWeight: 800,
+                fontWeight: 700,
                 padding: "1px 8px",
                 borderRadius: 999,
                 background: islandTheme.color.panelMutedBg,
@@ -2124,7 +2044,7 @@ function ActivityRow({
               style={{
                 marginLeft: 8,
                 fontSize: 10,
-                fontWeight: 800,
+                fontWeight: 700,
                 letterSpacing: "0.06em",
                 padding: "1px 7px",
                 borderRadius: 999,
@@ -2311,125 +2231,38 @@ function NewsCardTile({ card }: { card: NewsCardData }) {
   return content;
 }
 
-function BotAndRitualRow({ guildId, onNavigate }: { guildId: string | null; onNavigate: (page: PageId) => void }) {
+function QuickActions({ guildId, onNavigate }: { guildId: string | null; onNavigate: (page: PageId) => void }) {
   return (
-    <section
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        gap: 14
-      }}
-    >
-      <CtaCard
-        accent={islandTheme.color.primaryGlow}
-        eyebrow="Try the bot"
-        title="/whatcanweplay"
-        body="Drop the slash command in any island channel. The bot pings the API, scans the crew's libraries, and surfaces overlap and near-matches in three seconds."
-        ctaLabel="Open in Discord ↗"
-        primary
-        onCta={() => {
+    <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+      <ActionCard
+        icon="🎮"
+        title="What can we play?"
+        subtitle="Scan crew libraries for overlap"
+        tone="primary"
+        onClick={() => {
           if (guildId) {
             window.open(`https://discord.com/channels/${guildId}`, "_blank", "noopener");
-            return;
+          } else {
+            onNavigate("games");
           }
-          // No guild id available, so fall back to the in-app
-          // "what can we play" surface on the Games page.
-          onNavigate("games");
         }}
       />
-      <CtaCard
-        accent={islandTheme.palette.sandWarmAccent}
-        eyebrow="Sunday ritual"
-        title="Tide check"
-        body="Your weekly island recap — who showed up, what got played, what is queued. The tide rolls in every Sunday with the week's attendance, playtime, and wishlist drift."
-        ctaLabel="Read this week's tide →"
-        primary={false}
-        onCta={() => onNavigate("tide-check")}
+      <ActionCard
+        icon="🌊"
+        title="Tide Check"
+        subtitle="This week's island digest"
+        tone="success"
+        onClick={() => onNavigate("tide-check")}
+      />
+      <ActionCard
+        icon="🎲"
+        title="The Arcade"
+        subtitle="Coinflip · Blackjack · Hi-Lo"
+        tone="warning"
+        onClick={() => onNavigate("nuggies-casino")}
       />
     </section>
   );
-}
-
-type CtaCardProps = {
-  accent: string;
-  eyebrow: string;
-  title: string;
-  body: string;
-  ctaLabel: string;
-  primary: boolean;
-  onCta?: () => void;
-};
-
-function CtaCard({ accent, eyebrow, title, body, ctaLabel, primary, onCta }: CtaCardProps) {
-  return (
-    <article
-      style={{
-        background: `linear-gradient(135deg, ${hexToRgba(accent, primary ? 0.32 : 0.22)} 0%, ${islandTheme.color.panelBg} 100%)`,
-        backdropFilter: islandTheme.glass.blur,
-        WebkitBackdropFilter: islandTheme.glass.blur,
-        border: `1px solid ${hexToRgba(accent, 0.4)}`,
-        borderRadius: 16,
-        padding: 28
-      }}
-    >
-      <div
-        className="island-mono"
-        style={{
-          fontSize: 12,
-          color: accent,
-          textTransform: "uppercase",
-          letterSpacing: "0.1em",
-          marginBottom: 10
-        }}
-      >
-        {eyebrow}
-      </div>
-      <div
-        className="island-display"
-        style={{ fontSize: 24, marginBottom: 8, fontWeight: 800, letterSpacing: "-0.01em" }}
-      >
-        {title}
-      </div>
-      <p
-        style={{
-          margin: "0 0 14px",
-          color: islandTheme.color.textSubtle,
-          fontSize: 14,
-          lineHeight: 1.5
-        }}
-      >
-        {body}
-      </p>
-      <button
-        type="button"
-        className="island-btn"
-        onClick={onCta}
-        style={{
-          background: primary ? islandTheme.color.primary : "transparent",
-          border: `1px solid ${primary ? islandTheme.color.primary : islandTheme.color.cardBorder}`,
-          color: primary ? islandTheme.color.primaryText : islandTheme.color.textPrimary,
-          padding: "8px 14px",
-          borderRadius: 999,
-          fontSize: 13,
-          fontWeight: 700,
-          cursor: "pointer",
-          font: "inherit"
-        }}
-      >
-        {ctaLabel}
-      </button>
-    </article>
-  );
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  if (hex.startsWith("#") && hex.length === 7) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-  return hex;
 }
 
 function SectionHead({
@@ -2454,7 +2287,7 @@ function SectionHead({
       }}
     >
       <div>
-        <h2 className="island-display" style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>
+        <h2 className="island-display" style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>
           {title}
         </h2>
         <div

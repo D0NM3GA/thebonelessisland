@@ -304,7 +304,7 @@ export function LoginScreen({ loading, authError, exiting }: LoginScreenProps) {
           />
           <div
             className="island-display"
-            style={{ fontWeight: 800, fontSize: 22, lineHeight: 1.2 }}
+            style={{ fontWeight: 700, fontSize: 22, lineHeight: 1.2 }}
           >
             Welcome to the Island
           </div>

@@ -143,7 +143,7 @@ export function MilestonesPage() {
         </span>
         <h1
           className="island-display"
-          style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 800 }}
+          style={{ margin: 0, fontSize: "clamp(28px, 4vw, 38px)", fontWeight: 700 }}
         >
           Milestones &amp; Achievements
         </h1>
@@ -320,7 +320,7 @@ function CurrentRankHero({
             className="island-display"
             style={{
               fontSize: "clamp(24px, 3.5vw, 34px)",
-              fontWeight: 800,
+              fontWeight: 700,
               letterSpacing: "0.03em",
               lineHeight: 1.05,
               textShadow: "0 2px 12px rgba(0,0,0,0.3)",
@@ -449,7 +449,7 @@ function RankTierCard({
             className="island-mono"
             style={{
               fontSize: 13,
-              fontWeight: 800,
+              fontWeight: 700,
               letterSpacing: "0.06em",
               color: reached ? tier.reachedTextColor : islandTheme.color.textPrimary,
               overflow: "hidden",
@@ -547,7 +547,7 @@ function AchievementCard({
             className="island-mono"
             style={{
               fontSize: 13,
-              fontWeight: 800,
+              fontWeight: 700,
               letterSpacing: "0.04em",
               color: islandTheme.color.textPrimary,
               overflow: "hidden",

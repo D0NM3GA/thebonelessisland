@@ -57,7 +57,7 @@ export function GuessNumberGame({ startBalance, maxBet, onResolved, onBack }: Pr
     <IslandCard style={{ display: "grid", gap: 14, padding: 18 }}>
       <div style={headerStyle}>
         <div>
-          <div className="island-display" style={{ fontSize: 18, fontWeight: 800 }}>Hi-Lo</div>
+          <div className="island-display" style={{ fontSize: 18, fontWeight: 700 }}>Hi-Lo</div>
           <div style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
             8× on win · pick 1–10 · max bet {maxBet}
           </div>
@@ -222,7 +222,7 @@ function dieStyle(accent: string): React.CSSProperties {
     color: accent,
     fontFamily: "var(--island-mono, monospace)",
     fontSize: 44,
-    fontWeight: 800,
+    fontWeight: 700,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -235,7 +235,7 @@ function numberBtnStyle(selected: boolean, disabled: boolean): React.CSSProperti
     ...islandTagStyle({ color: "#38bdf8", active: selected }),
     padding: "10px 0",
     fontSize: 14,
-    fontWeight: 800,
+    fontWeight: 700,
     fontFamily: "var(--island-mono, monospace)",
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.55 : 1,
@@ -322,7 +322,7 @@ const chipPresetStyle: React.CSSProperties = {
   border: "1px solid rgba(250, 204, 21, 0.35)",
   background: "rgba(250, 204, 21, 0.08)",
   color: "#fde68a",
-  fontWeight: 800,
+  fontWeight: 700,
   fontSize: 12,
   fontFamily: "var(--island-mono, monospace)",
   cursor: "pointer",
