@@ -7,6 +7,25 @@ Scope owner: matt. Last updated: 2026-06-19.
 
 ---
 
+## Build progress (resume here)
+
+Done + committed on branch `claude/wizardly-shaw-0503dc` (typecheck-clean, 0 vulns):
+- Vocabulary → STYLE_GUIDE.md (`ab53080`)
+- Phase A — summary completeness + 1350-word cap + jargon + batch 6 / maxTokens 16384 + `summary_too_long` validation (`76a4db2`)
+- Phase B — og:image scrape + pre-flight SSRF guard + migration 064 (`3be88c8`)
+- Phase D + F — single Source Attribution pop-out; content-vote re-aim + ranking weight 0.2 + story-level placement (`f050c57`)
+
+**Next: Phase C** (visual rebuild) — do WITH live preview (`/run` + Claude Preview) to tune the
+Ken Burns + sheen feel, hero crop, and excerpt length. See §4 Phase C + the §5 CSS block.
+
+Known follow-ups:
+- **Image backfill** — `resolveMissingImages` only scrapes newly-ingested rows; existing imageless
+  Reddit/RSS rows need a one-time backfill pass (mirror `embed-backfill`) or the new Hero has little to show.
+- **Post-merge ops** — run migration 064, then admin recurate to regenerate summaries under the new prompt.
+- **Deferred (§9)** — A4 prompt caching, probe-image-size dimension fallback, B5 hero-by-image-quality, dominant color.
+
+---
+
 ## 0. Vocabulary (canonical terms)
 
 Use these names in code, comments, commits, and discussion. Code symbols mostly
