@@ -21,9 +21,10 @@ Visual tuning of the Hero/cards may follow from preview feedback (motion speed, 
 excerpt length are all single-constant tweaks). See §4 Phase E + follow-ups below.
 
 Known follow-ups:
-- **Image backfill** — `resolveMissingImages` only scrapes newly-ingested rows; existing imageless
-  Reddit/RSS rows need a one-time backfill pass (mirror `embed-backfill`) or the new Hero has little to show.
-- **Post-merge ops** — run migration 064, then admin recurate to regenerate summaries under the new prompt.
+- **Image backfill** — DONE: `POST /news/general/image-backfill` (admin, bounded ≤200/call, poll until
+  remaining 0). Run it once post-deploy so existing imageless rows get covers.
+- **Post-merge ops** — run migration 064, then admin recurate (regenerate summaries under the new
+  prompt), then image-backfill until remaining 0.
 - **Deferred (§9)** — A4 prompt caching, probe-image-size dimension fallback, B5 hero-by-image-quality, dominant color.
 
 ---
