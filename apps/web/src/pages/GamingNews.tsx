@@ -330,6 +330,15 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
         @media (prefers-reduced-motion: no-preference) {
           .news-kenburns, .news-hero-sheen { animation-play-state: running; }
         }
+        .news-list-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          align-items: start;
+        }
+        @media (max-width: 560px) {
+          .news-list-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
       <section style={{ display: "grid", gap: 14 }}>
         {/* Tab bar */}
@@ -523,7 +532,7 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
             )}
 
             {visibleRest.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="news-list-grid">
                 {visibleRest.map((item) => (
                   <NewsListRow
                     key={item.externalId}
@@ -531,7 +540,6 @@ function GamingNewsFeed({ news }: { news: GeneralNewsItem[] }) {
                     spoilerRevealed={revealedSpoilers.has(item.externalId)}
                     onRevealSpoiler={() => revealSpoiler(item.externalId)}
                     onOpen={() => setActiveArticle(item)}
-                    onTagClick={handleTagClick}
                     userVote={userVotes[item.id] ?? 0}
                     onVote={(dir) => handleVote(item.id, dir)}
                   />
@@ -951,7 +959,6 @@ function NewsListRow({
   item,
   spoilerRevealed,
   onOpen,
-  onTagClick,
   userVote,
   onVote
 }: {
@@ -959,12 +966,10 @@ function NewsListRow({
   spoilerRevealed: boolean;
   onRevealSpoiler: () => void;
   onOpen: () => void;
-  onTagClick?: (tag: string) => void;
   userVote: 1 | -1 | 0;
   onVote: (dir: 1 | -1) => void;
 }) {
   const isSpoiler = item.aiSpoilerWarning && !spoilerRevealed;
-  const displayTags = (item.aiTags ?? []).slice(0, 3);
   const netVotes = ((item.upvotes ?? 0) - (item.downvotes ?? 0)) + userVote;
   const ago = relativeAgo(item.publishedAt);
 
@@ -990,10 +995,10 @@ function NewsListRow({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpen(); }}
       style={{
         display: "grid",
-        gridTemplateColumns: "80px minmax(0, 1fr) auto auto auto",
+        gridTemplateColumns: "52px minmax(0, 1fr) auto",
         alignItems: "center",
-        gap: 12,
-        padding: "8px 12px",
+        gap: 10,
+        padding: "7px 9px",
         borderRadius: islandTheme.radius.control,
         background: islandTheme.color.panelMutedBg,
         border: `1px solid ${islandTheme.color.cardBorder}`,
@@ -1010,48 +1015,35 @@ function NewsListRow({
         e.currentTarget.style.transform = "translateY(0)";
       }}
     >
-      <div style={{ position: "relative", width: 80, height: 60, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
+      <div style={{ position: "relative", width: 52, height: 52, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
         <CoverImage src={item.imageUrl} objectPosition="center 35%" />
       </div>
 
-      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
         <div
           style={{
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: 700,
-            lineHeight: 1.3,
+            lineHeight: 1.25,
             color: islandTheme.color.textPrimary,
             overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap"
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical"
           }}
         >
           {item.aiTitle ?? item.title}
         </div>
-        {item.aiSubtitle && (
-          <div
-            style={{
-              fontSize: 12,
-              color: islandTheme.color.textSubtle,
-              lineHeight: 1.35,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {item.aiSubtitle}
-          </div>
-        )}
         <div
           className="island-mono"
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6,
-            fontSize: 12,
+            gap: 5,
+            fontSize: 11,
             color: islandTheme.color.textMuted,
             textTransform: "uppercase",
-            letterSpacing: "0.05em",
+            letterSpacing: "0.04em",
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap"
@@ -1064,43 +1056,38 @@ function NewsListRow({
           {isSpoiler ? (
             <>
               <span aria-hidden="true">·</span>
-              <span style={{ color: "#f59e0b" }} title="Spoiler — open to reveal">⚠ spoiler</span>
+              <span style={{ color: "#f59e0b" }} title="Spoiler — open to reveal">⚠</span>
             </>
           ) : null}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 4, flexWrap: "nowrap" }}>
-        {displayTags.map((tag) => (
-          <TagPill key={tag} tag={tag} onTagClick={onTagClick} />
-        ))}
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <button
+          type="button"
+          onClick={handleShare}
+          aria-label="Share article"
+          title="Share article"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: islandTheme.color.textMuted,
+            cursor: "pointer",
+            padding: "2px 3px",
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            font: "inherit",
+            transition: `color ${islandTheme.motion.dur.fast} ease`
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = islandTheme.color.textSubtle; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = islandTheme.color.textMuted; }}
+        >
+          <ShareIcon />
+        </button>
+        <VoteControls userVote={userVote} netVotes={netVotes} onVote={handleVote} size="compact" />
       </div>
-
-      <button
-        type="button"
-        onClick={handleShare}
-        aria-label="Share article"
-        title="Share article"
-        style={{
-          background: "transparent",
-          border: "none",
-          color: islandTheme.color.textMuted,
-          cursor: "pointer",
-          padding: "2px 4px",
-          borderRadius: 6,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          font: "inherit",
-          transition: `color ${islandTheme.motion.dur.fast} ease`
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = islandTheme.color.textSubtle; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = islandTheme.color.textMuted; }}
-      >
-        <ShareIcon />
-      </button>
-
-      <VoteControls userVote={userVote} netVotes={netVotes} onVote={handleVote} size="compact" />
     </article>
   );
 }
