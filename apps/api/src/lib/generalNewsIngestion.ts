@@ -66,6 +66,7 @@ type ExistingPrimary = {
 type ValidationError =
   | "missing_title"
   | "summary_too_short"
+  | "summary_too_long"
   | "missing_why_matters"
   | "missing_sources"
   | "invalid_source_urls";
@@ -137,10 +138,11 @@ function sanitizeTags(tags: string[], crewNames: Set<string> = new Set()): strin
   return result;
 }
 
-// Max articles to AI-curate per curation pass — larger = more cross-source story coverage
-// 12 articles × ~1300 output tokens each = ~16k. Fits 16384 maxTokens cap with
-// headroom. v2 prompt (3-5 paragraph summaries) was overflowing at 25/batch.
-const CURATION_BATCH_SIZE = 12;
+// Max articles to AI-curate per curation pass. Smaller batch now that summaries
+// target completeness (hard cap 1350 words ≈ ~1800 tokens each): 6 × ~1800 ≈ 10.8k
+// worst case, under the 16384 maxTokens cap. Must stay ≥ the largest sibling cluster
+// so a full multi-source story still synthesizes inside one call.
+const CURATION_BATCH_SIZE = 6;
 // Wider candidate pool so cluster-aware batching can group siblings together.
 const CURATION_POOL_SIZE = CURATION_BATCH_SIZE * 3;
 // Cluster-candidate window: articles within this window are eligible for
@@ -797,7 +799,7 @@ The rewritten title must:
 
 ## 2. Summary
 
-Write a complete summary, 3–5 paragraphs, ~300–500 words. Cover:
+Write a complete summary. Aim for COMPLETENESS of information, not a word count — include every unique fact, figure, quote, date, name, and distinct source angle from all clustered articles. Do not pad to fill space, and do not drop details to stay short. Hard cap: 1350 words (most stories need far fewer). Cover:
 - What happened
 - Who is affected (players, developers, platforms, regions)
 - Why it happened (if known)
@@ -806,6 +808,8 @@ Write a complete summary, 3–5 paragraphs, ~300–500 words. Cover:
 - Any background context needed to understand the impact
 
 Don't sacrifice detail for brevity. If a gamer deciding how to respond would care about it, include it. Label speculation clearly — don't present assumptions as facts.
+
+Write so any gamer can follow it, even one who doesn't play this game. Use plain language; reach for jargon only when it adds real precision, and when you do, briefly explain it inline the first time — e.g. "a roguelite (a run-based game where you restart with small permanent upgrades)".
 
 Use a mix of flowing prose paragraphs AND bullet points. Use bullets for concrete facts, specs, or list-shaped information (release dates, platforms, feature lists, pricing tiers, patch line items, performance numbers). Use prose for context, narrative, and synthesis. Format bullets as plain markdown — each bullet on its own line, prefixed with \`- \`. Separate prose paragraphs with a blank line. Separate a prose paragraph from an adjacent bullet block with a blank line.
 
@@ -959,7 +963,7 @@ Write a cross-source synthesis covering:
 4. **What's next** — expected follow-up, release date, or open questions surfaced by the sources
 
 **Length and format:**
-- Aim for ~350 words.
+- Length follows completeness, not a target — include all unique information from every source and never pad. Hard cap 1350 words.
 - Use a mix of flowing prose paragraphs AND bullet points. Use bullets specifically for concrete facts, specs, or list-shaped information (e.g. release dates, platforms, feature lists, pricing tiers, patch line items, performance numbers). Use prose for context, narrative, and synthesis.
 - Format bullets as plain markdown — each bullet on its own line, prefixed with \`- \`. Separate prose paragraphs with a blank line. Separate a prose paragraph from an adjacent bullet block with a blank line.
 - Direct, conversational gamer tone — informative but not dry.
@@ -1041,12 +1045,10 @@ Return ONLY the JSON array. No markdown fences, no preamble.`;
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent }
     ],
-    // Cost guard: cap output budget per batch. With 12 articles × ~400-token
-    // summary expectation = ~5K tokens, plus merge-output fields adds headroom
-    // for ~3 mergers. 8K cap keeps batch-output cost predictable (~$0.04 on
-    // Haiku, ~$0.12 on Sonnet) and prevents runaway generation when the AI
-    // tries to write a 700-word summary per row.
-    { maxTokens: 8192, temperature: 0.2 }
+    // Output budget per batch. Summaries now target completeness (hard cap 1350
+    // words ≈ ~1800 tokens). 6 articles worst-case ≈ 10.8K + merge-output headroom;
+    // the 16K cap keeps cost bounded while letting full multi-source syntheses through.
+    { maxTokens: 16384, temperature: 0.2 }
   );
 
   const raw = result.text.trim();
@@ -1069,7 +1071,11 @@ function validateCuration(res: GeneralCurationResult, batchUrls: Set<string>): V
   if (res.duplicate || isMerge(res)) return [];
   const errors: ValidationError[] = [];
   if (!res.title || res.title.trim().length < 8) errors.push("missing_title");
-  if (!res.summary || res.summary.trim().length < 150) errors.push("summary_too_short");
+  if (!res.summary || res.summary.trim().length < 150) {
+    errors.push("summary_too_short");
+  } else if (res.summary.trim().split(/\s+/).length > 1350) {
+    errors.push("summary_too_long");
+  }
   if (!res.whyMatters || res.whyMatters.trim().length < 20) errors.push("missing_why_matters");
   if (!Array.isArray(res.sources) || res.sources.length === 0) {
     errors.push("missing_sources");
@@ -1119,7 +1125,7 @@ async function curateBatchWithValidation(
       failed
         .map((o) => `${o.item.external_id}: ${o.errors.join(",")}`)
         .join(" | ") +
-      `. Return the corrected JSON for these IDs only, ensuring every required field is populated.`;
+      `. Return corrected JSON for these IDs only: populate every required field; for summary_too_long, trim under 1350 words by cutting the least-important detail first.`;
 
     const retryItems = failed.map((o) => o.item);
     console.warn(
