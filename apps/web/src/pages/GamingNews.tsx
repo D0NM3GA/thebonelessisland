@@ -1103,9 +1103,9 @@ function VoteControls({ userVote, netVotes, onVote, size = "default" }: VoteCont
       <button
         type="button"
         onClick={(e) => onVote(e, 1)}
-        aria-label="Rate AI summary as helpful"
+        aria-label="Upvote this story"
         aria-pressed={userVote === 1}
-        title="Rate AI summary — helpful"
+        title="Upvote — surface this story for the crew"
         style={{
           background: "transparent",
           border: "none",
@@ -1137,9 +1137,9 @@ function VoteControls({ userVote, netVotes, onVote, size = "default" }: VoteCont
       <button
         type="button"
         onClick={(e) => onVote(e, -1)}
-        aria-label="Rate AI summary as not helpful"
+        aria-label="Downvote this story"
         aria-pressed={userVote === -1}
-        title="Rate AI summary — not helpful"
+        title="Downvote — sink this story"
         style={{
           background: "transparent",
           border: "none",
@@ -1177,6 +1177,8 @@ function NewsArticleModal({
   const ago = relativeAgo(item.publishedAt);
   const displayTags = (item.aiTags ?? []).slice(0, 3);
   const netVotes = ((item.upvotes ?? 0) - (item.downvotes ?? 0)) + userVote;
+  // Source Attribution lists every source once — primary URL + AI-collected siblings.
+  const sourceUrls = Array.from(new Set([item.url, ...(item.aiSources ?? [])].filter(Boolean)));
 
   function handleVote(e: React.MouseEvent, dir: 1 | -1) {
     e.stopPropagation();
@@ -1303,6 +1305,22 @@ function NewsArticleModal({
           </div>
         )}
 
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            marginBottom: 20,
+            paddingBottom: 16,
+            borderBottom: `1px solid ${islandTheme.color.cardBorder}`
+          }}
+        >
+          <VoteControls userVote={userVote} netVotes={netVotes} onVote={handleVote} />
+          <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
+            Upvote to surface this story for the crew
+          </span>
+        </div>
+
         {item.aiSummary && (
           <div
             style={{
@@ -1313,22 +1331,13 @@ function NewsArticleModal({
               marginBottom: 20
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                marginBottom: 10
-              }}
-            >
+            <div style={{ marginBottom: 10 }}>
               <span
                 className="island-mono"
                 style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.primaryGlow }}
               >
                 AI Summary
               </span>
-              <VoteControls userVote={userVote} netVotes={netVotes} onVote={handleVote} />
             </div>
             <FormattedSummary text={item.aiSummary} />
           </div>
@@ -1366,31 +1375,6 @@ function NewsArticleModal({
           </div>
         )}
 
-        {item.aiSources && item.aiSources.length > 0 && (
-          <div style={{ marginBottom: 20 }}>
-            <div
-              className="island-mono"
-              style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.1em", color: islandTheme.color.textMuted, marginBottom: 8, fontWeight: 700 }}
-            >
-              Sources
-            </div>
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-              {item.aiSources.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: islandTheme.color.primaryGlow, textDecoration: "none" }}
-                  >
-                    {prettyHost(url)}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         <details
           style={{
             borderTop: `1px solid ${islandTheme.color.cardBorder}`,
@@ -1412,45 +1396,22 @@ function NewsArticleModal({
             }}
           >
             <span style={{ fontSize: 12 }}>▶</span>
-            Source attribution
+            Source Attribution{sourceUrls.length > 1 ? ` (${sourceUrls.length})` : ""}
           </summary>
-          <div
-            style={{
-              marginTop: 14,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 10
-            }}
-          >
-            <div>
-              <div className="island-mono" style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em", color: islandTheme.color.textMuted, marginBottom: 2 }}>
-                Source
-              </div>
-              <div style={{ fontSize: 13, color: islandTheme.color.textSubtle }}>{item.sourceName}</div>
-            </div>
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "9px 18px",
-                borderRadius: 10,
-                background: islandTheme.color.primary,
-                color: islandTheme.color.textInverted,
-                fontSize: 13,
-                fontWeight: 700,
-                textDecoration: "none",
-                font: "inherit"
-              }}
-            >
-              Read full article →
-            </a>
-          </div>
+          <ul style={{ margin: "14px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.8 }}>
+            {sourceUrls.map((url) => (
+              <li key={url}>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: islandTheme.color.primaryGlow, textDecoration: "none" }}
+                >
+                  {prettyHost(url)}
+                </a>
+              </li>
+            ))}
+          </ul>
         </details>
       </div>
     </div>,

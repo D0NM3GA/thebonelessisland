@@ -131,7 +131,7 @@ generalNewsRouter.get("/general", async (_req, res) => {
           WHERE news_id = r.id
         ) fb ON true
         WHERE r.rk = 1
-        ORDER BY (COALESCE(r.ai_relevance_score, 0.5) + (fb.upvotes - fb.downvotes * 0.5) * 0.08) DESC, r.published_at DESC
+        ORDER BY (COALESCE(r.ai_relevance_score, 0.5) + (fb.upvotes - fb.downvotes) * 0.2) DESC, r.published_at DESC
         LIMIT 50
       `
     );
@@ -450,8 +450,9 @@ generalNewsRouter.get("/general/validation-failures", requireSession, requirePar
 
 /**
  * POST /news/general/:id/feedback
- * Record a user's thumbs up/down on AI summarization quality for an article.
- * Rates the summary quality, not the story itself.
+ * Record a member's upvote/downvote on a story. This is a CONTENT vote that
+ * surfaces or sinks the story in the feed ranking — not a rating of AI summary
+ * quality. One vote per member per story (rating 1 / -1; 0 clears the vote).
  */
 generalNewsRouter.post("/general/:id/feedback", requireSession, async (req, res) => {
   try {
