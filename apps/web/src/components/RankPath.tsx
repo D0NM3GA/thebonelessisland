@@ -11,9 +11,17 @@ import { islandTheme } from "../theme.js";
 // Pure geometry (deterministic) so the SVG scales freely; decor sits behind.
 
 const GOLD = islandTheme.color.nuggieGold;
-const P = islandTheme.palette;
-const A = islandTheme.accent;
 const N = RANK_TIERS.length;
+
+// Illustrated trail scenery, ordered base → summit (climb runs bottom-to-top).
+// Placed in the empty pockets so it sits behind the trail and shields.
+const TRAIL_ART = "/art/trail/";
+const DECOR: Array<{ href: string; cx: number; cy: number; w: number; h: number; op: number }> = [
+  { href: "tbi_island_overhead_mstrail_1.png", cx: 205, cy: 702, w: 300, h: 300, op: 0.92 },
+  { href: "tbi_pyramid_mstrail_2.png", cx: 366, cy: 452, w: 148, h: 148, op: 0.9 },
+  { href: "tbi_volcanobase_mstrail_3.png", cx: 118, cy: 298, w: 214, h: 117, op: 0.92 },
+  { href: "tbi_volcano_summit_mstrail_4.png", cx: 330, cy: 112, w: 224, h: 122, op: 0.94 }
+];
 
 const VB_W = 480;
 const VB_H = 820;
@@ -49,65 +57,6 @@ function smoothPath(pts: Pt[]): string {
 }
 
 const fmt = (n: number) => n.toLocaleString();
-
-// ── Island decor primitives (flat, theme palette, sit behind the trail) ──
-function Palm({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
-  return (
-    <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <ellipse cx={0} cy={2} rx={26} ry={8} fill={P.sand} />
-      <ellipse cx={4} cy={3} rx={14} ry={4} fill={P.sandDeep} opacity={0.5} />
-      <path d="M 2 0 Q -6 -26 1 -46" stroke={P.palmBark} strokeWidth={5} fill="none" strokeLinecap="round" />
-      <g transform="translate(1 -46)">
-        {[-72, -36, 0, 36, 72, 112].map((a, i) => (
-          <ellipse key={i} cx={0} cy={0} rx={20} ry={6} fill={i % 2 ? P.palmMid : P.palm} transform={`rotate(${a}) translate(15 0)`} />
-        ))}
-        <circle cx={-4} cy={5} r={3} fill={P.palmBark} />
-        <circle cx={5} cy={6} r={3} fill={P.sandDeep} />
-      </g>
-    </g>
-  );
-}
-
-function Mountain({ x, y, w = 92, h = 80, snow = false }: { x: number; y: number; w?: number; h?: number; snow?: boolean }) {
-  const half = w / 2;
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      <path d={`M ${-half} 0 L 0 ${-h} L ${half} 0 Z`} fill={P.horizon} />
-      <path d={`M ${-half} 0 L 0 ${-h} L ${-half * 0.16} 0 Z`} fill="#16304f" opacity={0.55} />
-      {snow && (
-        <path d={`M ${-w * 0.2} ${-h * 0.66} L 0 ${-h} L ${w * 0.2} ${-h * 0.66} L ${w * 0.08} ${-h * 0.56} L 0 ${-h * 0.64} L ${-w * 0.08} ${-h * 0.56} Z`} fill={P.foam} />
-      )}
-    </g>
-  );
-}
-
-function Waves({ x, y, w = 460 }: { x: number; y: number; w?: number }) {
-  const seg = w / 6;
-  let d = `M ${x - w / 2} ${y}`;
-  for (let i = 0; i < 6; i++) d += ` q ${seg / 2} -6 ${seg} 0`;
-  return <path d={d} stroke={P.oceanShallow} strokeWidth={3} fill="none" strokeLinecap="round" opacity={0.7} />;
-}
-
-function Cloud({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
-  return (
-    <g transform={`translate(${x} ${y}) scale(${s})`} opacity={0.5}>
-      <ellipse cx={-14} cy={4} rx={16} ry={11} fill={P.foam} />
-      <ellipse cx={6} cy={0} rx={20} ry={14} fill={P.foam} />
-      <ellipse cx={22} cy={6} rx={14} ry={10} fill={P.foam} />
-      <rect x={-26} y={8} width={62} height={10} rx={5} fill={P.foam} />
-    </g>
-  );
-}
-
-function SummitFlag({ x, y, s = 1 }: { x: number; y: number; s?: number }) {
-  return (
-    <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <path d="M -16 0 L 16 0 L 6 -10 L -6 -10 Z" fill={P.sandDeep} opacity={0.7} />
-      <line x1={0} y1={-8} x2={0} y2={-46} stroke="#cbd5e1" strokeWidth={2.5} strokeLinecap="round" />
-      <path d="M 0 -46 L 30 -38 L 0 -30 Z" fill={A.gold} />
-    </g>
-  );
-}
 
 export function RankPath({ lifetimeEarned }: { lifetimeEarned: number }) {
   const [fitAll, setFitAll] = useState(false);
@@ -195,19 +144,19 @@ export function RankPath({ lifetimeEarned }: { lifetimeEarned: number }) {
               </filter>
             </defs>
 
-            {/* Island decor (sea → palms → mountains → summit) */}
-            <g opacity={0.62}>
-              <Waves x={240} y={786} w={470} />
-              <Waves x={240} y={800} w={470} />
-              <Palm x={64} y={748} s={1.05} />
-              <Palm x={120} y={602} s={0.82} />
-              <Mountain x={386} y={478} w={94} h={78} />
-              <Mountain x={106} y={300} w={108} h={108} snow />
-              <SummitFlag x={356} y={120} s={1.05} />
-              <Cloud x={252} y={44} s={1} />
-              <Cloud x={408} y={96} s={0.78} />
-              <Cloud x={150} y={150} s={0.66} />
-            </g>
+            {/* Illustrated island scenery (base island → pyramid → volcano → summit) */}
+            {DECOR.map((d) => (
+              <image
+                key={d.href}
+                href={TRAIL_ART + d.href}
+                x={d.cx - d.w / 2}
+                y={d.cy - d.h / 2}
+                width={d.w}
+                height={d.h}
+                opacity={d.op}
+                preserveAspectRatio="xMidYMid meet"
+              />
+            ))}
 
             {/* Base (un-climbed) trail */}
             <path d={smoothPath(basePts)} fill="none" stroke="rgba(148,163,184,0.22)" strokeWidth={9} strokeLinecap="round" strokeDasharray="2 13" />
