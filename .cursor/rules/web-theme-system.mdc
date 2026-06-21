@@ -60,5 +60,10 @@ Prefer these before writing inline one-off styled elements:
 `.island-display` → Bricolage Grotesque display font  
 `.island-mono` → JetBrains Mono
 
+## Milestone rank layout (`MilestoneRankBadge.tsx`, `RankTierCard.tsx`)
+- Wrap badge art in **`RankBadgeSlot`** (fixed width/height via `rankBadgeHeight`, `flexShrink: 0`) — never drop a bare `RankBadgeArt` into flex/grid rows.
+- Rank-ladder grids: use **`RANK_LADDER_GRID_COLUMNS`** from `RankTierCard.tsx` (`minmax(220px, 1fr)`).
+- Grid/flex text columns need **`minWidth: 0`** on the item and the text wrapper; truncate mono lines (`overflow: hidden; textOverflow: ellipsis; whiteSpace: nowrap`) or stack vertically — avoid two `nowrap` siblings in narrow cards.
+
 ## Scene shell (apps/web/src/scene/IslandSceneShell.tsx)
 Fixed full-viewport backdrop behind all content (`zIndex: -10`). Contains: sky gradient, stars/clouds, sun/moon with arc-dip animation, ocean wave band, beach band, vignette. Left/right palm SVGs with scroll parallax. Do not duplicate scene elements inside pages.

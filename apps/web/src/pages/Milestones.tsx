@@ -5,12 +5,12 @@ import { IslandCard, IslandEmptyState, IslandSkeleton, IslandSkeletonCard } from
 import { NuggieCoin } from "../components/NuggieCoin.js";
 import { ItemGlyph } from "../components/ItemGlyph.js";
 import {
-  MILESTONES,
   RANK_TIERS,
   findCurrentTier,
   findNextTier,
 } from "../data/rankTiers.js";
-import { RankBadgeArt, rankBadgeHeight } from "../components/MilestoneRankBadge.js";
+import { RankBadgeArt, RankBadgeSlot } from "../components/MilestoneRankBadge.js";
+import { RankTierCard, RANK_LADDER_GRID_COLUMNS } from "../components/RankTierCard.js";
 import { islandTheme } from "../theme.js";
 
 type EarnedAchievement = {
@@ -184,7 +184,7 @@ export function MilestonesPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+            gridTemplateColumns: RANK_LADDER_GRID_COLUMNS,
             gap: 12,
           }}
         >
@@ -288,22 +288,14 @@ function CurrentRankHero({
           boxShadow: `inset 0 -40px 60px ${heroGlow}, inset 0 0 0 1px rgba(255,255,255,0.10)`,
         }}
       >
-        <div
-          style={{
-            width: 96,
-            height: rankBadgeHeight(96),
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            filter: "drop-shadow(0 12px 32px rgba(0,0,0,0.35))",
-          }}
-        >
-          {currentTier ? (
-            <RankBadgeArt tier={currentTier} width={96} />
-          ) : (
-            <span style={{ fontSize: 42, opacity: 0.5 }}>○</span>
-          )}
+        <div style={{ filter: "drop-shadow(0 12px 32px rgba(0,0,0,0.35))" }}>
+          <RankBadgeSlot width={96}>
+            {currentTier ? (
+              <RankBadgeArt tier={currentTier} width={96} />
+            ) : (
+              <span style={{ fontSize: 42, opacity: 0.5 }}>○</span>
+            )}
+          </RankBadgeSlot>
         </div>
         <div style={{ minWidth: 0 }}>
           <div
@@ -381,101 +373,6 @@ function CurrentRankHero({
         </div>
       )}
     </IslandCard>
-  );
-}
-
-// ── Ladder card ───────────────────────────────────────────────────────────────
-
-function RankTierCard({
-  tier,
-  reached,
-  isNext,
-  lifetimeEarned,
-}: {
-  tier: (typeof RANK_TIERS)[number];
-  reached: boolean;
-  isNext: boolean;
-  lifetimeEarned: number;
-}) {
-  const idx = MILESTONES.indexOf(tier.threshold);
-  const lower = idx > 0 ? MILESTONES[idx - 1] : 0;
-  const span = Math.max(1, tier.threshold - lower);
-  const within = Math.max(0, lifetimeEarned - lower);
-  const pct = reached ? 100 : isNext ? Math.min(100, Math.round((within / span) * 100)) : 0;
-
-  const status = reached ? "REACHED" : isNext ? "IN PROGRESS" : "LOCKED";
-  const statusColor = reached
-    ? tier.reachedTextColor
-    : isNext
-      ? "#7dd3fc"
-      : islandTheme.color.textMuted;
-
-  return (
-    <div
-      style={{
-        position: "relative",
-        padding: 14,
-        borderRadius: 14,
-        background: islandTheme.color.panelMutedBg,
-        border: `1px solid ${reached ? tier.reachedBorder : isNext ? tier.nextBorder : islandTheme.color.border}`,
-        boxShadow: reached
-          ? `0 0 18px ${tier.reachedGlow}`
-          : isNext
-            ? `0 0 12px ${tier.reachedGlow}`
-            : "none",
-        opacity: reached || isNext ? 1 : 0.55,
-        display: "grid",
-        gap: 10,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <RankBadgeArt tier={tier} reached={reached} width={52} glow={reached || isNext} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
-            className="island-mono"
-            style={{
-              fontSize: 13,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              color: reached ? tier.reachedTextColor : islandTheme.color.textPrimary,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {tier.label}
-          </div>
-          <div style={{ fontSize: 12, color: islandTheme.color.textMuted, fontFamily: islandTheme.font.mono }}>
-            ₦{fmt(tier.threshold)} · <span style={{ color: islandTheme.color.successAccent }}>+₦{fmt(tier.bonus)} bonus</span>
-          </div>
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ flex: 1, height: 4, borderRadius: 999, background: islandTheme.color.panelBg, overflow: "hidden" }}>
-          <div
-            style={{
-              height: "100%",
-              width: `${pct}%`,
-              background: tier.reachedGrad,
-              borderRadius: 999,
-              transition: "width 500ms ease",
-            }}
-          />
-        </div>
-        <span
-          className="island-mono"
-          style={{
-            fontSize: 12,
-            letterSpacing: "0.1em",
-            color: statusColor,
-            fontWeight: 700,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {status}
-        </span>
-      </div>
-    </div>
   );
 }
 

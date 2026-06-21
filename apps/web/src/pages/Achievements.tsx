@@ -9,7 +9,7 @@ import { NuggieBadge } from "../components/NuggieBadge.js";
 import { ItemGlyph } from "../components/ItemGlyph.js";
 import { NuggieCoin } from "../components/NuggieCoin.js";
 import { MILESTONES, MILESTONE_LABELS, RANK_TIERS } from "../data/rankTiers.js";
-import { RankBadgeArt, rankBadgeHeight } from "../components/MilestoneRankBadge.js";
+import { RankBadgeArt, RankBadgeSlot } from "../components/MilestoneRankBadge.js";
 import { islandTheme } from "../theme.js";
 import type {
   NuggieTransaction,
@@ -426,16 +426,13 @@ function AchievementsPageInner({ onProfileChanged }: AchievementsPageProps = {})
                 <div
                   className={reached && isApex ? "bi-rank-apex-pulse" : undefined}
                   style={{
-                    width: badgeW,
-                    height: rankBadgeHeight(badgeW),
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                     transition: "transform 240ms ease",
                     transform: isNext ? "scale(1.04)" : undefined,
                   }}
                 >
-                  <RankBadgeArt tier={tier} reached={reached} width={badgeW} glow={reached || isNext} />
+                  <RankBadgeSlot width={badgeW}>
+                    <RankBadgeArt tier={tier} reached={reached} width={badgeW} glow={reached || isNext} />
+                  </RankBadgeSlot>
                 </div>
                 <div
                   style={{

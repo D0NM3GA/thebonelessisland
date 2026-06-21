@@ -16,6 +16,30 @@ type RankBadgeArtProps = {
   glow?: boolean;
 };
 
+/** Fixed-size slot for rank badge art in flex/grid rows — prevents layout bleed. */
+export function RankBadgeSlot({
+  width,
+  children,
+}: {
+  width: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        width,
+        height: rankBadgeHeight(width),
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Shield badge image — art SVG includes its own frame; no circular crop. */
 export function RankBadgeArt({ tier, reached = true, width, alt, glow = true }: RankBadgeArtProps) {
   const height = rankBadgeHeight(width);
@@ -63,7 +87,9 @@ export function MilestoneRankBadge({
       style={{ display: "flex", alignItems: "center", gap: isProfile ? 12 : 8 }}
       title={`Rank: ${tier.label}`}
     >
-      <RankBadgeArt tier={tier} width={badgeWidth} />
+      <RankBadgeSlot width={badgeWidth}>
+        <RankBadgeArt tier={tier} width={badgeWidth} />
+      </RankBadgeSlot>
       {showLabel ? (
         <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
           <span
