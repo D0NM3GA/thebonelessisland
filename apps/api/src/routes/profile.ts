@@ -60,6 +60,7 @@ profileRouter.get("/me", async (req, res) => {
     joined_at_guild: string | null;
     premium_since: string | null;
     balance: string | null;
+    lifetime_earned: string | null;
   }>(
     `
       SELECT
