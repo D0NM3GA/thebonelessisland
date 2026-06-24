@@ -1,4 +1,4 @@
-import { RecommendedGame } from "@island/shared";
+import { RecommendedGame, SITE_BRAND_NAME } from "@island/shared";
 import { db } from "../db/client.js";
 import { AIDisabledError, AINotConfiguredError, getAIProvider } from "./ai/index.js";
 
@@ -123,7 +123,7 @@ export async function generateRecommendationBlurb(
       {
         role: "system",
         content:
-          "Write one-sentence recommendation blurbs for The Boneless Island gaming community. Casual gamer tone, specific, no quotes, no corporate speak."
+          `Write one-sentence recommendation blurbs for ${SITE_BRAND_NAME} gaming community. Casual gamer tone, specific, no quotes, no corporate speak.`
       },
       {
         role: "user",

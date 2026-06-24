@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import { SITE_BRAND_NAME } from "@island/shared";
 import { islandTheme } from "../theme.js";
 import type { MeProfile, PageId } from "../types.js";
 import { UserMenu } from "./UserMenu.js";
@@ -132,7 +133,7 @@ function Brand({ tagline }: { tagline?: string }) {
     <Link
       to="/"
       className="bi-brand"
-      aria-label="The Boneless Island — home"
+      aria-label={`${SITE_BRAND_NAME} — home`}
       style={{
         display: "flex",
         alignItems: "center",
@@ -181,7 +182,7 @@ function Brand({ tagline }: { tagline?: string }) {
             textOverflow: "ellipsis"
           }}
         >
-          The Boneless Island
+          {SITE_BRAND_NAME}
         </div>
         <div
           className="bi-brand-tagline island-mono"

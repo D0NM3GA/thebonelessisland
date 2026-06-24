@@ -9,7 +9,7 @@ export const StringSetting = () => (
       onSave={noop}
       setting={{
         key: "guild_display_name",
-        value: "The Boneless Island",
+        value: "The Boneless Island™",
         label: "Server Display Name",
         description: null,
         isSecret: false,
@@ -21,7 +21,7 @@ export const StringSetting = () => (
         label: "Server Display Name",
         description: "A friendly label for the Discord server shown in the admin panel header. No functional effect.",
         whenToChange: "When the community renames itself, or to make the admin panel header less generic.",
-        example: "The Boneless Island",
+        example: "The Boneless Island™",
         tags: ["discord", "name", "branding"],
         dangerLevel: "low",
         domain: "people",

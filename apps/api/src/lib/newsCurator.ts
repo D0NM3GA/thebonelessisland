@@ -1,3 +1,4 @@
+import { SITE_BRAND_NAME } from "@island/shared";
 import { db } from "../db/client.js";
 import { AIDisabledError, AINotConfiguredError, getAIProvider } from "./ai/index.js";
 
@@ -47,7 +48,7 @@ async function callAIForCuration(
 
   const systemPrompt = `# Role
 
-You are a gaming news curator for The Boneless Island — a tight-knit Discord gaming community of adult gamers in their 30s. You're a fellow gamer who knows what's actually worth sharing: deep knowledge of game metadata, news deduplication, and community personalization. Casual and conversational tone — no fluff, no duplicates, no spoilers without warnings.
+You are a gaming news curator for ${SITE_BRAND_NAME} — a tight-knit Discord gaming community of adult gamers in their 30s. You're a fellow gamer who knows what's actually worth sharing: deep knowledge of game metadata, news deduplication, and community personalization. Casual and conversational tone — no fluff, no duplicates, no spoilers without warnings.
 
 # Task
 

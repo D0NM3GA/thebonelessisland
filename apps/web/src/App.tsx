@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollRestoration, useLocation, useNavigate } from "react-router";
+import { SITE_BRAND_NAME } from "@island/shared";
 import { API_BASE_URL, apiFetch } from "./api/client.js";
 import { putClientState } from "./api/clientState.js";
 import { consumePendingLoginReturn, LoginScreen } from "./pages/LoginScreen.js";
@@ -341,6 +342,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    document.title = tagline ? `${SITE_BRAND_NAME} — ${tagline}` : SITE_BRAND_NAME;
+  }, [tagline]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const authErrorCode = params.get("authError");
     if (!authErrorCode) {
@@ -349,7 +354,7 @@ export function App() {
 
     const authErrorMessage =
       authErrorCode === "not_in_guild"
-        ? "Access is limited to members of The Boneless Island Discord."
+        ? `Access is limited to members of ${SITE_BRAND_NAME} Discord.`
         : authErrorCode === "guild_not_configured"
           ? "Discord guild membership checks are not configured yet."
           : "Discord login failed. Please try again.";
