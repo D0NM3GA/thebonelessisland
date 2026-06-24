@@ -1,4 +1,4 @@
-# API container — Node 22 LTS Alpine, single-stage for beta simplicity.
+# API container — Node 26 Alpine, single-stage for beta simplicity.
 # Runs the TypeScript source directly via tsx so we don't need a separate
 # compile step. Multi-stage with tsc build is a future optimization once
 # image size matters more than build complexity.
@@ -9,7 +9,7 @@
 # Run (env injection at deploy time — never bake secrets into the image):
 #   docker run -d --env-file .env -p 3000:3000 boneless-api:latest
 
-FROM node:22-alpine
+FROM node:26-alpine
 
 # Patch OS packages (e.g. libcrypto3/libssl3) to the latest alpine release so
 # the image doesn't ship known-fixed CVEs the base tag hasn't picked up yet.
@@ -36,7 +36,7 @@ COPY tsconfig*.json ./
 COPY packages packages
 COPY apps/api apps/api
 
-# Run as non-root. node:22-alpine ships with the `node` user (uid 1000).
+# Run as non-root. node:26-alpine ships with the `node` user (uid 1000).
 RUN chown -R node:node /app
 USER node
 
