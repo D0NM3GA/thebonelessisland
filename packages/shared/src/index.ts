@@ -1,3 +1,4 @@
+export { SITE_BRAND_NAME } from "./brand.js";
 export {
   MS_PER_DAY,
   PENDING_OFFER_TTL_HOURS,

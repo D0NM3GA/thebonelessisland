@@ -1,10 +1,11 @@
+import { SITE_BRAND_NAME } from "@island/shared";
 import { AIDisabledError, AINotConfiguredError, getAIProvider } from "./ai/index.js";
 import { db } from "../db/client.js";
 import { loadSettings } from "./serverSettings.js";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-const GENERATION_PROMPT = `You are a witty copywriter specializing in gaming culture and internet humor. Generate exactly 50 rotating subtitle taglines for "The Boneless Island," a close-knit gaming community website.
+const GENERATION_PROMPT = `You are a witty copywriter specializing in gaming culture and internet humor. Generate exactly 50 rotating subtitle taglines for "${SITE_BRAND_NAME}," a close-knit gaming community website.
 
 These appear as subtitle text beneath the site title — like Minecraft splash text. One is shown per visit.
 

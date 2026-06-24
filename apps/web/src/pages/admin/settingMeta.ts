@@ -3,6 +3,8 @@
 // admin UI can render the comprehension layer (label / what / when / example)
 // and the risk layer (danger zone + typed confirm) consistently.
 
+import { SITE_BRAND_NAME } from "@island/shared";
+
 export type SettingDomain = "people" | "content" | "engagement" | "system";
 export type DangerLevel = "low" | "medium" | "high";
 export type SettingInputType = "string" | "number" | "boolean" | "password" | "select" | "csv" | "textarea";
@@ -42,7 +44,7 @@ const RAW: SettingMeta[] = [
     label: "Server Display Name",
     description: "A friendly label for the Discord server shown in the admin panel header. No functional effect.",
     whenToChange: "When the community renames itself, or to make the admin panel header less generic.",
-    example: "The Boneless Island",
+    example: SITE_BRAND_NAME,
     tags: ["discord", "name", "label", "branding"],
     dangerLevel: "low",
     domain: "people",
@@ -369,7 +371,7 @@ const RAW: SettingMeta[] = [
     label: "Nuggie system prompt",
     description: "Core personality definition for Nuggie. Used as the system message for web chat, Discord /nuggie ask, and announcement generation.",
     whenToChange: "When you want to shift Nuggie's voice, tone, or backstory. Test edits via the web chat before relying on them in Discord.",
-    example: "You are Nuggie, a chicken nugget mascot for The Boneless Island…",
+    example: `You are Nuggie, a chicken nugget mascot for ${SITE_BRAND_NAME}…`,
     ifWrong: "Nuggie may speak out of character or contradict the Boneless Island branding. Behavior changes within ~30 seconds of save.",
     tags: ["nuggie", "persona", "ai", "prompt", "voice", "mascot", "personality"],
     dangerLevel: "low",
