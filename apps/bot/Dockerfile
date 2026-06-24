@@ -1,4 +1,4 @@
-# Bot container — Node 22 LTS Alpine, single-stage. Same shape as the API
+# Bot container — Node 26 Alpine, single-stage. Same shape as the API
 # image but smaller copy set since the bot doesn't need apps/web or migrations.
 #
 # Build from repo root:
@@ -7,7 +7,7 @@
 # Run (the bot has no inbound listener — outbound only to Discord gateway):
 #   docker run -d --env-file .env boneless-bot:latest
 
-FROM node:22-alpine
+FROM node:26-alpine
 
 # Patch OS packages (e.g. libcrypto3/libssl3) to the latest alpine release so
 # the image doesn't ship known-fixed CVEs the base tag hasn't picked up yet.
