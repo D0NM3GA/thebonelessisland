@@ -27,7 +27,7 @@ updates:
           - "patch"
     # Major bumps fall outside the group above, so each opens its own PR.
 
-  # ── Docker base images (node:22-alpine, caddy:2-alpine) ───────────────────
+  # ── Docker base images (node:26-alpine, caddy:2-alpine) ───────────────────
   - package-ecosystem: "docker"
     directories:
       - "/apps/api"

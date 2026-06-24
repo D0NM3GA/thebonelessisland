@@ -12,9 +12,9 @@
 # Changing the API URL requires a rebuild, not just a restart.
 
 # ── Stage 1: build the static bundle ────────────────────────────────────────
-# Node 22 LTS: required by rollup-plugin-visualizer (ANALYZE builds) and the
-# precompression plugins.
-FROM node:22-alpine AS build
+# Node 26: required by rollup-plugin-visualizer (ANALYZE builds), the
+# precompression plugins, and react-router v8's Node 22.22+ floor.
+FROM node:26-alpine AS build
 
 # Patch OS packages (e.g. libcrypto3/libssl3) to the latest alpine release so
 # the build stage doesn't carry known-fixed CVEs the base tag hasn't picked up.
