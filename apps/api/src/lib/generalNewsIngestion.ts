@@ -1,5 +1,6 @@
 import { db } from "../db/client.js";
 import { AIDisabledError, AINotConfiguredError, getAIProvider } from "./ai/index.js";
+import { getAiCostTotalUsd } from "./ai/usageTally.js";
 import { PROVIDERS } from "./news/providers/index.js";
 import type { FeedItem, NewsSourceRow } from "./news/providers/index.js";
 import {
@@ -9,6 +10,7 @@ import {
   isEmbeddingColumnAvailable,
   setEmbedding
 } from "./news/embeddings.js";
+import { reportCurationPassOutcome, setLastBatchDiagnostics } from "./news/newsCurationHealth.js";
 import { resolveHeroImage } from "./news/ogImage.js";
 import { getAISetting } from "./serverSettings.js";
 
@@ -596,9 +598,9 @@ export async function backfillMissingImages(
  * never reaches the LLM curator, saving the largest cost item. Returns the
  * subset of input IDs that were NOT absorbed and still need curation.
  */
-async function embedAndCluster(newIds: number[]): Promise<number[]> {
-  if (newIds.length === 0) return [];
-  if (!(await isEmbeddingColumnAvailable())) return newIds;
+async function embedAndCluster(newIds: number[]): Promise<{ embedded: number; absorbed: number }> {
+  if (newIds.length === 0) return { embedded: 0, absorbed: 0 };
+  if (!(await isEmbeddingColumnAvailable())) return { embedded: 0, absorbed: 0 };
 
   const rows = await db.query<{
     id: number;
@@ -613,6 +615,7 @@ async function embedAndCluster(newIds: number[]): Promise<number[]> {
   );
 
   let absorbed = 0;
+  let embedded = 0;
   const remaining: number[] = [];
   for (const row of rows.rows) {
     const text = `${row.title}\n\n${(row.contents ?? "").slice(0, 1500)}`;
@@ -622,6 +625,7 @@ async function embedAndCluster(newIds: number[]): Promise<number[]> {
       continue;
     }
     await setEmbedding(row.id, vec);
+    embedded++;
 
     const similar = await findSimilarPrimary(vec, row.id);
     if (similar) {
@@ -635,20 +639,12 @@ async function embedAndCluster(newIds: number[]): Promise<number[]> {
     remaining.push(row.id);
   }
 
-  // Surface rows that had no text content to embed (rare — RSS items always
-  // have a title) so they still reach the curator.
-  const embedSkipped = newIds.filter(
-    (id) => !rows.rows.some((r) => r.id === id) && !remaining.includes(id)
-  );
-  remaining.push(...embedSkipped);
-
-  const embeddedCount = rows.rowCount ?? 0;
-  if (absorbed > 0 || embeddedCount > 0) {
+  if (absorbed > 0 || embedded > 0) {
     console.log(
-      `[generalNews] embed-cluster: ${embeddedCount} embedded, ${absorbed} absorbed as siblings, ${remaining.length} sent to curator`
+      `[generalNews] embed-cluster: ${embedded} embedded, ${absorbed} absorbed as siblings, ${remaining.length} sent to curator`
     );
   }
-  return remaining;
+  return { embedded, absorbed };
 }
 
 // ── AI Curation for General News ─────────────────────────────────────────────
@@ -1122,13 +1118,62 @@ Return ONLY the JSON array. No markdown fences, no preamble.`;
   const parsed = parseAiJsonArray(jsonText) as GeneralCurationResult[];
   if (!Array.isArray(parsed)) throw new Error("AI returned non-array response");
   // Debug: log raw tags so we can verify taxonomy compliance
-  const sample = parsed.slice(0, 3).map((r) => ({ id: r.id.slice(-30), tags: r.tags, dup: r.duplicate }));
+  const sample = parsed.slice(0, 3).map((r) => ({ id: r.id?.slice(-30), tags: r.tags, dup: r.duplicate }));
   console.log("[generalNews] AI tag sample:", JSON.stringify(sample));
   return parsed;
 }
 
 function isMerge(res: GeneralCurationResult): boolean {
   return typeof res.mergesIntoExistingId === "string" && res.mergesIntoExistingId.length > 0;
+}
+
+function normalizeArticleId(id: string): string {
+  try {
+    return decodeURIComponent(id.trim()).replace(/\/$/, "").toLowerCase();
+  } catch {
+    return id.trim().replace(/\/$/, "").toLowerCase();
+  }
+}
+
+function resultHasPayload(r: GeneralCurationResult | undefined): boolean {
+  if (!r) return false;
+  return Boolean(
+    r.duplicate ||
+    isMerge(r) ||
+    (r.title && r.title.trim().length > 0) ||
+    (r.summary && r.summary.trim().length > 0)
+  );
+}
+
+/** Map AI batch output back to input rows. Bedrock/Claude often drifts on long URL ids. */
+function resolveCurationResultForItem(
+  item: RawGeneral,
+  parsed: GeneralCurationResult[],
+  index: number
+): { result: GeneralCurationResult; match: string } {
+  const targetNorm = normalizeArticleId(item.external_id);
+
+  const exact = parsed.find((r) => r.id === item.external_id);
+  if (exact) return { result: exact, match: "exact" };
+
+  const byNorm = parsed.find((r) => r.id && normalizeArticleId(r.id) === targetNorm);
+  if (byNorm) return { result: { ...byNorm, id: item.external_id }, match: "normalized" };
+
+  const byPartial = parsed.find(
+    (r) =>
+      r.id &&
+      (item.external_id.includes(r.id) ||
+        r.id.includes(item.external_id) ||
+        item.url.includes(r.id) ||
+        r.id.includes(item.url))
+  );
+  if (byPartial) return { result: { ...byPartial, id: item.external_id }, match: "partial" };
+
+  if (index < parsed.length && resultHasPayload(parsed[index])) {
+    return { result: { ...parsed[index], id: item.external_id }, match: "positional" };
+  }
+
+  return { result: {} as GeneralCurationResult, match: "none" };
 }
 
 function validateCuration(res: GeneralCurationResult, batchUrls: Set<string>): ValidationError[] {
@@ -1167,9 +1212,10 @@ async function curateBatchWithValidation(
   const batchUrls = new Set(items.map((it) => it.url));
   const initial = await curateBatchOnce(items, crewContext, existingPrimaries);
 
-  const outcomes: CurationOutcome[] = items.map((item) => {
-    const result =
-      initial.find((r) => r.id === item.external_id) ?? ({} as GeneralCurationResult);
+  const matchCounts: Record<string, number> = {};
+  const outcomes: CurationOutcome[] = items.map((item, index) => {
+    const { result, match } = resolveCurationResultForItem(item, initial, index);
+    matchCounts[match] = (matchCounts[match] ?? 0) + 1;
     return {
       item,
       result,
@@ -1198,14 +1244,30 @@ async function curateBatchWithValidation(
     const retryResults = await curateBatchOnce(retryItems, crewContext, existingPrimaries, reminder);
 
     for (const o of failed) {
-      const fresh = retryResults.find((r) => r.id === o.item.external_id);
-      if (fresh) {
+      const retryIndex = retryItems.findIndex((it) => it.external_id === o.item.external_id);
+      const { result: fresh, match } = resolveCurationResultForItem(
+        o.item,
+        retryResults,
+        retryIndex >= 0 ? retryIndex : 0
+      );
+      if (match !== "none") {
         o.result = fresh;
         o.errors = validateCuration(fresh, batchUrls);
         o.attempts++;
+        matchCounts[`retry_${match}`] = (matchCounts[`retry_${match}`] ?? 0) + 1;
       }
     }
   }
+
+  const failed = outcomes.filter((o) => o.errors.length > 0);
+  setLastBatchDiagnostics({
+    batchSize: items.length,
+    parsedCount: initial.length,
+    matchCounts,
+    failedCount: failed.length,
+    provider: getAISetting("ai_provider") ?? "unknown",
+    model: getAISetting("ai_model") ?? "default"
+  });
 
   return outcomes;
 }
@@ -1348,8 +1410,7 @@ async function persistCurationOutcome(
 
   // Embed the newly-curated primary so future ingests can match against the
   // richer AI-summary text rather than the raw RSS lede. Best-effort: skip
-  // silently when pgvector / OpenAI key isn't configured. Failure here must
-  // never break the curation persist itself.
+  // silently when pgvector / embedding backend isn't configured.
   if (!validationFailed && (await isEmbeddingColumnAvailable())) {
     try {
       const text = result.summary
@@ -1381,9 +1442,13 @@ export async function ingestAndCurateGeneralNews(force = false): Promise<{ fetch
   if (ingestionInFlight) return { fetched: 0, curated: 0 };
   if (!force && Date.now() - lastIngestedAt < INGEST_COOLDOWN_MS) return { fetched: 0, curated: 0 };
   ingestionInFlight = true;
+  const costAtStart = getAiCostTotalUsd();
 
   let totalFetched = 0;
   let totalCurated = 0;
+  let totalEmbedded = 0;
+  let batchFailed = 0;
+  let errorSummary: string | null = null;
 
   try {
     const [crewTags, gameNames, crewEntityNames] = await Promise.all([
@@ -1411,7 +1476,8 @@ export async function ingestAndCurateGeneralNews(force = false): Promise<{ fetch
     // Deterministic clustering pass: embed each new row, fold cosine-similar
     // articles into existing primary cards as siblings (no LLM curation). Big
     // cost win — only NEW stories reach the curator.
-    await embedAndCluster(insertedIds);
+    const { embedded } = await embedAndCluster(insertedIds);
+    totalEmbedded = embedded;
 
     // Curate new rows (cluster-aware batching: pull wider pool, group siblings,
     // then pack into batches preserving cluster boundaries).
@@ -1448,6 +1514,7 @@ export async function ingestAndCurateGeneralNews(force = false): Promise<{ fetch
           const outcomes = await curateBatchWithValidation(batch, crewContext, existingPrimaries);
           for (const outcome of outcomes) {
             const persisted = await persistCurationOutcome(outcome, crewEntityNames);
+            if (persisted.failed) batchFailed++;
             if (
               persisted.persisted &&
               !persisted.failed &&
@@ -1460,17 +1527,29 @@ export async function ingestAndCurateGeneralNews(force = false): Promise<{ fetch
         }
       } catch (err) {
         if (err instanceof AIDisabledError || err instanceof AINotConfiguredError) {
+          errorSummary = err.message;
           console.warn("[generalNews] AI unavailable, skipping curation:", err.message);
         } else {
+          errorSummary = err instanceof Error ? err.message : String(err);
           console.error("[generalNews] Curation error:", err);
         }
       }
     }
   } catch (err) {
+    errorSummary = err instanceof Error ? err.message : String(err);
     console.error("[generalNews] Ingestion error:", err);
   } finally {
     lastIngestedAt = Date.now();
     ingestionInFlight = false;
+    void reportCurationPassOutcome({
+      runKind: "ingest",
+      fetched: totalFetched,
+      curated: totalCurated,
+      embedded: totalEmbedded,
+      batchFailed,
+      errorSummary,
+      costUsdStart: costAtStart
+    });
   }
 
   return { fetched: totalFetched, curated: totalCurated };
@@ -1534,7 +1613,8 @@ export async function debugCurateOne(): Promise<{
  * Manually trigger AI curation of any un-curated general_news rows.
  * Used by the admin "trigger curation" button.
  */
-export async function curateUncuratedGeneralNews(): Promise<number> {
+export async function curateUncuratedGeneralNews(options: { reportRun?: boolean } = {}): Promise<number> {
+  const reportRun = options.reportRun !== false;
   // Phase 1: cluster-aware window (catches sibling articles for same story).
   let uncurated = await db.query<RawGeneral>(
     `
@@ -1565,6 +1645,9 @@ export async function curateUncuratedGeneralNews(): Promise<number> {
 
   if (uncurated.rows.length === 0) return 0;
 
+  const costAtStart = getAiCostTotalUsd();
+  let batchFailed = 0;
+
   try {
     const [crewContext, crewEntityNames] = await Promise.all([buildCrewContext(), getCrewEntityNames()]);
     const fingerprintMap = await assignStoryFingerprints(uncurated.rows);
@@ -1580,6 +1663,7 @@ export async function curateUncuratedGeneralNews(): Promise<number> {
       const outcomes = await curateBatchWithValidation(batch, crewContext, existingPrimaries);
       for (const outcome of outcomes) {
         const result = await persistCurationOutcome(outcome, crewEntityNames);
+        if (result.failed) batchFailed++;
         if (
           result.persisted &&
           !result.failed &&
@@ -1590,9 +1674,30 @@ export async function curateUncuratedGeneralNews(): Promise<number> {
         }
       }
     }
+    if (reportRun) {
+      void reportCurationPassOutcome({
+        runKind: "curate",
+        fetched: 0,
+        curated: count,
+        embedded: 0,
+        batchFailed,
+        costUsdStart: costAtStart
+      });
+    }
     return count;
   } catch (err) {
     console.error("[generalNews] Manual curation error:", err);
+    if (reportRun) {
+      void reportCurationPassOutcome({
+        runKind: "curate",
+        fetched: 0,
+        curated: 0,
+        embedded: 0,
+        batchFailed,
+        errorSummary: err instanceof Error ? err.message : String(err),
+        costUsdStart: costAtStart
+      });
+    }
     return 0;
   }
 }

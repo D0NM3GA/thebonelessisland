@@ -137,7 +137,7 @@ export const ADMIN_PAGES: Record<AdminPageId, AdminPageMeta> = {
     sections: [
       { anchor: "news-status", label: "Feed on/off", keywords: ["enable", "disable", "toggle", "feed"] },
       { anchor: "news-sources", label: "Source registry", keywords: ["sources", "rss", "reddit", "youtube", "gnews", "preset"] },
-      { anchor: "news-keys", label: "API keys (GNews / YouTube)", keywords: ["gnews", "youtube", "api", "key"] },
+      { anchor: "news-keys", label: "API keys (GNews / YouTube / alerts)", keywords: ["gnews", "youtube", "api", "key", "webhook", "alert"] },
       { anchor: "news-dev-cap", label: "Developer diversity cap", keywords: ["developer", "diversity", "cap", "valve"] },
       { anchor: "news-triggers", label: "Manual triggers", keywords: ["ingest", "curate", "recurate", "regenerate", "embed", "backfill", "fetch"] },
       { anchor: "news-validation", label: "AI validation failures", keywords: ["validation", "failures", "failed", "retry", "hidden"] }
@@ -283,6 +283,7 @@ const SETTING_PAGE_OVERRIDES: Record<string, { page: AdminPageId; anchor: string
   gemini_api_key: { page: "ai", anchor: "ai-keys" },
   news_general_enabled: { page: "news", anchor: "news-status" },
   newsapi_key: { page: "news", anchor: "news-keys" },
+  news_curation_alert_webhook_url: { page: "news", anchor: "news-keys" },
   news_dev_cap: { page: "news", anchor: "news-dev-cap" },
   official_announcements_enabled: { page: "bridge", anchor: "bridge-official" },
   official_announcements_channel_id: { page: "bridge", anchor: "bridge-official" },

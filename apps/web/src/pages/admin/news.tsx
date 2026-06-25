@@ -106,6 +106,8 @@ export function NewsAdminPage(props: NewsPageProps) {
   const newsApiKeyIsSet = getSetting("newsapi_key") === "••••••••";
   const [youtubeApiKey, setYoutubeApiKey] = useState("");
   const youtubeApiKeyIsSet = getSetting("youtube_api_key") === "••••••••";
+  const [curationWebhook, setCurationWebhook] = useState("");
+  const curationWebhookIsSet = getSetting("news_curation_alert_webhook_url") === "••••••••";
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const initializedRef = useRef(false);
 
@@ -239,6 +241,33 @@ export function NewsAdminPage(props: NewsPageProps) {
             </IslandButton>
           </div>
         </div>
+        <div style={{ borderTop: `1px solid ${islandTheme.color.cardBorder}`, paddingTop: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Curation alerts (Discord)</div>
+          <p style={{ margin: "0 0 10px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+            Optional webhook URL. Nuggie pings this channel when curation fetches articles but produces zero cards, or when validation failures spike.
+          </p>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="password"
+              placeholder={curationWebhookIsSet ? "••••••••  (webhook is set)" : "https://discord.com/api/webhooks/…"}
+              value={curationWebhook}
+              onChange={(e) => setCurationWebhook(e.target.value)}
+              style={{ ...islandInputStyle, flex: 1 }}
+            />
+            <IslandButton
+              variant="secondary"
+              onClick={() => {
+                if (!curationWebhook.trim()) return;
+                onUpdate("news_curation_alert_webhook_url", curationWebhook.trim());
+                setCurationWebhook("");
+                flashSaved("news_curation_alert_webhook_url");
+              }}
+              disabled={!curationWebhook.trim() || saved["news_curation_alert_webhook_url"]}
+            >
+              {saved["news_curation_alert_webhook_url"] ? "Saved" : "Save Webhook"}
+            </IslandButton>
+          </div>
+        </div>
       </IslandCard>
           )
         },
@@ -285,6 +314,8 @@ export function NewsAdminPage(props: NewsPageProps) {
           label: "Validation",
           content: (
             <>
+              <SectionLabel title="Pipeline health" />
+              <NewsPipelineHealthPanel />
               <SectionLabel title="AI Validation Failures" />
               <ValidationFailuresStats />
             </>
@@ -612,7 +643,7 @@ function ManualTriggersCard({
       <div style={{ borderTop: `1px solid ${islandTheme.color.cardBorder}`, paddingTop: 12 }}>
         <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600 }}>Embedding Backfill</div>
         <div style={{ fontSize: 12, color: islandTheme.color.textMuted, marginBottom: 8, lineHeight: 1.4 }}>
-          Generate semantic vectors (OpenAI text-embedding-3-small) for every article missing one. Required for deterministic cosine-similarity clustering. Processes up to 200 rows per click — re-click until "Done — 0 remaining". Costs roughly $0.02 per 1000 articles.
+          Generate semantic vectors for articles missing one. Uses Amazon Titan Embed on Bedrock when that is your AI provider, otherwise OpenAI. Required for cosine-similarity clustering. Processes up to 200 rows per click — re-click until "Done — 0 remaining".
         </div>
         <EmbedBackfillButton onEmbedBackfill={onEmbedBackfill} />
       </div>
@@ -756,6 +787,102 @@ function EmbedBackfillButton({
         </span>
       )}
     </div>
+  );
+}
+
+// ── Pipeline health + validation failures ─────────────────────────────────────
+
+type NewsPipelineHealth = {
+  status: "healthy" | "degraded" | "critical" | "off";
+  embeddingBackend: string;
+  embeddingsMissing: number;
+  liveCards: number;
+  validationFailures: number;
+  uncuratedBacklog: number;
+  lastRun: {
+    at: string;
+    kind: string;
+    fetched: number;
+    curated: number;
+    failed: number;
+    embedded: number;
+    provider: string | null;
+    errorSummary: string | null;
+  } | null;
+};
+
+function NewsPipelineHealthPanel() {
+  const [health, setHealth] = useState<NewsPipelineHealth | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/news/general/health")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = (await res.json()) as { health?: NewsPipelineHealth };
+        if (!cancelled) setHealth(payload.health ?? null);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <IslandCard style={{ padding: 16, marginBottom: 12 }}>
+        <span style={{ fontSize: 12, color: islandTheme.color.dangerText }}>{error}</span>
+      </IslandCard>
+    );
+  }
+  if (!health) {
+    return (
+      <IslandCard style={{ padding: 16, marginBottom: 12 }}>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>Loading pipeline health…</span>
+      </IslandCard>
+    );
+  }
+
+  const statusColor =
+    health.status === "healthy"
+      ? islandTheme.color.successAccent
+      : health.status === "off"
+        ? islandTheme.color.textMuted
+        : health.status === "degraded"
+          ? islandTheme.color.warnAccent
+          : islandTheme.color.dangerAccent;
+
+  const lastRun = health.lastRun;
+  const lastRunLine = lastRun
+    ? `${lastRun.kind} · fetched ${lastRun.fetched} · curated ${lastRun.curated} · embedded ${lastRun.embedded}${
+        lastRun.errorSummary ? ` · error: ${lastRun.errorSummary}` : ""
+      }`
+    : "No runs recorded yet";
+
+  return (
+    <IslandCard style={{ padding: 16, marginBottom: 12, display: "grid", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span
+          aria-hidden="true"
+          style={{ width: 10, height: 10, borderRadius: 999, background: statusColor, flexShrink: 0 }}
+        />
+        <span style={{ fontSize: 15, fontWeight: 700, textTransform: "capitalize" }}>{health.status}</span>
+        <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
+          embeddings via {health.embeddingBackend}
+          {health.embeddingsMissing > 0 ? ` · ${health.embeddingsMissing.toLocaleString()} missing` : ""}
+        </span>
+      </div>
+      <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+        {health.liveCards.toLocaleString()} live cards · {health.validationFailures.toLocaleString()} validation
+        failures · {health.uncuratedBacklog.toLocaleString()} uncurated backlog
+      </div>
+      <div style={{ fontSize: 11, color: islandTheme.color.textMuted, lineHeight: 1.4 }}>
+        Last run{lastRun ? ` (${new Date(lastRun.at).toLocaleString()})` : ""}: {lastRunLine}
+      </div>
+    </IslandCard>
   );
 }
 

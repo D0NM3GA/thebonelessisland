@@ -4,6 +4,7 @@ import { requireParentRole, requireSession } from "../lib/auth.js";
 import { getAiCostTotalUsd } from "../lib/ai/usageTally.js";
 import { backfillEmbeddings, isEmbeddingColumnAvailable } from "../lib/news/embeddings.js";
 import { ingestAndCurateGeneralNews, curateUncuratedGeneralNews, resetAllCuration, backfillMissingImages } from "../lib/generalNewsIngestion.js";
+import { getNewsPipelineHealth, reportCurationPassOutcome } from "../lib/news/newsCurationHealth.js";
 
 export const generalNewsRouter = Router();
 
@@ -350,7 +351,7 @@ async function runRecurateJob(): Promise<void> {
         console.warn(`[generalNews] recurate cancelled by admin at pass ${pass}`);
         break;
       }
-      await curateUncuratedGeneralNews();
+      await curateUncuratedGeneralNews({ reportRun: false });
 
       const remainingAfter = await countUncurated();
       const breakdown = await snapshotBreakdown();
@@ -380,12 +381,31 @@ async function runRecurateJob(): Promise<void> {
     recurateJob.costUsd = Math.max(0, getAiCostTotalUsd() - costAtStart);
     recurateJob.state = "done";
     recurateJob.finishedAt = Date.now();
+    void reportCurationPassOutcome({
+      runKind: "recurate",
+      fetched: 0,
+      curated: recurateJob.curated,
+      merged: recurateJob.merged,
+      duplicates: recurateJob.duplicates,
+      failed: recurateJob.failed,
+      embedded: 0,
+      costUsdStart: costAtStart
+    });
   } catch (err) {
     recurateJob.costUsd = Math.max(0, getAiCostTotalUsd() - costAtStart);
     recurateJob.state = "error";
     recurateJob.finishedAt = Date.now();
     recurateJob.error = err instanceof Error ? err.message : String(err);
     console.error("[generalNews] recurate job error:", err);
+    void reportCurationPassOutcome({
+      runKind: "recurate",
+      fetched: 0,
+      curated: recurateJob.curated,
+      failed: recurateJob.failed,
+      embedded: 0,
+      errorSummary: recurateJob.error,
+      costUsdStart: costAtStart
+    });
   }
 }
 
@@ -427,6 +447,20 @@ generalNewsRouter.post("/general/recurate/cancel", requireSession, requireParent
  */
 generalNewsRouter.get("/general/recurate/status", requireSession, requireParentRole, (_req, res) => {
   res.json({ ok: true, job: recurateJob });
+});
+
+/**
+ * GET /news/general/health
+ * Admin — pipeline health snapshot (cards, failures, embeddings, last run).
+ */
+generalNewsRouter.get("/general/health", requireSession, requireParentRole, async (_req, res) => {
+  try {
+    const health = await getNewsPipelineHealth();
+    res.json({ ok: true, health });
+  } catch (err) {
+    console.error("[generalNews] GET /news/general/health error:", err);
+    res.status(500).json({ ok: false, error: "Health check failed" });
+  }
 });
 
 /**

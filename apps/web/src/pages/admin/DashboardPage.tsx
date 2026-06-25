@@ -47,6 +47,11 @@ type DashboardProps = {
 
 export function DashboardPage({ settings, onNavigate }: DashboardProps) {
   const [openReports, setOpenReports] = useState<number | null>(null);
+  const [newsHealth, setNewsHealth] = useState<{
+    status: string;
+    liveCards: number;
+    validationFailures: number;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +68,32 @@ export function DashboardPage({ settings, onNavigate }: DashboardProps) {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/news/general/health")
+      .then(async (r) => {
+        if (!r.ok) return null;
+        return (await r.json()) as {
+          health?: { status: string; liveCards: number; validationFailures: number };
+        };
+      })
+      .then((d) => {
+        if (!cancelled && d?.health) {
+          setNewsHealth({
+            status: d.health.status,
+            liveCards: d.health.liveCards,
+            validationFailures: d.health.validationFailures
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNewsHealth(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const getSetting = (key: string) => settings?.find((s) => s.key === key)?.value ?? "";
   const aiProvider = getSetting("ai_provider");
   const aiReady =
@@ -72,6 +103,21 @@ export function DashboardPage({ settings, onNavigate }: DashboardProps) {
       getSetting(`${aiProvider}_api_key`) === "••••••••" ||
       getSetting("ai_api_key") === "••••••••");
   const newsOn = getSetting("news_general_enabled") !== "false";
+  const newsPipelineOk =
+    newsHealth === null
+      ? null
+      : newsHealth.status === "healthy" || newsHealth.status === "off";
+  const newsDetail =
+    newsHealth === null
+      ? newsOn
+        ? "…"
+        : "off"
+      : !newsOn
+        ? "off"
+        : newsHealth.status === "healthy"
+          ? `${newsHealth.liveCards} live`
+          : `${newsHealth.status} · ${newsHealth.validationFailures} failed`;
+
   const nuggiesOn = getSetting("nuggies_enabled") !== "false";
   const bridgeOn =
     getSetting("milestone_announcements_enabled") === "true" &&
@@ -79,7 +125,7 @@ export function DashboardPage({ settings, onNavigate }: DashboardProps) {
 
   const chips: Array<{ id: string; label: string; ok: boolean | null; detail: string; page: AdminPageId }> = [
     { id: "ai", label: "AI", ok: settings ? aiReady : null, detail: settings ? (aiReady ? aiProvider : "not configured") : "…", page: "ai" },
-    { id: "news", label: "News feed", ok: settings ? newsOn : null, detail: settings ? (newsOn ? "active" : "off") : "…", page: "news" },
+    { id: "news", label: "News feed", ok: newsPipelineOk ?? (settings ? newsOn : null), detail: newsDetail, page: "news" },
     { id: "nuggies", label: "Economy", ok: settings ? nuggiesOn : null, detail: settings ? (nuggiesOn ? "live" : "frozen") : "…", page: "economy-rules" },
     { id: "bridge", label: "Bridge", ok: settings ? bridgeOn : null, detail: settings ? (bridgeOn ? "announcing" : "silent") : "…", page: "bridge" },
     { id: "reports", label: "Reports", ok: openReports === null ? null : openReports === 0, detail: openReports === null ? "…" : `${openReports} open`, page: "forums" }
