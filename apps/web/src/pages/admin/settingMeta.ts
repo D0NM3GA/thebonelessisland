@@ -131,9 +131,9 @@ const RAW: SettingMeta[] = [
   {
     key: "openai_api_key",
     label: "OpenAI API key",
-    description: "Stored encrypted; never displayed after saving. Used for OpenAI (GPT) chat models AND for OpenAI text-embedding-3-small clustering of news articles.",
-    whenToChange: "When rotating the key, first configuring GPT, or enabling embedding-based clustering.",
-    ifWrong: "OpenAI chat features fail. Embedding-based news clustering falls back to fingerprint-only clustering.",
+    description: "Stored encrypted; never displayed after saving. Optional — used for OpenAI (GPT) chat models and as a fallback embedding provider when Bedrock is not selected.",
+    whenToChange: "When rotating the key, or first configuring GPT as chat provider.",
+    ifWrong: "OpenAI chat features fail. Embeddings use Bedrock Titan when ai_provider is bedrock.",
     tags: ["ai", "openai", "gpt", "embeddings", "api", "key", "secret"],
     dangerLevel: "high",
     domain: "system",
@@ -166,7 +166,7 @@ const RAW: SettingMeta[] = [
   {
     key: "bedrock_region",
     label: "Bedrock region",
-    description: "AWS region for Amazon Bedrock. Defaults to us-east-1. Only used when the AI provider is Amazon Bedrock.",
+    description: "AWS region for Amazon Bedrock (chat curation + Titan embeddings). Defaults to us-east-1.",
     whenToChange: "When your Bedrock model access or quota lives in a different AWS region than us-east-1.",
     example: "us-east-1",
     tags: ["ai", "bedrock", "aws", "region"],
@@ -217,6 +217,16 @@ const RAW: SettingMeta[] = [
     dangerLevel: "low",
     domain: "content",
     type: "number"
+  },
+  {
+    key: "news_curation_alert_webhook_url",
+    label: "News curation alert webhook",
+    description: "Discord webhook URL for news pipeline health alerts (zero-curate passes, validation failure spikes). Empty = off.",
+    whenToChange: "When you want Parents pinged in Discord when the AI news pipeline degrades.",
+    tags: ["news", "discord", "webhook", "alert", "curation"],
+    dangerLevel: "low",
+    domain: "content",
+    type: "password"
   },
 
   // ── Engagement · Nuggies economy ─────────────────────────────────────────

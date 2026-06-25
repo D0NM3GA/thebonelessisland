@@ -58,12 +58,16 @@ export class BedrockProvider implements AIProvider {
       .join("");
     const inputTokens = res.usage?.inputTokens ?? 0;
     const outputTokens = res.usage?.outputTokens ?? 0;
+    const stopReason = res.stopReason ?? "unknown";
 
     const cost = estimateBedrockCostUsd(this.model, { input: inputTokens, output: outputTokens });
     recordAiCost("bedrock", this.model, cost);
     console.log(
-      `[ai:usage] bedrock/${this.model} in=${inputTokens}tok out=${outputTokens}tok est=$${cost.toFixed(4)}`
+      `[ai:usage] bedrock/${this.model} in=${inputTokens}tok out=${outputTokens}tok stop=${stopReason} est=$${cost.toFixed(4)}`
     );
+    if (!text.trim() && stopReason === "max_tokens") {
+      console.warn(`[ai:bedrock] empty response — model hit max_tokens (${outputTokens} out)`);
+    }
 
     return {
       text,

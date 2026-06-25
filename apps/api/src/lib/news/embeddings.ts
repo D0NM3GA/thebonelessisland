@@ -1,27 +1,28 @@
+import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import OpenAI from "openai";
 import { env } from "../../config.js";
 import { db } from "../../db/client.js";
 import { recordAiCost } from "../ai/usageTally.js";
 import { getAISetting } from "../serverSettings.js";
 
-// Embeddings-based clustering. Uses OpenAI text-embedding-3-small (1536-dim,
-// $0.02 / 1M tokens — effectively free at our volume). Stored in
-// general_news.embedding (pgvector column) and queried with cosine distance
-// (`<=>`) against existing primary cards to find merge candidates.
+// Embeddings-based clustering. Default: Amazon Titan Embed v2 on Bedrock (1024-dim)
+// when ai_provider is bedrock. Falls back to OpenAI text-embedding-3-small when an
+// OpenAI key is configured. Stored in general_news.embedding (pgvector).
 
-const EMBEDDING_MODEL = "text-embedding-3-small";
-const EMBEDDING_DIM = 1536;
-const EMBEDDING_PRICE_PER_M_TOKENS = 0.02; // $USD, input only
-// Cosine-similarity threshold for treating two articles as the same story.
-// 0.85 picks up "ARC Raiders cadence shift" variants across outlets but won't
-// merge "ARC Raiders cadence shift" with "ARC Raiders season 2 launch".
+export const EMBEDDING_DIM = 1024;
+const TITAN_EMBED_MODEL = "amazon.titan-embed-text-v2:0";
+const OPENAI_EMBED_MODEL = "text-embedding-3-small";
+const TITAN_PRICE_PER_M_TOKENS = 0.02;
+const OPENAI_PRICE_PER_M_TOKENS = 0.02;
 const SIMILARITY_THRESHOLD = 0.85;
 const SIMILARITY_WINDOW_DAYS = 14;
+
+export type EmbeddingBackend = "bedrock" | "openai" | "none";
 
 let availabilityChecked = false;
 let columnAvailable = false;
 
-/** Returns true once both pgvector is installed AND the column exists. */
+/** Returns true once pgvector is installed AND the embedding column exists. */
 export async function isEmbeddingColumnAvailable(): Promise<boolean> {
   if (availabilityChecked) return columnAvailable;
   availabilityChecked = true;
@@ -41,50 +42,110 @@ export async function isEmbeddingColumnAvailable(): Promise<boolean> {
 }
 
 function resolveOpenAIKey(): string | null {
-  // Embeddings use OpenAI's text-embedding-3-small. Same OpenAI account as the
-  // chat models, so we read the shared openai_api_key setting first. Legacy
-  // ai_api_key fallback covers installs where the admin only ever configured
-  // one key and had OpenAI selected as the chat provider.
   const fromOpenAI = getAISetting("openai_api_key");
   const legacy = getAISetting("ai_api_key");
   const key = (fromOpenAI || legacy || env.OPENAI_API_KEY || "").trim();
   return key.length > 0 ? key : null;
 }
 
-let cachedClient: OpenAI | null = null;
-let cachedKey: string | null = null;
-function getClient(): OpenAI | null {
-  const key = resolveOpenAIKey();
-  if (!key) return null;
-  if (cachedClient && cachedKey === key) return cachedClient;
-  cachedClient = new OpenAI({ apiKey: key });
-  cachedKey = key;
-  return cachedClient;
+function bedrockRegion(): string {
+  return getAISetting("bedrock_region") || process.env.AWS_REGION || "us-east-1";
 }
 
-/** Embed a piece of text. Returns null when no key is configured or input is empty. */
-export async function embedText(text: string): Promise<number[] | null> {
-  const client = getClient();
+/** Which embedding backend would be used right now (for admin health UI). */
+export function resolveEmbeddingBackend(): EmbeddingBackend {
+  if (getAISetting("ai_enabled") !== "true") return "none";
+  const chatProvider = (getAISetting("ai_provider") ?? "").toLowerCase();
+  if (chatProvider === "bedrock") return "bedrock";
+  if (resolveOpenAIKey()) return "openai";
+  return "none";
+}
+
+let openaiClient: OpenAI | null = null;
+let openaiKey: string | null = null;
+function getOpenAIClient(): OpenAI | null {
+  const key = resolveOpenAIKey();
+  if (!key) return null;
+  if (openaiClient && openaiKey === key) return openaiClient;
+  openaiClient = new OpenAI({ apiKey: key });
+  openaiKey = key;
+  return openaiClient;
+}
+
+let bedrockClient: BedrockRuntimeClient | null = null;
+let bedrockClientRegion: string | null = null;
+function getBedrockClient(): BedrockRuntimeClient {
+  const region = bedrockRegion();
+  if (bedrockClient && bedrockClientRegion === region) return bedrockClient;
+  bedrockClient = new BedrockRuntimeClient({ region });
+  bedrockClientRegion = region;
+  return bedrockClient;
+}
+
+async function embedViaBedrock(text: string): Promise<number[] | null> {
+  try {
+    const client = getBedrockClient();
+    const body = JSON.stringify({
+      inputText: text,
+      dimensions: EMBEDDING_DIM,
+      normalize: true
+    });
+    const res = await client.send(
+      new InvokeModelCommand({
+        modelId: TITAN_EMBED_MODEL,
+        contentType: "application/json",
+        accept: "application/json",
+        body: new TextEncoder().encode(body)
+      })
+    );
+    const parsed = JSON.parse(new TextDecoder().decode(res.body)) as {
+      embedding?: number[];
+      inputTextTokenCount?: number;
+    };
+    const vec = parsed.embedding;
+    if (!Array.isArray(vec) || vec.length !== EMBEDDING_DIM) return null;
+    const inputTokens = parsed.inputTextTokenCount ?? 0;
+    if (inputTokens > 0) {
+      recordAiCost("bedrock", TITAN_EMBED_MODEL, (inputTokens * TITAN_PRICE_PER_M_TOKENS) / 1_000_000);
+    }
+    return vec;
+  } catch (err) {
+    console.warn("[embeddings] bedrock embed failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+async function embedViaOpenAI(text: string): Promise<number[] | null> {
+  const client = getOpenAIClient();
   if (!client) return null;
-  const trimmed = (text ?? "").slice(0, 6000).trim();
-  if (trimmed.length < 8) return null;
   try {
     const resp = await client.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: trimmed
+      model: OPENAI_EMBED_MODEL,
+      input: text,
+      dimensions: EMBEDDING_DIM
     });
     const vec = resp.data[0]?.embedding;
     if (!vec || vec.length !== EMBEDDING_DIM) return null;
     const promptTokens = resp.usage?.prompt_tokens ?? 0;
     if (promptTokens > 0) {
-      const cost = (promptTokens * EMBEDDING_PRICE_PER_M_TOKENS) / 1_000_000;
-      recordAiCost("openai", EMBEDDING_MODEL, cost);
+      recordAiCost("openai", OPENAI_EMBED_MODEL, (promptTokens * OPENAI_PRICE_PER_M_TOKENS) / 1_000_000);
     }
     return vec;
   } catch (err) {
-    console.warn("[embeddings] embedText failed:", err instanceof Error ? err.message : err);
+    console.warn("[embeddings] openai embed failed:", err instanceof Error ? err.message : err);
     return null;
   }
+}
+
+/** Embed a piece of text. Returns null when no backend is configured or input is empty. */
+export async function embedText(text: string): Promise<number[] | null> {
+  const trimmed = (text ?? "").slice(0, 6000).trim();
+  if (trimmed.length < 8) return null;
+
+  const backend = resolveEmbeddingBackend();
+  if (backend === "bedrock") return embedViaBedrock(trimmed);
+  if (backend === "openai") return embedViaOpenAI(trimmed);
+  return null;
 }
 
 /** pgvector literal — `'[0.1, 0.2, ...]'::vector`. */
@@ -178,12 +239,13 @@ export async function absorbAsSibling(
   );
 }
 
-/** Backfill embeddings for rows missing them. Returns the count actually
- *  embedded (after the OpenAI rate limit, network errors, or empty inputs). */
+export type EmbedClusterResult = { embedded: number; absorbed: number; remaining: number };
+
+/** Backfill embeddings for rows missing them. */
 export async function backfillEmbeddings(maxRows: number = 200): Promise<number> {
   if (!(await isEmbeddingColumnAvailable())) return 0;
-  if (!resolveOpenAIKey()) {
-    console.warn("[embeddings] backfill skipped — no OpenAI key configured");
+  if (resolveEmbeddingBackend() === "none") {
+    console.warn("[embeddings] backfill skipped — no embedding backend configured (enable AI + Bedrock or OpenAI key)");
     return 0;
   }
 
@@ -199,8 +261,6 @@ export async function backfillEmbeddings(maxRows: number = 200): Promise<number>
   );
   let count = 0;
   for (const row of r.rows) {
-    // Prefer AI summary (rich, denoised) when available; fall back to raw
-    // title + contents. Either way we cap at 6000 chars in embedText.
     const text = row.ai_summary
       ? `${row.title}\n\n${row.ai_summary}`
       : `${row.title}\n\n${row.contents ?? ""}`;
@@ -211,7 +271,16 @@ export async function backfillEmbeddings(maxRows: number = 200): Promise<number>
     }
   }
   if (count > 0) {
-    console.log(`[embeddings] backfilled ${count}/${r.rowCount} row(s)`);
+    console.log(`[embeddings] backfilled ${count}/${r.rowCount} row(s) via ${resolveEmbeddingBackend()}`);
   }
   return count;
+}
+
+/** Count rows still missing embeddings (for admin health). */
+export async function countMissingEmbeddings(): Promise<number> {
+  if (!(await isEmbeddingColumnAvailable())) return 0;
+  const r = await db.query<{ c: string }>(
+    `SELECT COUNT(*)::text AS c FROM general_news WHERE embedding IS NULL`
+  );
+  return parseInt(r.rows[0]?.c ?? "0", 10);
 }
