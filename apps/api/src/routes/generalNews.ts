@@ -12,6 +12,11 @@ import { buildGeneralNewsFeedQuery } from "../lib/news/newsFeed.js";
 import { savePipelineJob, reconcileInterruptedPipelineJobs } from "../lib/news/newsPipelineJobs.js";
 import { findSimilarArticles, searchGeneralNews } from "../lib/news/newsSearch.js";
 import { getNewsPipelineHealth, reportCurationPassOutcome } from "../lib/news/newsCurationHealth.js";
+import {
+  CORPUS_RESET_CONFIRM_PHRASE,
+  resetGeneralNewsCorpus
+} from "../lib/news/newsCorpusReset.js";
+import { withNewsPipelineLock } from "../lib/news/newsPipelineLock.js";
 
 export const generalNewsRouter = Router();
 
@@ -303,6 +308,17 @@ const FRESH_EMBED_JOB: EmbedBackfillJob = {
 
 let embedBackfillJob: EmbedBackfillJob = { ...FRESH_EMBED_JOB };
 let embedBackfillCancelRequested = false;
+
+function resetGeneralNewsJobState(): void {
+  recurateCancelRequested = true;
+  embedBackfillCancelRequested = true;
+  recurateJob = { ...FRESH_JOB };
+  embedBackfillJob = { ...FRESH_EMBED_JOB };
+}
+
+function isGeneralNewsBackgroundJobRunning(): boolean {
+  return recurateJob.state === "running" || embedBackfillJob.state === "running";
+}
 
 const EMBED_BACKFILL_BATCH = 40;
 const EMBED_BACKFILL_MAX_PASSES = 500;
@@ -665,6 +681,69 @@ generalNewsRouter.post("/general/recurate/cancel", requireSession, requireParent
  */
 generalNewsRouter.get("/general/recurate/status", requireSession, requireParentRole, (_req, res) => {
   res.json({ ok: true, job: recurateJob });
+});
+
+/**
+ * POST /news/general/reset-corpus
+ * Admin — delete all ingested general news and pipeline history, then optionally re-fetch.
+ */
+generalNewsRouter.post("/general/reset-corpus", requireSession, requireParentRole, async (req, res) => {
+  try {
+    const body = req.body as { confirm?: unknown; ingestAfter?: unknown };
+    if (body.confirm !== CORPUS_RESET_CONFIRM_PHRASE) {
+      res.status(400).json({
+        ok: false,
+        error: `Type confirm exactly: ${CORPUS_RESET_CONFIRM_PHRASE}`
+      });
+      return;
+    }
+
+    if (isGeneralNewsBackgroundJobRunning()) {
+      res.status(409).json({
+        ok: false,
+        error: "Cancel running embed backfill or recurate jobs before scrubbing the archive"
+      });
+      return;
+    }
+
+    const runningJobs = await db.query<{ job_kind: string }>(
+      `SELECT job_kind FROM news_pipeline_jobs WHERE state = 'running'`
+    );
+    if (runningJobs.rows.length > 0) {
+      res.status(409).json({
+        ok: false,
+        error: `Pipeline job still marked running: ${runningJobs.rows.map((r) => r.job_kind).join(", ")}`
+      });
+      return;
+    }
+
+    const locked = await withNewsPipelineLock(async () => resetGeneralNewsCorpus());
+    if (!locked.ran) {
+      res.status(409).json({
+        ok: false,
+        error: "Pipeline busy (ingest or curation in progress). Try again in a minute."
+      });
+      return;
+    }
+
+    resetGeneralNewsJobState();
+    console.warn("[generalNews] corpus reset by admin:", locked.result);
+
+    const ingestAfter = body.ingestAfter === true;
+    if (ingestAfter) {
+      void ingestAndCurateGeneralNews(true).catch((err) => {
+        console.error("[generalNews] post-reset ingest failed:", err);
+      });
+    }
+
+    res.json({ ok: true, ...locked.result, ingestStarted: ingestAfter });
+  } catch (err) {
+    console.error("[generalNews] POST /news/general/reset-corpus error:", err);
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Corpus reset failed"
+    });
+  }
 });
 
 /**
