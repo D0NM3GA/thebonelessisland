@@ -206,6 +206,16 @@ type NewsPageProps = {
     error: string | null;
   } | null>;
   onCurateGameNews: () => Promise<{ ok: boolean; curated?: number; error?: string }>;
+  onResetGeneralNewsCorpus: (opts: {
+    confirm: string;
+    ingestAfter?: boolean;
+  }) => Promise<{
+    ok: boolean;
+    deletedArticles?: number;
+    deletedFeedback?: number;
+    ingestStarted?: boolean;
+    error?: string;
+  }>;
 };
 
 export function NewsAdminPage(props: NewsPageProps) {
@@ -387,7 +397,7 @@ export function NewsAdminPage(props: NewsPageProps) {
           anchor: "news-retention",
           label: "Archive",
           content: (
-            <NewsRetentionSettingsPanel settings={settings} onSave={onUpdate} />
+            <NewsRetentionSettingsPanel settings={settings} onSave={onUpdate} onResetCorpus={props.onResetGeneralNewsCorpus} />
           )
         },
         {
@@ -449,11 +459,20 @@ export function NewsAdminPage(props: NewsPageProps) {
 
 function NewsRetentionSettingsPanel({
   settings,
-  onSave
+  onSave,
+  onResetCorpus
 }: {
   settings: ServerSetting[];
   onSave: (key: string, value: string) => Promise<void> | void;
+  onResetCorpus: NewsPageProps["onResetGeneralNewsCorpus"];
 }) {
+  const [confirmText, setConfirmText] = useState("");
+  const [resetState, setResetState] = useState<AdminRunState>("idle");
+  const [resetMsg, setResetMsg] = useState("");
+  const [ingestAfterReset, setIngestAfterReset] = useState(true);
+  const confirmPhrase = "SCRUB THE ARCHIVE";
+  const confirmReady = confirmText.trim().toUpperCase() === confirmPhrase;
+
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <IslandCard style={{ padding: "16px 18px" }}>
@@ -550,6 +569,87 @@ function NewsRetentionSettingsPanel({
           onSave={onSave}
           title=""
         />
+      </IslandCard>
+
+      <IslandCard
+        style={{
+          padding: "16px 18px",
+          display: "grid",
+          gap: 12,
+          borderColor: islandTheme.color.dangerAccent + "55"
+        }}
+      >
+        <div>
+          <div
+            className="island-mono"
+            style={{
+              fontSize: 11,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: islandTheme.color.dangerAccent,
+              marginBottom: 6
+            }}
+          >
+            Scrub the archive
+          </div>
+          <p style={{ margin: "0 0 4px", fontSize: 13, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
+            Wipes every ingested external headline, validation failure, and curation run — a clean dock for the current
+            pipeline. Member mutes and source registry stay put. Use this when an old backlog is stuck and re-curate
+            keeps failing.
+          </p>
+        </div>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, color: islandTheme.color.textMuted }}>
+          <input
+            type="checkbox"
+            checked={ingestAfterReset}
+            onChange={(e) => setIngestAfterReset(e.target.checked)}
+          />
+          Fetch fresh headlines right after the scrub
+        </label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={`Type ${confirmPhrase} to confirm`}
+            style={{ ...islandInputStyle, flex: "1 1 220px", maxWidth: 360 }}
+            disabled={resetState === "running"}
+          />
+          <IslandButton
+            variant="secondary"
+            onClick={async () => {
+              setResetState("running");
+              setResetMsg("Scrubbing the archive…");
+              const result = await onResetCorpus({
+                confirm: confirmPhrase,
+                ingestAfter: ingestAfterReset
+              });
+              if (result.ok) {
+                setResetState("done");
+                setConfirmText("");
+                setResetMsg(
+                  `Removed ${(result.deletedArticles ?? 0).toLocaleString()} articles` +
+                    (result.ingestStarted ? " · fresh fetch started in the background" : "") +
+                    " — hit Fetch & Curate on Triggers if the feed is still empty"
+                );
+                setTimeout(() => setResetState("idle"), 15000);
+              } else {
+                setResetState("error");
+                setResetMsg(result.error ?? "Reset failed");
+                setTimeout(() => setResetState("idle"), 20000);
+              }
+            }}
+            disabled={resetState === "running" || !confirmReady}
+            style={
+              confirmReady
+                ? { borderColor: islandTheme.color.dangerAccent, color: islandTheme.color.dangerAccent }
+                : undefined
+            }
+          >
+            {resetState === "running" ? "Scrubbing…" : "Scrub archive & start fresh"}
+          </IslandButton>
+        </div>
+        <AdminTriggerFeedback state={resetState} message={resetMsg} />
       </IslandCard>
     </div>
   );
