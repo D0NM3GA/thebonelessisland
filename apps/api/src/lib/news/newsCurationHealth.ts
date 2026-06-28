@@ -31,6 +31,8 @@ export type CurationRunInput = {
 
 export type NewsPipelineHealth = {
   status: "healthy" | "degraded" | "critical" | "off";
+  /** Plain-English explanation of the current status — always set. */
+  reason: string;
   embeddingBackend: string;
   embeddingsMissing: number;
   liveCards: number;
@@ -47,6 +49,8 @@ export type NewsPipelineHealth = {
     curated: number;
     failed: number;
     embedded: number;
+    duplicates: number;
+    merged: number;
     provider: string | null;
     errorSummary: string | null;
   } | null;
@@ -128,10 +132,14 @@ export async function getNewsPipelineHealth(): Promise<NewsPipelineHealth> {
       curated: number;
       failed: number;
       embedded: number;
+      duplicates: number;
+      merged: number;
       provider: string | null;
       error_summary: string | null;
     }>(
-      `SELECT started_at, run_kind, fetched, curated, failed, embedded, provider, error_summary
+      `SELECT started_at, run_kind, fetched, curated, failed, embedded,
+              COALESCE(duplicates, 0) AS duplicates, COALESCE(merged, 0) AS merged,
+              provider, error_summary
          FROM news_curation_runs
         ORDER BY started_at DESC
         LIMIT 1`
@@ -140,6 +148,7 @@ export async function getNewsPipelineHealth(): Promise<NewsPipelineHealth> {
 
   const lr = lastRunRow.rows[0];
   let status: NewsPipelineHealth["status"] = "healthy";
+  let reason = "";
   const queueStaleMs =
     queueCounts.oldestPendingAt !== null
       ? Date.now() - new Date(queueCounts.oldestPendingAt).getTime()
@@ -150,35 +159,48 @@ export async function getNewsPipelineHealth(): Promise<NewsPipelineHealth> {
 
   if (!newsEnabled || !aiEnabled) {
     status = "off";
+    reason = !aiEnabled ? "AI is disabled — news curation paused" : "News feed is disabled";
   } else if (counts.liveCards === 0 && counts.uncuratedBacklog > 50) {
     status = "critical";
-  } else if (counts.uncuratedBacklog > 200 && counts.liveCards < counts.uncuratedBacklog * 0.15) {
-    status = "degraded";
+    reason = `No live cards with ${counts.uncuratedBacklog.toLocaleString()} uncurated rows — pipeline stalled`;
   } else if (
     counts.liveCards === 0 &&
     counts.uncuratedBacklog > 0 &&
     (lr?.run_kind === "recurate" || lastBatchDiagnostics?.parsedCount === 0)
   ) {
     status = "critical";
+    reason = `No live cards after re-curation pass — AI may have returned empty results`;
+  } else if (lr?.error_summary) {
+    status = "critical";
+    reason = `Last run errored: ${lr.error_summary}`;
+  } else if (counts.uncuratedBacklog > 200 && counts.liveCards < counts.uncuratedBacklog * 0.15) {
+    status = "degraded";
+    reason = `${counts.uncuratedBacklog.toLocaleString()} uncurated rows within the window with only ${counts.liveCards.toLocaleString()} live cards`;
   } else if (counts.validationFailures > 100 && counts.liveCards < counts.validationFailures * 0.1) {
     // Large historical failure corpus — usually fixed by Regenerate All Summaries.
     status = "degraded";
-  } else if (lr?.error_summary) {
-    status = "critical";
+    reason = `${counts.validationFailures.toLocaleString()} articles failed AI validation (vs ${counts.liveCards.toLocaleString()} live cards) — run Regenerate All Summaries`;
   } else if (queueBacklogged && counts.uncuratedBacklog > 100) {
     status = "degraded";
-  } else if (counts.validationFailures > 10) {
+    reason = `Pipeline queue backlogged with ${counts.uncuratedBacklog.toLocaleString()} uncurated articles waiting`;
+  } else if (counts.validationFailures > 25) {
     status = "degraded";
-  } else if (liveCardsMissingImages > 5) {
-    status = "degraded";
+    reason = `${counts.validationFailures.toLocaleString()} articles failed AI validation — check Validation tab`;
   } else if (embeddingsMissing > 500) {
     status = "degraded";
-  } else if (lr?.curated === 0 && (lr?.fetched ?? 0) > 0) {
+    reason = `${embeddingsMissing.toLocaleString()} live cards missing embeddings — run Embed All Missing`;
+  } else if (liveCardsMissingImages > 5) {
     status = "degraded";
+    reason = `${liveCardsMissingImages.toLocaleString()} live cards missing cover images — run Cover Image Backfill`;
+  } else {
+    // Healthy — a quiet run (0 new due to dedup/Reddit-park) is NOT degraded
+    const n = counts.liveCards;
+    reason = `Pipeline healthy — ${n.toLocaleString()} live card${n === 1 ? "" : "s"}`;
   }
 
   return {
     status,
+    reason,
     embeddingBackend: resolveEmbeddingBackend(),
     embeddingsMissing,
     liveCards: counts.liveCards,
@@ -196,6 +218,8 @@ export async function getNewsPipelineHealth(): Promise<NewsPipelineHealth> {
           curated: lr.curated,
           failed: lr.failed,
           embedded: lr.embedded,
+          duplicates: lr.duplicates,
+          merged: lr.merged,
           provider: lr.provider,
           errorSummary: lr.error_summary
         }
@@ -275,12 +299,21 @@ export async function reportCurationPassOutcome(input: {
     costUsdStart: input.costUsdStart
   });
 
-  const zeroCurateWithFetch = input.fetched > 0 && input.curated === 0;
+  // A run that fetched N but curated 0 new is normal when articles were deduped or Reddit-parked.
+  // Only treat zero-curated as a real signal when validation failures are actually climbing OR
+  // there was an error — not when the fetched articles simply already existed in the corpus.
+  const dedupExplained =
+    (input.duplicates ?? 0) > 0 || (input.merged ?? 0) > 0 || (input.failed ?? input.batchFailed ?? 0) === 0;
+  const zeroCurateUnexplained =
+    input.fetched > 0 &&
+    input.curated === 0 &&
+    !dedupExplained &&
+    counts.validationFailures > 10;
   const highFailureRate =
     counts.validationFailures > 50 &&
     counts.liveCards < Math.max(5, counts.validationFailures * 0.05);
 
-  if (zeroCurateWithFetch || highFailureRate || input.errorSummary) {
+  if (zeroCurateUnexplained || highFailureRate || input.errorSummary) {
     const level = highFailureRate ? "error" : "warning";
     if (process.env.SENTRY_DSN) {
       Sentry.captureMessage("news curation pipeline degraded", {
@@ -289,6 +322,8 @@ export async function reportCurationPassOutcome(input: {
           runKind: input.runKind,
           fetched: input.fetched,
           curated: input.curated,
+          duplicates: input.duplicates,
+          merged: input.merged,
           validationFailures: counts.validationFailures,
           liveCards: counts.liveCards,
           errorSummary: input.errorSummary,
@@ -309,11 +344,11 @@ export async function reportCurationPassOutcome(input: {
     });
   }
 
-  if (zeroCurateWithFetch) {
+  if (zeroCurateUnexplained) {
     void sendNewsCurationAlert({
       title: "News curation produced zero cards",
       description:
-        `Fetched **${input.fetched}** new article(s) but curated **0** primary cards.\n` +
+        `Fetched **${input.fetched}** article(s) but curated **0** new cards — not explained by dedup.\n` +
         `Validation failures in corpus: **${counts.validationFailures}** · Live cards: **${counts.liveCards}**\n` +
         `Provider: \`${provider}\` · Check Admin → News → Validation.`,
       color: 0xef4444,
@@ -402,9 +437,9 @@ export async function runNewsPipelineHealthSweep(): Promise<void> {
   if (health.uncuratedBacklog > 500) {
     lines.push(`Uncurated backlog: **${health.uncuratedBacklog.toLocaleString()}**`);
   }
-  if (health.lastRun?.curated === 0 && (health.lastRun.fetched ?? 0) > 0) {
+  if (health.lastRun?.curated === 0 && (health.lastRun.fetched ?? 0) > 0 && health.lastRun.errorSummary) {
     lines.push(
-      `Last ingest curated **0** of **${health.lastRun.fetched}** fetched (${new Date(health.lastRun.at).toLocaleString()})`
+      `Last ingest curated **0** of **${health.lastRun.fetched}** fetched with error (${new Date(health.lastRun.at).toLocaleString()})`
     );
   }
   if (autopilotSkipped) {

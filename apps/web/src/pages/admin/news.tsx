@@ -1377,6 +1377,8 @@ function EmbedBackfillButton({
 
 type NewsPipelineHealth = {
   status: "healthy" | "degraded" | "critical" | "off";
+  /** Plain-English explanation of the current status. */
+  reason: string;
   embeddingBackend: string;
   embeddingsMissing: number;
   liveCards: number;
@@ -1389,6 +1391,8 @@ type NewsPipelineHealth = {
     curated: number;
     failed: number;
     embedded: number;
+    duplicates: number;
+    merged: number;
     provider: string | null;
     errorSummary: string | null;
   } | null;
@@ -1445,11 +1449,22 @@ function NewsPipelineHealthPanel() {
           : islandTheme.color.dangerAccent;
 
   const lastRun = health.lastRun;
-  const lastRunLine = lastRun
-    ? `${lastRun.kind} · fetched ${lastRun.fetched} · curated ${lastRun.curated} · embedded ${lastRun.embedded}${
-        lastRun.errorSummary ? ` · error: ${lastRun.errorSummary}` : ""
-      }`
-    : "No runs recorded yet";
+
+  // Build a funnel line like "fetched 4 · 4 duplicates · 0 new (normal)" or "fetched 3 · curated 2 · embedded 2"
+  function buildFunnelLine(run: NonNullable<NewsPipelineHealth["lastRun"]>): string {
+    const parts: string[] = [`fetched ${run.fetched}`];
+    if (run.duplicates > 0) parts.push(`${run.duplicates} dup${run.duplicates === 1 ? "" : "s"}`);
+    if (run.merged > 0) parts.push(`${run.merged} merged`);
+    if (run.embedded > 0) parts.push(`embedded ${run.embedded}`);
+    parts.push(`${run.curated} new`);
+    if (run.curated === 0 && run.fetched > 0 && !run.errorSummary) {
+      parts.push("normal");
+    }
+    if (run.errorSummary) parts.push(`error: ${run.errorSummary}`);
+    return parts.join(" · ");
+  }
+
+  const lastRunLine = lastRun ? buildFunnelLine(lastRun) : "No runs recorded yet";
 
   return (
     <IslandCard style={{ padding: 16, marginBottom: 12, display: "grid", gap: 8 }}>
@@ -1459,17 +1474,20 @@ function NewsPipelineHealthPanel() {
           style={{ width: 10, height: 10, borderRadius: 999, background: statusColor, flexShrink: 0 }}
         />
         <span style={{ fontSize: 15, fontWeight: 700, textTransform: "capitalize" }}>{health.status}</span>
-        <span style={{ fontSize: 12, color: islandTheme.color.textMuted }}>
-          embeddings via {health.embeddingBackend}
-          {health.embeddingsMissing > 0 ? ` · ${health.embeddingsMissing.toLocaleString()} missing` : ""}
-        </span>
+        {health.reason ? (
+          <span style={{ fontSize: 12, color: health.status === "healthy" ? islandTheme.color.textMuted : statusColor }}>
+            {health.reason}
+          </span>
+        ) : null}
       </div>
       <div style={{ fontSize: 12, color: islandTheme.color.textSubtle, lineHeight: 1.5 }}>
         {health.liveCards.toLocaleString()} live cards · {health.validationFailures.toLocaleString()} validation
-        failures · {health.uncuratedBacklog.toLocaleString()} uncurated backlog
+        failures · {health.uncuratedBacklog.toLocaleString()} uncurated backlog ·{" "}
+        embeddings via {health.embeddingBackend}
+        {health.embeddingsMissing > 0 ? ` (${health.embeddingsMissing.toLocaleString()} missing)` : ""}
       </div>
       <div style={{ fontSize: 11, color: islandTheme.color.textMuted, lineHeight: 1.4 }}>
-        Last run{lastRun ? ` (${new Date(lastRun.at).toLocaleString()})` : ""}: {lastRunLine}
+        Last run{lastRun ? ` (${new Date(lastRun.at).toLocaleString()})` : ""}: {lastRun?.kind ?? ""}{lastRun ? " · " : ""}{lastRunLine}
       </div>
       {(health.embeddingsMissing > 0 || health.validationFailures > 0 || health.uncuratedBacklog > 0) && (
         <div
