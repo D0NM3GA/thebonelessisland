@@ -19,7 +19,7 @@ import {
   persistNewsArticleImage
 } from "./news/newsImageResolver.js";
 import { applyPreFilter, looksLikeNonGamingNews, markPreFiltered, preFilterReason } from "./news/newsPreFilter.js";
-import { isFreshCorpusMode, retireStaleUncuratedBacklog } from "./news/newsBacklog.js";
+import { isFreshCorpusMode, maybeRetireStaleBacklog } from "./news/newsBacklog.js";
 import { withNewsPipelineLock } from "./news/newsPipelineLock.js";
 import { getIngestMaxAgeDays } from "./news/newsPipelineDiagnostics.js";
 import { shouldTriggerBackgroundIngest } from "./news/newsRetention.js";
@@ -141,8 +141,19 @@ const ALLOWED_PLATFORMS = new Set([
   "PC", "PlayStation", "Xbox", "Nintendo", "Mobile", "VR"
 ]);
 
+// ── Crew-context TTL cache ────────────────────────────────────────────────────
+// Both buildCrewContext() and getCrewEntityNames() run heavy multi-join queries
+// and are called on every curate pass. Cache results for 10 minutes — crew
+// games/playtime change slowly and a brief stale window is harmless.
+const CREW_CONTEXT_TTL_MS = 10 * 60 * 1000; // 10 minutes
+let _crewContextCache: { value: string; expiresAt: number } | null = null;
+let _crewEntityNamesCache: { value: Set<string>; expiresAt: number } | null = null;
+
 /** Fetch lowercased set of all crew game + studio names for Crew Pick tag validation. */
 async function getCrewEntityNames(): Promise<Set<string>> {
+  if (_crewEntityNamesCache && Date.now() < _crewEntityNamesCache.expiresAt) {
+    return _crewEntityNamesCache.value;
+  }
   const result = await db.query<{ name: string }>(
     `SELECT DISTINCT LOWER(g.name) AS name FROM shareable_user_games ug INNER JOIN games g ON g.app_id = ug.app_id
      UNION
@@ -150,7 +161,9 @@ async function getCrewEntityNames(): Promise<Set<string>> {
      INNER JOIN games g ON g.app_id = ug.app_id,
      UNNEST(g.developers) AS d`
   );
-  return new Set(result.rows.map((r) => r.name));
+  const value = new Set(result.rows.map((r) => r.name));
+  _crewEntityNamesCache = { value, expiresAt: Date.now() + CREW_CONTEXT_TTL_MS };
+  return value;
 }
 
 /**
@@ -591,6 +604,9 @@ type RawGeneral = {
 };
 
 async function buildCrewContext(): Promise<string> {
+  if (_crewContextCache && Date.now() < _crewContextCache.expiresAt) {
+    return _crewContextCache.value;
+  }
   const [recent, topOwned, tagFeedback, crewEntities] = await Promise.all([
     db.query<{ game_name: string; playtime_2weeks: number }>(
       `SELECT g.name AS game_name, SUM(ug.playtime_2weeks)::int AS playtime_2weeks
@@ -656,7 +672,7 @@ async function buildCrewContext(): Promise<string> {
     .slice(0, 15)
     .join(", ");
 
-  return [
+  const context = [
     `Playing this week: ${recentStr || "none"}`,
     `Top owned games: ${ownedStr || "none"}`,
     `Crew genre tags: ${topTagsStr || "none"}`,
@@ -669,6 +685,8 @@ async function buildCrewContext(): Promise<string> {
   ]
     .filter((line) => line !== "")
     .join("\n");
+  _crewContextCache = { value: context, expiresAt: Date.now() + CREW_CONTEXT_TTL_MS };
+  return context;
 }
 
 // Locate the first balanced top-level JSON array in `text`. Tolerates any
@@ -1190,8 +1208,15 @@ function applyDefaultRelevanceScore(result: GeneralCurationResult): GeneralCurat
   return { ...result, relevanceScore: FALLBACK_RELEVANCE_SCORE };
 }
 
-/** Deterministic card when Bedrock returns empty or unmatched output. */
-function buildFallbackCurationResult(item: RawGeneral): GeneralCurationResult {
+/** Minimum body content required to mint a fallback card rather than letting the article park. */
+const FALLBACK_MIN_BODY_CHARS = 200;
+
+/**
+ * Deterministic card when AI returns empty or unmatched output.
+ * Only minted when the article has real body content (>= FALLBACK_MIN_BODY_CHARS trimmed chars).
+ * Thin/empty articles return null so the caller lets them fail validation and park via give-up.
+ */
+function buildFallbackCurationResult(item: RawGeneral): GeneralCurationResult | null {
   const title =
     item.title.trim().length >= 8 ? item.title.trim() : item.title.trim() || "Gaming news update";
   const body = (item.contents ?? "").trim();
@@ -1213,15 +1238,28 @@ function buildFallbackCurationResult(item: RawGeneral): GeneralCurationResult {
     };
   }
 
+  // Require real body content — thin/empty articles should park, not get filler cards.
+  if (body.length < FALLBACK_MIN_BODY_CHARS) {
+    return null;
+  }
+
   let summary = [body, title].filter(Boolean).join("\n\n").trim();
   if (summary.length < MIN_SUMMARY_CHARS) {
-    summary = `${title}\n\n${body || "See the linked article for full details."}`.trim();
+    summary = `${title}\n\n${body}`.trim();
   }
   while (summary.length < MIN_SUMMARY_CHARS) {
     summary += " More coverage may follow as the story develops.";
   }
+
+  // Use the first sentence of the article body as whyMatters when it's informative enough;
+  // otherwise a neutral one-liner. The old generic "Worth a look for the crew…" was filler
+  // that pretended AI insight the curation step never produced.
+  const firstSentence = body.split(/(?<=[.!?])\s+/)[0]?.trim() ?? "";
   const whyMatters =
-    `Worth a look for the crew — this ${item.source_name} story may affect games on your shelf or tonight's picks.`;
+    firstSentence.length >= 20
+      ? firstSentence.slice(0, 200)
+      : `From ${item.source_name}: ${title}`.slice(0, 200);
+
   return {
     id: item.external_id,
     relevanceScore: FALLBACK_RELEVANCE_SCORE,
@@ -1455,7 +1493,10 @@ async function curateBatchWithValidation(
       continue;
     }
     if (!aiEmpty && o.aiMatch !== "none") continue;
-    const fallback = ensurePrimarySources(buildFallbackCurationResult(o.item), o.item);
+    const fallbackRaw = buildFallbackCurationResult(o.item);
+    // null = thin article with no real body; let it fail validation and park via give-up.
+    if (!fallbackRaw) continue;
+    const fallback = ensurePrimarySources(fallbackRaw, o.item);
     const fallbackErrors = validateCuration(fallback, batchUrls);
     if (fallbackErrors.length === 0) {
       o.result = fallback;
@@ -1705,12 +1746,7 @@ export async function ingestAndCurateGeneralNews(
   let errorSummary: string | null = null;
 
   try {
-    const staleBacklog = await db.query<{ c: string }>(
-      `SELECT COUNT(*)::text AS c FROM general_news WHERE ai_curated_at IS NULL`
-    );
-    if (parseInt(staleBacklog.rows[0]?.c ?? "0", 10) > 500) {
-      await retireStaleUncuratedBacklog();
-    }
+    await maybeRetireStaleBacklog();
 
     const [crewTags, gameNames] = await Promise.all([
       getCrewGameTags(), getCrewGameNames()

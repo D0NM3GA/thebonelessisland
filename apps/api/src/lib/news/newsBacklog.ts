@@ -1,6 +1,34 @@
 import { db } from "../../db/client.js";
+import { getAISetting } from "../serverSettings.js";
 
 export const CURATION_WINDOW_DAYS = 14;
+
+/** Default threshold: retire outside-window rows when this many exist. */
+const DEFAULT_RETIRE_THRESHOLD = 100;
+
+/**
+ * Shared retire-stale policy used by both ingest and autopilot.
+ * Counts uncurated rows outside the curation window; when that count meets the
+ * `news_autopilot_retire_threshold` setting (default 100) it calls
+ * retireStaleUncuratedBacklog and returns the number retired.
+ * Returns 0 when below threshold.
+ */
+export async function maybeRetireStaleBacklog(): Promise<number> {
+  const raw = getAISetting("news_autopilot_retire_threshold");
+  const n = parseInt(raw ?? "", 10);
+  const threshold = Number.isFinite(n) && n > 0 ? n : DEFAULT_RETIRE_THRESHOLD;
+
+  const r = await db.query<{ c: string }>(
+    `SELECT COUNT(*)::text AS c
+       FROM general_news
+      WHERE ai_curated_at IS NULL
+        AND published_at < NOW() - ($1::text || ' days')::interval`,
+    [String(CURATION_WINDOW_DAYS)]
+  );
+  const outside = parseInt(r.rows[0]?.c ?? "0", 10);
+  if (outside < threshold) return 0;
+  return retireStaleUncuratedBacklog();
+}
 
 /** Mark never-curated rows outside the auto-curation window as handled (no AI spend). */
 export async function retireStaleUncuratedBacklog(
