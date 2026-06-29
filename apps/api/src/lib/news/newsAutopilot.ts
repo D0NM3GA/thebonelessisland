@@ -6,7 +6,7 @@ import {
 } from "../generalNewsIngestion.js";
 import { backfillEmbeddings, countMissingEmbeddings } from "./embeddings.js";
 import { backfillMissingNewsImages, countLiveCardsMissingImages } from "./newsImageResolver.js";
-import { CURATION_WINDOW_DAYS, retireStaleUncuratedBacklog } from "./newsBacklog.js";
+import { CURATION_WINDOW_DAYS, maybeRetireStaleBacklog } from "./newsBacklog.js";
 import {
   getNewsPipelineHealth,
   snapshotPipelineCounts,
@@ -52,19 +52,6 @@ function autopilotEnabled(): boolean {
     getAISetting("ai_enabled") === "true" &&
     getAISetting("news_autopilot_enabled") !== "false"
   );
-}
-
-async function countUncuratedOutsideWindow(): Promise<number> {
-  const r = await db.query<{ c: string }>(
-    `
-      SELECT COUNT(*)::text AS c
-        FROM general_news
-       WHERE ai_curated_at IS NULL
-         AND published_at <= NOW() - ($1::text || ' days')::interval
-    `,
-    [String(CURATION_WINDOW_DAYS)]
-  );
-  return parseInt(r.rows[0]?.c ?? "0", 10);
 }
 
 async function countUncuratedWithinWindow(): Promise<number> {
@@ -218,15 +205,12 @@ export async function executeAutopilotPass(
   const steps: AutopilotStepLog = {};
   const maxCurateBatches = intSetting("news_autopilot_max_curate_batches", 10);
   const maxEmbedRows = intSetting("news_autopilot_max_embed_rows", 200);
-  const retireThreshold = intSetting("news_autopilot_retire_threshold", 100);
 
   await savePipelineJob("autopilot", "running", {}, { startedAt: new Date(), finishedAt: null, error: null });
 
   try {
-    const outside = await countUncuratedOutsideWindow();
-    if (outside >= retireThreshold) {
-      steps.retireStale = await retireStaleUncuratedBacklog();
-    }
+    const retired = await maybeRetireStaleBacklog();
+    if (retired > 0) steps.retireStale = retired;
 
     const counts = await snapshotPipelineCounts();
     const feedStale = await isFeedStale();
