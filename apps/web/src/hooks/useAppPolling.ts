@@ -97,6 +97,11 @@ async function fetchNewsBundle(): Promise<{ gameNews: GameNewsItem[]; generalNew
 
 async function syncOwnedSteamGames(): Promise<void> {
   const response = await apiFetch("/steam/sync-owned-games", { method: "POST", credentials: "include" });
+  // 429 = the route's own sync cooldown (last_synced_at still fresh), not a failure.
+  // The poll re-fires its initial request on every reload, so this is expected
+  // backpressure — treat it as a no-op instead of throwing (which would log a
+  // console error and trigger query retries).
+  if (response.status === 429) return;
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as { error?: string } | null;
     throw new Error(data?.error ?? `Steam sync failed (${response.status})`);
@@ -182,6 +187,9 @@ export function useAppPolling(options: UseAppPollingOptions) {
     enabled: authed && steamLinked,
     refetchInterval: 10 * 60 * 1000,
     staleTime: 8 * 60 * 1000,
+    // Background sync trigger — a transient failure self-heals on the next
+    // interval, so don't retry-storm the endpoint (which amplifies cooldown 429s).
+    retry: false,
   });
 
   useQuery({
@@ -190,6 +198,7 @@ export function useAppPolling(options: UseAppPollingOptions) {
     enabled: authed && steamLinked,
     refetchInterval: 5 * 60 * 1000,
     staleTime: 4 * 60 * 1000,
+    retry: false,
   });
 
   useEffect(() => {
