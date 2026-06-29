@@ -48,7 +48,11 @@ function mapSearchRow(row: {
     aiTitle: row.ai_title,
     aiSummary: row.ai_summary,
     aiSubtitle: row.ai_subtitle,
-    publishedAt: row.published_at,
+    // pg returns timestamptz as a JS Date at runtime even though the row type
+    // says string. Normalize to an ISO string so the declared type is honest
+    // and downstream string ops (the publishedAt sort below) don't throw
+    // `localeCompare is not a function`.
+    publishedAt: new Date(row.published_at).toISOString(),
     url: row.url,
     imageUrl: row.image_url,
     aiRelevanceScore: row.ai_relevance_score,
@@ -232,7 +236,8 @@ export async function findSimilarArticles(
       aiTitle: row.ai_title,
       aiSummary: row.ai_summary,
       aiSubtitle: row.ai_subtitle,
-      publishedAt: row.published_at,
+      // Same timestamptz→Date normalization as mapSearchRow (keep the boundary consistent).
+      publishedAt: new Date(row.published_at).toISOString(),
       url: row.url,
       imageUrl: row.image_url,
       aiRelevanceScore: row.ai_relevance_score,
